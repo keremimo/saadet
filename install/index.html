@@ -1,0 +1,1808 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MPL-2.0
+     Copyright (C) 2026 Kerem Kilic (Ellic Studio)
+     Portions Copyright (C) 2026 Charles Vestal
+     Portions Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+     Saadet's web installer: connect, choose, install, with the install itself in a screen of its own that asks the
+     player to stay. After fm1-base's web/installer.html (its m-bootloader option, stock firmware and crash report).
+     The firmware and m-bootloader come from release.json beside this page (tools/make_site.py); ?demo runs the
+     same page against a simulated FM-1 (fakefm1.js). Logic: installer.js; transfer: transfer.js. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Install Saadet</title>
+<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --paper: #f6f5f1; --card: #fff; --ink: #121212; --dim: #63625d; --faint: #8f8e88; --line: #e2e0d9; --chip: #eeede7;
+    --warn: #8a5300; --warn-bg: #fff3d6; --warn-line: #f0d9a6; --ok: #17733a; --ok-bg: #e5f4ea; --bad: #b42318; --bad-bg: #fdeceb;
+    --focus: #2563eb; --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 28px rgba(0, 0, 0, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0b0b0c; --card: #151516; --ink: #f2f2ee; --dim: #a6a5a0; --faint: #74736f; --line: #2a2a2c; --chip: #202022;
+      --warn: #f4b54a; --warn-bg: #2a2111; --warn-line: #4a3a17; --ok: #55c785; --ok-bg: #12261a; --bad: #ff8577; --bad-bg: #2c1614;
+      --focus: #7aa7ff; --shadow: 0 1px 2px rgba(0, 0, 0, .5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0b0b0c; --card: #151516; --ink: #f2f2ee; --dim: #a6a5a0; --faint: #74736f; --line: #2a2a2c; --chip: #202022;
+    --warn: #f4b54a; --warn-bg: #2a2111; --warn-line: #4a3a17; --ok: #55c785; --ok-bg: #12261a; --bad: #ff8577; --bad-bg: #2c1614;
+    --focus: #7aa7ff; --shadow: 0 1px 2px rgba(0, 0, 0, .5);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { background: var(--paper); }
+  body { margin: 0; background: var(--paper); color: var(--ink);
+         font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Sans", Arial, sans-serif;
+         font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-underline-offset: 2px; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+  svg.i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* the site's bar, as the editor's */
+  .site { max-width: 640px; margin: 0 auto; padding: 18px 16px 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .site .brand { font-weight: 650; font-size: 17px; letter-spacing: -.01em; text-decoration: none; }
+  .site nav { display: flex; gap: 18px; font-size: 14px; }
+  .site nav a, .site button.lang { color: var(--dim); text-decoration: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+  .site nav a:hover, .site button.lang:hover { color: var(--ink); }
+  .site nav a[aria-current="page"] { color: var(--ink); }
+
+  main { max-width: 640px; margin: 0 auto; padding: 0 16px 32px; }
+  .demo { background: var(--ink); color: var(--paper); font-size: 13px; text-align: center; padding: 7px 16px; }
+  .demo a { color: inherit; }
+
+  .hero { padding: 48px 0 28px; }
+  .kicker { margin: 0 0 10px; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+  h1 { margin: 0; font-size: clamp(34px, 8vw, 46px); line-height: 1.04; font-weight: 680; letter-spacing: -.025em; }
+  h1 .v { color: var(--faint); font-weight: 500; }
+  .lede { margin: 14px 0 0; font-size: 18px; color: var(--dim); max-width: 34em; }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+  .facts li { font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--chip); color: var(--dim); }
+  .banner { display: flex; gap: 12px; align-items: flex-start; margin: 0 0 16px; padding: 14px 16px; border-radius: 12px;
+            background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--ink); }
+  .banner svg { color: var(--warn); margin-top: 2px; }
+  .banner p { margin: 0; }
+
+  /* the three steps, numbered by what is shown */
+  .steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+  .step { counter-increment: step; position: relative; display: grid; grid-template-columns: 32px 1fr; gap: 0 16px;
+          background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 22px 22px 18px; margin: 0 0 12px; box-shadow: var(--shadow); }
+  .step::before { content: counter(step); display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
+                  border: 1.5px solid var(--line); color: var(--dim); font-size: 14px; font-weight: 600; }
+  .step[data-state="active"]::before { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  .step[data-state="done"]::before { content: "✓"; background: var(--ok-bg); border-color: transparent; color: var(--ok); }
+  .step > div { min-width: 0; }
+  .step h2 { margin: 3px 0 6px; font-size: 18px; font-weight: 640; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .step p { margin: 0 0 14px; color: var(--dim); }
+  .step p:last-child { margin-bottom: 0; }
+  .tag { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--dim);
+         padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
+
+  .btn { font: inherit; font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+         min-height: 44px; padding: 0 20px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+  .btn:hover:not(:disabled) { border-color: var(--faint); }
+  .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  .btn.primary:hover:not(:disabled) { opacity: .88; }
+  .btn.big { width: 100%; min-height: 52px; font-size: 16px; }
+  .btn:disabled { opacity: .38; cursor: default; }
+  .btn.ghost { background: none; }
+  .row { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 22px; }
+  .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .device { display: flex; align-items: center; gap: 14px; padding: 14px 16px; margin: 0 0 14px; border-radius: 12px; background: var(--chip); }
+  .device svg.i { width: 28px; height: 28px; }
+  .device .what { flex: 1; min-width: 0; line-height: 1.35; }
+  .device .what b { display: block; font-weight: 620; }
+  .device .what span { color: var(--dim); font-size: 14px; }
+  .chip { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; background: var(--card); color: var(--dim); }
+  .chip.ok { background: var(--ok-bg); color: var(--ok); }
+  .chip.warn { background: var(--warn-bg); color: var(--warn); }
+  .chip.bad { background: var(--bad-bg); color: var(--bad); }
+  .msg { color: var(--bad) !important; font-weight: 500; }
+  .msg:empty { display: none; }
+
+  .option { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; margin: 0 0 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+  .option:has(input:checked) { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+  .option input { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--ink); flex: none; }
+  .option b { display: block; font-weight: 620; margin-bottom: 2px; }
+  .option span span { color: var(--dim); font-size: 15px; }
+  .note { font-size: 14px; }
+  .caution { display: flex; gap: 10px; align-items: flex-start; color: var(--ink) !important; background: var(--warn-bg); border-radius: 10px; padding: 10px 12px; }
+  .caution svg.i { color: var(--warn); width: 18px; height: 18px; margin-top: 2px; }
+  .small { font-size: 13px !important; color: var(--faint) !important; }
+
+  .more { margin: 28px 0 0; border-top: 1px solid var(--line); }
+  .more details { border-bottom: 1px solid var(--line); }
+  .more summary { cursor: pointer; padding: 16px 0; font-weight: 600; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+  .more summary::-webkit-details-marker { display: none; }
+  .more summary::after { content: "+"; color: var(--faint); font-weight: 400; font-size: 20px; line-height: 1; }
+  .more details[open] summary::after { content: "−"; }
+  .more .in { padding: 0 0 18px; color: var(--dim); }
+  .more .in p, .more .in ol { margin: 0 0 12px; }
+  .more .in ol { padding-left: 20px; }
+  .more textarea { width: 100%; font: 12px/1.45 ui-monospace, Menlo, monospace; color: var(--ink); background: var(--card);
+                   border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  input[type=file] { font: inherit; font-size: 14px; color: var(--dim); max-width: 100%; }
+  footer { max-width: 640px; margin: 0 auto; padding: 8px 16px 56px; font-size: 13px; color: var(--faint); }
+  footer p { margin: 0 0 6px; }
+
+  /* dialogs: the checks before, and the install's own screen */
+  dialog { border: 0; padding: 0; color: var(--ink); background: var(--card); }
+  dialog::backdrop { background: rgba(10, 10, 10, .5); backdrop-filter: blur(3px); }
+  #preflight { width: min(480px, calc(100% - 32px)); border-radius: 18px; box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
+  #preflight form { padding: 26px 24px 22px; }
+  #preflight h2 { margin: 0 0 18px; font-size: 22px; letter-spacing: -.015em; }
+  .rules { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 14px; }
+  .rules li { display: flex; gap: 14px; align-items: flex-start; }
+  .rules .ri { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 10px; background: var(--chip); }
+  .rules li:first-child .ri { background: var(--warn-bg); color: var(--warn); }
+  .rules b { display: block; font-weight: 620; }
+  .rules span span, .rules div span { color: var(--dim); font-size: 14px; }
+  .check { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; background: var(--chip); cursor: pointer; font-size: 15px; }
+  .check input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--ink); flex: none; }
+
+  body:has(#run[open]) { overflow: hidden; }
+  #run { width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; background: var(--paper); }
+  #run::backdrop { background: var(--paper); }
+  .run-warn { position: sticky; top: 0; display: flex; justify-content: center; align-items: center; gap: 10px; padding: 12px 16px;
+              background: var(--warn-bg); color: var(--ink); border-bottom: 1px solid var(--warn-line); font-weight: 600; font-size: 15px; text-align: center; }
+  .run-warn svg { color: var(--warn); }
+  #run[data-state]:not([data-state="running"]) .run-warn { display: none; }
+  .run-main { max-width: 560px; margin: 0 auto; padding: clamp(32px, 9vh, 96px) 20px 40px; }
+  .run-kicker { margin: 0 0 4px; color: var(--dim); font-weight: 600; }
+  .pct { font-size: clamp(76px, 22vw, 136px); font-weight: 250; line-height: 1; letter-spacing: -.04em; margin: 0 0 18px; }
+  .pct .pc { font-size: .38em; color: var(--faint); letter-spacing: 0; margin-left: .06em; }
+  .bar { height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--ink); border-radius: 99px; transition: width .4s ease; }
+  .bar.indet i { width: 30% !important; animation: indet 1.4s ease-in-out infinite; }
+  @keyframes indet { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+  .runstep { margin: 16px 0 0; font-size: 18px; font-weight: 560; min-height: 1.55em; }
+  .eta { margin: 2px 0 0; color: var(--dim); min-height: 1.55em; }
+  .phases { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 26px 0 0; padding: 0; font-size: 14px; color: var(--faint); }
+  .phases li { display: flex; align-items: center; gap: 8px; }
+  .phases li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid currentColor; }
+  .phases li.now { color: var(--ink); font-weight: 600; }
+  .phases li.now::before { background: var(--ink); border-color: var(--ink); animation: pulse 1.2s ease-in-out infinite; }
+  .phases li.past { color: var(--dim); }
+  .phases li.past::before { background: var(--ok); border-color: var(--ok); }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .backnote { display: flex; gap: 10px; align-items: flex-start; margin: 26px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--warn-bg); }
+  .backnote svg { color: var(--warn); margin-top: 2px; }
+  .stall { margin: 14px 0 0; color: var(--dim); font-size: 15px; }
+
+  #run[data-state]:not([data-state="running"]) .live { display: none; }
+  .end-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; margin: 0 0 22px; }
+  .end-icon svg.i { width: 32px; height: 32px; stroke-width: 2; }
+  #run[data-state="done"] .end-icon { background: var(--ok-bg); color: var(--ok); }
+  #run[data-state="paused"] .end-icon, #run[data-state="restart"] .end-icon, #run[data-state="partial"] .end-icon { background: var(--warn-bg); color: var(--warn); }
+  #run[data-state="safe"] .end-icon { background: var(--chip); color: var(--dim); }
+  .end h2 { margin: 0 0 10px; font-size: clamp(28px, 6vw, 36px); line-height: 1.1; letter-spacing: -.02em; }
+  .end > p { margin: 0 0 14px; color: var(--dim); font-size: 17px; }
+  .end ul { margin: 0 0 8px; padding-left: 20px; color: var(--dim); }
+  .end ul li { margin: 0 0 6px; }
+  .end .row { justify-content: flex-start; }
+  .log { margin: 36px 0 0; font-size: 13px; color: var(--faint); }
+  .log summary { cursor: pointer; }
+  .log pre { max-height: 14em; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 0;
+             padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
+  .log pre:empty::after { content: "—"; }
+
+  @media (max-width: 520px) {
+    .step { display: block; padding: 18px 16px; }
+    .step::before { float: left; width: 28px; height: 28px; margin: 0 12px 0 0; font-size: 13px; }
+    .step h2 { margin-top: 0; min-height: 28px; }
+    .step p:first-of-type { clear: left; }
+    .row .btn { flex: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-tab" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18M8.5 4.5V9"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 2.5v4.5M15 2.5v4.5M6.5 7h11v3.5a5.5 5.5 0 0 1-11 0V7zM12 16v5.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9.5v4M12 17h.01"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6.5v11M15 6.5v11"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5h.01"/></symbol>
+  <symbol id="i-fm1" viewBox="0 0 24 24"><rect x="1.5" y="6" width="21" height="12" rx="2"/><path d="M4.5 9h5v2.5h-5zM13 9.5h.01M16 9.5h.01M19 9.5h.01M5 14v4M8.5 14v4M12 14v4M15.5 14v4M19 14v4"/></symbol>
+</svg>
+
+<div class="demo" id="demo" hidden><span data-t="demo">Demo: a simulated FM-1. Nothing is written.</span> <a href="./" data-t="demoleave">Leave the demo</a></div>
+
+<header class="site">
+  <a class="brand" href="../editor.html">Saadet</a>
+  <nav>
+    <a href="../editor.html" data-t="navEditor">Editor</a>
+    <a href="./" aria-current="page" data-t="navInstall">Install</a>
+    <a href="../manual/index.html" data-t="navManual">Manual</a>
+    <button type="button" class="lang" id="lang" lang="ja">日本語</button>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <p class="kicker" data-t="kicker">Firmware for the M-VAVE FM-1</p>
+    <h1><span data-t="title">Install Saadet</span> <span class="v" id="hver"></span></h1>
+    <p class="lede" data-t="lede">One polyphonic synthesizer: Prophet, FM6, CZ-1 and JUNO-106, installed over USB from this page.</p>
+    <ul class="facts">
+      <li data-t="factBrowser">Chrome or Edge</li>
+      <li data-t="factCable">A USB data cable</li>
+      <li data-t="factTime">About 3 minutes</li>
+    </ul>
+  </section>
+
+  <div class="banner" id="resumebanner" hidden>
+    <svg class="i"><use href="#i-pause"/></svg>
+    <p><b data-t="resumeBannerH">An installation didn't finish.</b> <span data-t="resumeBanner">Your FM-1 is waiting in update mode. Connect it and press Find FM-1 to finish.</span></p>
+  </div>
+  <div class="banner" id="pagefail" hidden role="alert">
+    <svg class="i"><use href="#i-alert"/></svg>
+    <p id="pagefailtext"></p>
+  </div>
+
+  <ol class="steps">
+    <li class="step" id="st-connect" data-state="active">
+      <div>
+        <h2 data-t="s1h">Connect the FM-1</h2>
+        <p data-t="s1p">Plug it straight into this computer, without a hub, and switch it on. Close other music apps and editor tabs. When the browser asks to use MIDI devices, choose Allow.</p>
+        <div class="device" id="device" hidden>
+          <svg class="i"><use href="#i-fm1"/></svg>
+          <div class="what"><b>FM-1</b><span id="devwhat"></span></div>
+          <span class="chip" id="devchip"></span>
+        </div>
+        <p class="msg" id="connmsg" role="alert"></p>
+        <button type="button" class="btn" id="find"><span data-t="find">Find FM-1</span></button>
+      </div>
+    </li>
+
+    <li class="step" id="st-options" data-state="todo" hidden>
+      <div>
+        <h2><span data-t="s2h">Recovery bootloader</span> <span class="tag" data-t="optional">Optional</span></h2>
+        <label class="option" for="mboot">
+          <input type="checkbox" id="mboot">
+          <span><b data-t="mboot">Also install m-bootloader</b>
+            <span data-t="mbootwhy">A recovery menu (hold PLAY while switching on) and USB download mode (hold REC) that work even when a firmware won't start. It replaces M-VAVE's bootloader and stays through firmware updates.</span></span>
+        </label>
+        <p class="note caution"><svg class="i"><use href="#i-alert"/></svg><span data-t="mbootrisk">It writes the FM-1's boot area, the one step where a power cut can need hardware recovery. Leave it off if you're unsure: you can add it later from this page.</span></p>
+        <p class="small"><span data-t="mbootby">By Julius Vitkauskas, MIT licence.</span>
+          <a href="https://github.com/jvitkauskas/m-bootloader" target="_blank" rel="noopener">github.com/jvitkauskas/m-bootloader<span class="sr" data-t="newtab"> (opens in a new tab)</span></a></p>
+      </div>
+    </li>
+
+    <li class="step" id="st-install" data-state="todo">
+      <div>
+        <h2 data-t="s3h">Install</h2>
+        <p id="plantext" data-t="s3p">Back up your sounds first: Settings, then Backup, in the editor.</p>
+        <button type="button" class="btn primary big" id="go" disabled></button>
+        <p class="small" id="gohint" data-t="gohint">Find your FM-1 first.</p>
+      </div>
+    </li>
+  </ol>
+
+  <section class="more">
+    <details id="d-resume">
+      <summary data-t="mResumeH">If an installation stopped</summary>
+      <div class="in">
+        <p data-t="mResume1">Nothing is lost. Until an installation finishes, the FM-1 starts in update mode: its screen shows UPDATING, or stays dark. That holds even after switching it off.</p>
+        <p data-t="mResume2">Connect it, open this page and press Find FM-1. The page offers to resume, and continues from the start of the write.</p>
+      </div>
+    </details>
+    <details id="d-stock">
+      <summary data-t="mStockH">Go back to M-VAVE's firmware</summary>
+      <div class="in">
+        <p data-t="mStock1">This writes M-VAVE's own FM-1 firmware back over the same cable. It also puts back M-VAVE's bootloader, and what Saadet saved may be lost.</p>
+        <ol>
+          <li><span data-t="mStock2">Download M-VAVE's firmware:</span> <a href="https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/firmware/FM-1.fwsc">FM-1.fwsc</a></li>
+          <li><label for="stockfile" data-t="mStock3">Choose the file you downloaded:</label><br><input type="file" id="stockfile" accept=".fwsc"></li>
+          <li data-t="mStock4">Connect the FM-1, press Find FM-1 above, then the button below.</li>
+        </ol>
+        <p class="msg" id="stockmsg" role="alert"></p>
+        <button type="button" class="btn" id="stockgo" disabled data-t="mStockGo">Install M-VAVE's firmware</button>
+      </div>
+    </details>
+    <details id="d-report">
+      <summary data-t="mReportH">Report a problem</summary>
+      <div class="in">
+        <p data-t="mReport1">If the FM-1 crashed, don't switch it off: the crash record survives a restart, not a power cycle. Connect it and read the record, then send it with what you were doing.</p>
+        <p><button type="button" class="btn" id="reportgo" data-t="mReportGo">Read the crash report</button>
+          <button type="button" class="btn ghost" id="reportcopy" hidden data-t="mReportCopy">Copy</button></p>
+        <p id="reportstatus" role="status"></p>
+        <label class="sr" for="report" data-t="mReportLabel">Crash report</label>
+        <textarea id="report" readonly hidden rows="12"></textarea>
+      </div>
+    </details>
+    <details id="d-brick">
+      <summary data-t="mBrickH">If the FM-1 won't start</summary>
+      <div class="in">
+        <p data-t="mBrick1">With m-bootloader: switch off, hold PLAY and switch on for its recovery menu, or hold REC for USB download mode.</p>
+        <p><span data-t="mBrick2">Without it, the FM-1's USB recovery route can put a firmware back from a computer:</span>
+          <a href="https://github.com/hugelton/felucca-bsp/tree/main/tools" target="_blank" rel="noopener" data-t="mBrickLink">felucca-bsp recovery tools</a></p>
+      </div>
+    </details>
+  </section>
+</main>
+
+<footer>
+  <p data-t="credits">Saadet by Kerem Kilic (Ellic Studio). Built on fm1-base by Charles Vestal and felucca-bsp, from Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments. m-bootloader by Julius Vitkauskas.</p>
+  <p data-t="legal">Firmware: MPL-2.0. Editor: GPL-3.0-only. Third-party terms apply. Without warranty. M-VAVE and FM-1 are trademarks of their respective owners.</p>
+  <p><a href="../firmware/LICENSING.md">Licences</a> · <a href="../firmware/SOURCES.txt">Source information</a> · <a href="../firmware/saadet-0.1.0-source.zip" download>Download source</a></p>
+</footer>
+
+<dialog id="preflight" aria-labelledby="pfh">
+  <form method="dialog">
+    <h2 id="pfh" data-t="pfh">Before you start</h2>
+    <ul class="rules">
+      <li><span class="ri"><svg class="i"><use href="#i-tab"/></svg></span>
+        <div><b data-t="pf1h">Keep this tab open and in front</b><span data-t="pf1">Don't switch tabs, minimise the window or close it until the page says Done.</span></div></li>
+      <li><span class="ri"><svg class="i"><use href="#i-plug"/></svg></span>
+        <div><b data-t="pf2h">Leave the FM-1 connected and on</b><span data-t="pf2">Don't unplug the cable or switch the FM-1 off. Plug a laptop into power.</span></div></li>
+      <li><span class="ri"><svg class="i"><use href="#i-clock"/></svg></span>
+        <div><b data-t="pf3h">It takes about 3 minutes</b><span data-t="pf3">The FM-1's screen shows UPDATING, or stays dark. Both are normal.</span></div></li>
+    </ul>
+    <p class="note caution" id="pfboot"><svg class="i"><use href="#i-alert"/></svg><span data-t="pfboot">m-bootloader is written last, after one more restart. Keep the power on until the page says Done.</span></p>
+    <label class="check" id="pfcheck"><input type="checkbox" id="pfok"><span data-t="pfok">I've backed up my sounds, or have nothing to keep.</span></label>
+    <div class="row">
+      <button type="submit" value="cancel" class="btn ghost" data-t="cancel">Cancel</button>
+      <button type="submit" value="go" class="btn primary" id="pfgo" disabled data-t="start">Start installation</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="run" aria-labelledby="runtitle" data-state="running">
+  <div class="run-warn" role="note"><svg class="i"><use href="#i-alert"/></svg><span data-t="runwarn">Keep this tab open and in front. Don't unplug the FM-1.</span></div>
+  <div class="run-main">
+    <div class="live">
+      <p class="run-kicker" id="runtitle"></p>
+      <div class="pct" aria-hidden="true"><span id="pct">0</span><span class="pc">%</span></div>
+      <div class="bar" id="bar" role="progressbar" aria-labelledby="runtitle" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="barfill"></i></div>
+      <p class="runstep" id="runstep" role="status"></p>
+      <p class="eta" id="eta"></p>
+      <ol class="phases" id="phases">
+        <li data-ph="prepare" data-t="phPrepare">Prepare</li>
+        <li data-ph="write" data-t="phWrite">Write</li>
+        <li data-ph="restart" data-t="phRestart">Restart</li>
+        <li data-ph="boot" data-t="phBoot">m-bootloader</li>
+      </ol>
+      <p class="stall" id="stall" hidden data-t="stall">Waiting for the FM-1… keep the cable connected.</p>
+      <div class="backnote" id="backnote" hidden role="alert"><svg class="i"><use href="#i-info"/></svg><span id="backtext"></span></div>
+    </div>
+    <div class="end" id="end" hidden>
+      <div class="end-icon"><svg class="i"><use id="endicon" href="#i-check"/></svg></div>
+      <h2 id="endtitle"></h2>
+      <p id="endtext"></p>
+      <ul id="endtips"></ul>
+      <div class="row" id="endactions"></div>
+    </div>
+    <details class="log"><summary data-t="details">Details</summary><pre id="log"></pre></details>
+  </div>
+</dialog>
+
+<script type="module">
+/* ---- fm1pkg.js ---- */
+const __fm1pkg_js = (() => {
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (C) 2026 Charles Vestal
+// Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+//
+// FM-1 .fwsc packages in the browser: the package identity and the image the
+// device reads during an update.
+
+const BLOCKS = 20, BLK = 0x30, KEEP = 0x2F;
+
+// the package identity ("FM-1_904"): one marker byte after each of the first 20 blocks
+function productOf(fwsc) {
+  if (fwsc.length < BLOCKS * BLK) throw new Error("not an FM-1 package (too short)");
+  let s = "";
+  for (let i = 0; i < BLOCKS; i++) {
+    const m = fwsc[i * BLK + KEEP];
+    if (m !== 0x7D) s += String.fromCharCode((m - i - 1) & 0xFF);
+  }
+  return s;
+}
+
+// the image the device addresses during an update: the .fwsc without the 20 marker bytes
+function logicalImage(fwsc) {
+  const out = new Uint8Array(fwsc.length - BLOCKS);
+  for (let i = 0; i < BLOCKS; i++) out.set(fwsc.subarray(i * BLK, i * BLK + KEEP), i * KEEP);
+  out.set(fwsc.subarray(BLOCKS * BLK), BLOCKS * KEEP);
+  return out;
+}
+
+// the UFW entries of a logical image, by type (0 flash.bin, 100 ota.bin): {off, len}. The header and the
+// entry list are ciphered with key 0xFFFF (felucca-bsp chip/ota.c ota_jl_enc); the CRCs are not checked here
+function ufwEntries(image) {
+  const dec = (off, n) => {
+    const b = image.slice(off, off + n);
+    for (let i = 0, k = 0xFFFF; i < n; i++) { b[i] ^= k & 0xFF; k = ((k << 1) ^ (k & 0x8000 ? 0x1021 : 0)) & 0xFFFF; }
+    return b;
+  };
+  const rd16 = (b, o) => b[o] | (b[o + 1] << 8);
+  const rd32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
+  const out = {};
+  const n = Math.min(rd16(dec(0, 0x40), 8), 11);
+  for (let i = 0; i < n; i++) {
+    const e = dec(0x40 + i * 0x50, 0x50);
+    out[rd16(e, 0)] = { off: rd32(e, 8), len: rd32(e, 12) };
+  }
+  return out;
+}
+
+return { productOf, logicalImage, ufwEntries };
+})();
+
+/* ---- fm1ota.js ---- */
+const __fm1ota_js = (() => {
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (C) 2026 Charles Vestal
+// Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+//
+// The FM-1 USB-MIDI update protocol (M-UPGRADE compatible) over WebMIDI.
+// Step 1: the running firmware reads parts of the package and stages the update
+// loader. Step 2: the loader reads the whole image and writes it. In both steps
+// the device sends cmd 0x30 read requests on the logical image and we answer.
+
+const HS_QUERY = [0xF0, 0x00, 0x32, 0x45, 0x00, 0x00, 0x00, 0x40, 0x7F, 0xF7];
+const UPGRADE = [0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7];
+const MAXDATA = 512;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const IS_OTA = (id) => /^ota-/i.test(id.model);
+
+// M-VAVE's FM1 Open firmware (V10, 2026-10): its updater takes only a package it has been told about
+// first (cmd 49 reads its state, cmd 50 arms it with the image length and the package's SHA-256); then
+// the update runs as usual. Only M-VAVE's own FM-1 firmware is installed over it: its loader rewrites the
+// whole flash, boot head included, which returns the FM-1 to stock.
+const OPEN_RE = /^FM1_(OFFICIAL_OPEN|COMMUNITY_\d+)$/;
+// M-VAVE's FM-1 firmware, any version: "FM-1_0" and two digits ("FM-1_016"; fm1-base's dev builds are
+// "FM-1_x00", its releases longer; m-bootloader's installer is FM-1_099). Whether a package is safe to write is the device's to check
+// (felucca-bsp chip/ota.c: a well-made writer, a bootable boot area), not a list of known files
+const IS_STOCK = (product) => /^FM-1_0\d\d$/.test(product) && product !== "FM-1_099";
+
+// errors carry a code the pages translate: notfound, model, stopped, noloader, lost, noreturn,
+// mismatch (detail: the identity the device reports), badreq
+function fail(code, msg, detail = "") { const e = new Error(msg); e.code = code; e.detail = detail; return e; }
+
+function pack7(data) {
+  const out = []; let acc = 0, nb = 0;
+  for (const b of data) {
+    acc |= b << nb; nb += 8;
+    while (nb >= 7) { out.push(acc & 0x7F); acc >>>= 7; nb -= 7; }
+  }
+  if (nb) out.push(acc & 0x7F);
+  return out;
+}
+
+function unpack7(s) {
+  const out = []; let acc = 0, nb = 0;
+  for (const b of s) {
+    acc |= (b & 0x7F) << nb; nb += 7;
+    while (nb >= 8) { out.push(acc & 0xFF); acc >>>= 8; nb -= 8; }
+  }
+  return out;
+}
+
+function response(addr, data, fl = 0) {
+  const len = data.length;
+  const body = [0x00, 0x59, 0x30, (len + 8) & 0xFF, ((len + 8) >> 8) & 0xFF, 0, fl,
+    addr & 0xFF, (addr >>> 8) & 0xFF, (addr >>> 16) & 0xFF, (addr >>> 24) & 0xFF,
+    len & 0xFF, (len >> 8) & 0xFF, 0, ...data];
+  let s = 0;
+  for (let i = 6; i < body.length; i++) s += body[i];
+  body.push(~s & 0xFF);
+  return [0xF0, ...pack7(body), 0xF7];
+}
+
+function parseRequest(pkt) {
+  if (pkt[0] !== 0xF0 || pkt[pkt.length - 1] !== 0xF7) return null;
+  const u = unpack7(pkt.slice(1, -1));
+  if (u.length !== 15 || u[0] !== 0 || u[1] !== 0x59 || u[2] !== 0x30) return null;
+  let s = 0;
+  for (let i = 6; i < 14; i++) s += u[i];
+  if ((~s & 0xFF) !== u[14]) return null;
+  return { fl: u[6], addr: (u[7] | (u[8] << 8) | (u[9] << 16) | (u[10] << 24)) >>> 0, len: u[11] | (u[12] << 8) | (u[13] << 16) };
+}
+
+function parseIdentity(pkt) {
+  const d = unpack7(pkt.slice(1, -1));
+  if (d.length !== 34 || d[0] !== 0 || d[1] !== 0x59 || d[2] !== 0x11) return null;
+  const txt = String.fromCharCode(...d.slice(6, 33)).replace(/\0+$/, "");
+  if (OPEN_RE.test(txt)) return { text: txt, model: "FM-1", version: 0, open: true };
+  const m = /^([^_]+)_(\d+)$/.exec(txt);
+  return m ? { text: txt, model: m[1], version: parseInt(m[2], 10) } : null;
+}
+
+// one MIDI in/out pair with a SysEx queue
+class Link {
+  constructor(input, output) {
+    this.input = input; this.output = output; this.q = []; this.waiter = null;
+    input.onmidimessage = (ev) => {
+      if (ev.data[0] !== 0xF0) return;
+      this.q.push(Array.from(ev.data));
+      if (this.waiter) { const w = this.waiter; this.waiter = null; w(); }
+    };
+  }
+  get lost() { return this.input.state === "disconnected" || this.output.state === "disconnected"; }
+  // false when the port is gone (unplugged): WebMIDI throws on a disconnected output
+  send(bytes) {
+    try { this.output.send(bytes); return true; } catch (_) { return false; }
+  }
+  drain() { this.q.length = 0; }
+  async read(ms) {
+    if (!this.q.length) {
+      let tm;
+      await Promise.race([new Promise((r) => { this.waiter = r; }), new Promise((r) => { tm = setTimeout(r, ms); })]);
+      clearTimeout(tm);
+      this.waiter = null;
+    }
+    return this.q.shift() || null;
+  }
+  close() { this.input.onmidimessage = null; }
+}
+
+async function handshake(link, tries = 3) {
+  link.drain();
+  for (let t = 0; t < tries; t++) {
+    if (!link.send(HS_QUERY)) return null;
+    const end = Date.now() + 1000;
+    while (Date.now() < end) {
+      const p = await link.read(end - Date.now());
+      if (!p) break;
+      const id = parseIdentity(p);
+      if (id) return id;
+    }
+  }
+  return null;
+}
+
+function frame(cmd, payload = []) {
+  let s = 0;
+  for (const b of payload) s += b;
+  return [0xF0, ...pack7([0x00, 0x59, cmd, payload.length & 0xFF, payload.length >> 8, 0, ...payload, ~s & 0xFF]), 0xF7];
+}
+
+// send a command -> the payload of its reply, or null
+async function query(link, cmd, payload = []) {
+  link.drain();
+  if (!link.send(frame(cmd, payload))) return null;
+  const end = Date.now() + 1500;
+  while (Date.now() < end) {
+    const p = await link.read(end - Date.now());
+    if (!p) break;
+    if (p[0] !== 0xF0 || p[p.length - 1] !== 0xF7) continue;
+    const u = unpack7(p.slice(1, -1));
+    if (u.length < 7 || u[0] !== 0 || u[1] !== 0x59 || u[2] !== cmd) continue;
+    let s = 0;
+    for (let i = 6; i < u.length; i++) s += u[i];
+    if ((s & 0xFF) === 0xFF) return u.slice(6, 6 + (u[3] | (u[4] << 8)));
+  }
+  return null;
+}
+
+class Updater {
+  constructor(access, log) {
+    this.access = access;
+    this.log = log || (() => {});
+  }
+
+  // every in/out pair with the same port name that answers the handshake
+  async find(filter) {
+    const outs = [...this.access.outputs.values()];
+    for (const input of this.access.inputs.values()) {
+      if (input.state === "disconnected") continue;
+      if (!/fm-?1|felucca|ota|composite|sinco|usb-midi/i.test(input.name || "")) continue;   // never probe other gear
+      const output = outs.find((o) => o.name === input.name) || (outs.length === 1 ? outs[0] : null);
+      if (!output) continue;
+      try { await input.open(); await output.open(); } catch (_) { continue; }
+      const link = new Link(input, output);
+      const id = await handshake(link, 2);
+      if (id && (!filter || filter(id))) return { link, id, name: input.name };
+      link.close();
+    }
+    return null;
+  }
+
+  async waitFor(filter, ms) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      const dev = await this.find(filter);
+      if (dev) return dev;
+      await sleep(1000);
+    }
+    return null;
+  }
+
+  // serve read requests until the device asks for one of the finish addresses; stops early
+  // when the port disappears (lost: true) instead of waiting out idleMs
+  async serve(link, image, finishAddr, idleMs, onProgress) {
+    let served = 0, bytes = 0, last = Date.now();
+    for (;;) {
+      const pkt = await link.read(1000);
+      if (!pkt) {
+        if (link.lost) return { served, finished: false, lost: true };
+        if (Date.now() - last > idleMs) return { served, finished: false };
+        continue;
+      }
+      const r = parseRequest(pkt);
+      if (!r) continue;
+      last = Date.now();
+      if (r.addr === 0xE0000000 || r.addr === 0xF0000000) {
+        link.send(response(r.addr, [...new TextEncoder().encode("success"), 0]));
+        if (r.addr === finishAddr) return { served, finished: true };
+        continue;
+      }
+      if (r.len > MAXDATA || r.addr + r.len > image.length) throw fail("badreq", `bad request ${r.addr.toString(16)}+${r.len}`);
+      await sleep(10);
+      if (!link.send(response(r.addr, Array.from(image.subarray(r.addr, r.addr + r.len)), r.fl))) {
+        return { served, finished: false, lost: true };
+      }
+      served++;
+      bytes += r.len;
+      if (onProgress) onProgress(served, bytes);
+    }
+  }
+
+  // full install: running firmware -> loader -> new firmware
+  async install(image, product, onStep, sha256) {
+    const step = onStep || (() => {});
+    const dev = await this.find((id) => !IS_OTA(id));
+    if (!dev) throw fail("notfound", "FM-1 not found (USB cable, and no other app using it?)");
+    const [model] = product.split("_");
+    if (dev.id.model !== model) { dev.link.close(); throw fail("model", `the device is ${dev.id.text}, the package is for ${product}`); }
+    if (dev.id.open) await this.arm(dev, image, product, sha256);
+    step("start", dev.id.text);
+    dev.link.send(UPGRADE);
+    await sleep(2000);
+    const s1 = await this.serve(dev.link, image, 0xE0000000, 8000, (n, b) => step("verify", n, b));
+    dev.link.close();
+    if (!s1.finished) throw fail(s1.lost ? "lost" : "stopped", `the device ${s1.lost ? "was disconnected" : "stopped"} after ${s1.served} requests: nothing was written`);
+    step("loader");
+    await sleep(3000);
+    const ota = await this.waitFor(IS_OTA, 30000);
+    if (!ota) throw fail("noloader", "the update loader did not appear. Replug the USB cable and press Install again: the device stays in update mode until it is finished.");
+    const s2 = await this.write(ota, image, step);
+    if (!s2.finished) throw fail(s2.lost ? "lost" : "stopped", `the loader ${s2.lost ? "was disconnected" : "stopped"} after ${s2.served} requests. Replug and press Install again to resume.`);
+    step("reboot");
+    await sleep(3000);
+    const back = await this.waitFor((id) => !IS_OTA(id), 40000);
+    if (!back) throw fail("noreturn", "the device did not come back: power-cycle it");
+    back.link.close();
+    if (back.id.text !== product) throw fail("mismatch", `installed, but the device reports ${back.id.text}`, back.id.text);
+    step("done", back.id.text);
+    return back.id.text;
+  }
+
+  // m-bootloader (github.com/jvitkauskas/m-bootloader, MIT) after an install: the running firmware (product)
+  // stages the package's installer (no flash.bin: any well-made writer, felucca-bsp chip/ota.c) and resets; the bootloader
+  // runs it, it rewrites the boot area [0, 0x4000) only and restarts into the firmware. It never talks to us:
+  // we wait for the firmware to come back. A firmware that does not know it refuses it, and nothing is written.
+  async installBoot(image, product, onStep) {
+    const step = onStep || (() => {});
+    const dev = await this.waitFor((id) => !IS_OTA(id) && id.text === product, 40000);
+    if (!dev) throw fail("noreturn", "the device did not come back: power-cycle it");
+    step("bootstart");
+    dev.link.send(UPGRADE);
+    await sleep(2000);
+    const s = await this.serve(dev.link, image, 0xE0000000, 8000);
+    dev.link.close();
+    if (!s.finished) throw fail(s.lost ? "lost" : "bootrefused", `m-bootloader: the device stopped after ${s.served} requests: nothing was written`);
+    step("bootwrite");
+    await sleep(3000);
+    const back = await this.waitFor((id) => !IS_OTA(id), 40000);
+    if (!back) throw fail("noreturn", "the device did not come back: power-cycle it");
+    back.link.close();
+    step("bootdone", back.id.text);
+    return back.id.text;
+  }
+
+  // M-VAVE's Open firmware: allow the update of M-VAVE's own firmware (sha256: the package file's, hex)
+  async arm(dev, image, product, sha256) {
+    if (!IS_STOCK(product) || !/^[0-9a-f]{64}$/.test(sha256 || "")) {
+      dev.link.close();
+      throw fail("open", `This FM-1 runs M-VAVE's ${dev.id.text} firmware. Put the stock firmware back first ("Back to the stock firmware"), then install this.`, dev.id.text);
+    }
+    const cap = await query(dev.link, 49);
+    if (!cap || cap.length !== 47 || String.fromCharCode(...cap.slice(0, 4)) !== "FMC1" || cap[6] !== 0) {
+      dev.link.close();
+      throw fail("stopped", `${dev.id.text} did not accept the update: nothing was written`);
+    }
+    const n = image.length;
+    const tag = sha256.match(/../g).map((h) => parseInt(h, 16));
+    const ack = await query(dev.link, 50, [1, cap[5], n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF, ...tag]);
+    if (!ack || ack.length !== 1 || ack[0] !== 0) {
+      dev.link.close();
+      throw fail("stopped", `${dev.id.text} refused the package: nothing was written`);
+    }
+  }
+
+  // step 2 with the loader found by find()/waitFor()
+  async write(ota, image, step) {
+    ota.link.send(UPGRADE);
+    await sleep(2000);
+    const s2 = await this.serve(ota.link, image, 0xF0000000, 180000, (n, b) => step("write", n, b));
+    ota.link.close();
+    return s2;
+  }
+
+  // resume: the device is already in update mode (loader) -> true when the write finished
+  async resume(image, onStep) {
+    const ota = await this.find(IS_OTA);
+    if (!ota) return false;
+    return (await this.write(ota, image, onStep || (() => {}))).finished;
+  }
+}
+
+return { pack7, unpack7, Updater };
+})();
+
+/* ---- flow.js ---- */
+const __flow_js = (() => {
+const { ufwEntries } = __fm1pkg_js;
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (C) 2026 Kerem Kilic (Ellic Studio)
+// Portions Copyright (C) 2026 Charles Vestal
+//
+// The installer's decisions, without the page: what a connected FM-1 is running, what an install will do, how
+// far it has got, and what a failure leaves behind. progressModel() follows fm1-base's installer.html.
+
+
+const IS_OTA = (id) => /^ota-/i.test(id.model);
+const OPEN_RE = /^FM1_(OFFICIAL_OPEN|COMMUNITY_\d+)$/;
+
+// "FM-1_9010200" -> "1.2", "FM-1_9010203" -> "1.2.3" (fm1-base tools/build.py: the prefix, then XXYYZZ)
+function releaseVersion(product, prefix = "FM-1_9") {
+  if (!product.startsWith(prefix)) return null;
+  const m = /^(\d\d)(\d\d)(\d\d)$/.exec(product.slice(prefix.length));
+  if (!m) return null;
+  const [x, y, z] = m.slice(1).map(Number);
+  return z ? `${x}.${y}.${z}` : `${x}.${y}`;
+}
+
+// a connected FM-1, from its identity: { kind, version }
+//   loader   in update mode: an install waits to be finished
+//   this     the version this page installs
+//   saadet   another Saadet release; dev: a development build (FM-1_900)
+//   stock    M-VAVE's own firmware (version: "V16"); open: M-VAVE's Open firmware (must go back to stock first)
+//   other    another firmware for the FM-1; model: not an FM-1
+function describeDevice(id, product) {
+  if (!id) return { kind: "none" };
+  if (IS_OTA(id)) return { kind: "loader" };
+  if (id.open || OPEN_RE.test(id.text)) return { kind: "open" };
+  if (id.model !== "FM-1") return { kind: "model", text: id.text };
+  if (id.text === product) return { kind: "this", version: releaseVersion(product) };
+  if (id.text === "FM-1_900") return { kind: "dev" };
+  const v = releaseVersion(id.text);
+  if (v) return { kind: "saadet", version: v };
+  if (/^FM-1_0\d\d$/.test(id.text) && id.text !== "FM-1_099") return { kind: "stock", version: "V" + parseInt(id.text.slice(5), 10) };
+  return { kind: "other", text: id.text };
+}
+
+// what pressing Install does for a device: { firmware, resume, boot } or null (nothing to do)
+function planFor(kind, wantBoot) {
+  if (kind === "loader") return { firmware: true, resume: true, boot: wantBoot };
+  if (kind === "this") return wantBoot ? { firmware: false, resume: false, boot: true } : { firmware: true, resume: false, boot: false };
+  if (kind === "open" || kind === "model" || kind === "none") return null;
+  return { firmware: true, resume: false, boot: wantBoot };
+}
+
+// the bytes the device reads, for the bar. Step 1 (the running firmware): the UFW header, the loader's head twice,
+// its body. Step 2 (the loader): the header, the chip-key check, the whole flash.bin (checked before anything is
+// erased), then the app area again as it writes it. A resume has step 2 only. Without a readable flash.bin entry
+// the whole image stands for it.
+function progressModel(image, resume = false) {
+  let ent = {};
+  try { ent = ufwEntries(image); } catch (_) { /* not a UFW image */ }
+  const fl = ent[0], ldr = ent[100];
+  const flen = fl && fl.len > 0x4000 && fl.len <= 0x100000 ? fl.len : image.length;
+  const check = resume ? 0 : 0x400 + 0x400 + (ldr && ldr.len > 0x20 && ldr.len < image.length ? ldr.len - 0x20 : 0);
+  const write = 0x400 + 0x20 + flen + Math.max(0, flen - 0x4000);
+  const total = check + write;
+  return {
+    check, write, total,
+    verify: (b) => (Math.min(b, check) / total) * 100,
+    writing: (b) => Math.min(99, ((check + Math.min(b, write)) / total) * 100),
+  };
+}
+
+// minutes and seconds left at the rate so far, or null while it is too early to say
+function remaining(done, total, ms) {
+  if (done < total * 0.04 || ms < 3000) return null;
+  return Math.max(0, Math.round(((total - done) / done) * ms / 1000));
+}
+
+// what a failure leaves: "safe" (nothing written), "paused" (in update mode: resume), "restart" (written; the FM-1
+// did not come back as expected), "partial" (the firmware installed, m-bootloader not)
+function afterFailure(code, phase) {
+  if (phase === "boot") return code === "noreturn" ? "restart" : "partial";
+  if (phase === "done") return "restart";
+  if (phase === "staged") return code === "noreturn" || code === "mismatch" ? "restart" : "paused";
+  return "safe";
+}
+
+return { IS_OTA, releaseVersion, describeDevice, planFor, progressModel, remaining, afterFailure };
+})();
+
+/* ---- transfer.js ---- */
+const __transfer_js = (() => {
+const { Updater, pack7, unpack7 } = __fm1ota_js;
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (C) 2026 Kerem Kilic (Ellic Studio)
+// Portions Copyright (C) 2026 Charles Vestal
+// Portions Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+//
+// fm1-base's Updater (fm1ota.js, unchanged beside this file) with a read loop that does not depend on the page's
+// timers. Upstream answers each of the device's read requests after `await sleep(10)`. A browser throttles the timers
+// of a page in the background (Chrome: once a second at once, once a minute after five minutes), so a switched tab
+// turned every 10 ms gap into a second or a minute. The device waits 3 x 5 s for an answer and its first step gives
+// up after 2 min: the install stopped halfway. Here an answer is sent from the MIDI message's own event, with the
+// same 10 ms gap given to the browser's MIDI service as the send's timestamp; no page timer is between a request
+// and its answer. response() and parseRequest() are fm1ota.js's (module-private there), kept byte for byte.
+
+
+const MAXDATA = 512;
+const GAP_MS = 10;                          // upstream's pause before each answer
+const FINISH = [0xE0000000, 0xF0000000];           // step 1's and step 2's "success" questions
+
+function response(addr, data, fl = 0) {
+  const len = data.length;
+  const body = [0x00, 0x59, 0x30, (len + 8) & 0xFF, ((len + 8) >> 8) & 0xFF, 0, fl,
+    addr & 0xFF, (addr >>> 8) & 0xFF, (addr >>> 16) & 0xFF, (addr >>> 24) & 0xFF,
+    len & 0xFF, (len >> 8) & 0xFF, 0, ...data];
+  let s = 0;
+  for (let i = 6; i < body.length; i++) s += body[i];
+  body.push(~s & 0xFF);
+  return [0xF0, ...pack7(body), 0xF7];
+}
+
+function parseRequest(pkt) {
+  if (pkt[0] !== 0xF0 || pkt[pkt.length - 1] !== 0xF7) return null;
+  const u = unpack7(pkt.slice(1, -1));
+  if (u.length !== 15 || u[0] !== 0 || u[1] !== 0x59 || u[2] !== 0x30) return null;
+  let s = 0;
+  for (let i = 6; i < 14; i++) s += u[i];
+  if ((~s & 0xFF) !== u[14]) return null;
+  return { fl: u[6], addr: (u[7] | (u[8] << 8) | (u[9] << 16) | (u[10] << 24)) >>> 0, len: u[11] | (u[12] << 8) | (u[13] << 16) };
+}
+
+// a send the MIDI service delivers `delay` ms from now; false when the port is gone
+function sendLater(link, bytes, delay) {
+  try { link.output.send(bytes, performance.now() + delay); return true; } catch (_) { return false; }
+}
+
+function fail(code, msg) { const e = new Error(msg); e.code = code; return e; }
+
+class SteadyUpdater extends Updater {
+  // Updater.serve's contract: answer reads until the device asks finishAddr -> { served, finished, lost }
+  async serve(link, image, finishAddr, idleMs, onProgress) {
+    let served = 0, bytes = 0, last = Date.now();
+    for (;;) {
+      const pkt = await link.read(1000);           // resolves from the message event; its timeout only measures idle
+      if (!pkt) {
+        if (link.lost) return { served, finished: false, lost: true };
+        if (Date.now() - last > idleMs) return { served, finished: false };
+        continue;
+      }
+      const r = parseRequest(pkt);
+      if (!r) continue;
+      last = Date.now();
+      if (FINISH.includes(r.addr)) {
+        sendLater(link, response(r.addr, [...new TextEncoder().encode("success"), 0]), 0);
+        if (r.addr === finishAddr) return { served, finished: true };
+        continue;
+      }
+      if (r.len > MAXDATA || r.addr + r.len > image.length) throw fail("badreq", `bad request ${r.addr.toString(16)}+${r.len}`);
+      if (!sendLater(link, response(r.addr, Array.from(image.subarray(r.addr, r.addr + r.len)), r.fl), GAP_MS)) {
+        return { served, finished: false, lost: true };
+      }
+      served++;
+      bytes += r.len;
+      if (onProgress) onProgress(served, bytes);
+    }
+  }
+}
+
+return { GAP_MS, SteadyUpdater };
+})();
+
+/* ---- keepalive.js ---- */
+const __keepalive_js = (() => {
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (C) 2026 Kerem Kilic (Ellic Studio)
+//
+// Keeps an install going while it runs, as far as a page can:
+//   - timers from a worker: Chrome's background-tab throttling (1 s alignment, then one wake-up a minute) is
+//     applied to the page's own timers, which fm1ota.js waits on between steps; a dedicated worker's timers are
+//     scheduled apart from them. setTimeout/clearTimeout are routed through it until release. A browser that slows
+//     the worker too (a hidden embedded view does) loses nothing: the transfer itself waits on no timer.
+//   - one install at a time: a Web Lock that a second installer tab cannot take (two tabs answering the same
+//     FM-1 corrupt each other's transfer).
+//   - a screen wake lock: the display and the computer stay awake while the page is in front (taken again
+//     whenever the page comes back).
+//   - leaving: the browser asks before the page is closed or reloaded.
+//   - the page's visibility, reported to the caller (the warning when the tab is switched).
+// Each part is skipped where the browser lacks it; none is needed for the transfer itself (transfer.js).
+
+const LOCK = "saadet-fm1-install";
+const BASE_ID = 1 << 30;                          // worker timer ids, apart from the browser's own
+
+let worker = null, nextId = BASE_ID;
+const pending = new Map();
+
+function workerTimers() {
+  if (worker !== null) return worker;
+  worker = false;
+  try {
+    const src = "const t=new Map();onmessage=({data:[on,id,ms]})=>{if(on)t.set(id,setTimeout(()=>{t.delete(id);" +
+      "postMessage(id)},ms));else{clearTimeout(t.get(id));t.delete(id)}}";
+    const w = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+    w.onmessage = ({ data: id }) => { const f = pending.get(id); pending.delete(id); if (f) f(); };
+    worker = w;                                   // kept for the page's life: a timer set before release still fires
+  } catch (_) { /* no workers here: the page's timers, then */ }
+  return worker;
+}
+
+function routeTimers() {
+  const w = workerTimers();
+  if (!w) return () => {};
+  const nativeSet = globalThis.setTimeout, nativeClear = globalThis.clearTimeout;
+  globalThis.setTimeout = (fn, ms = 0, ...args) => {
+    if (typeof fn !== "function") return nativeSet(fn, ms, ...args);
+    const id = nextId++;
+    pending.set(id, () => fn(...args));
+    w.postMessage([1, id, Math.max(0, +ms || 0)]);
+    return id;
+  };
+  globalThis.clearTimeout = (id) => {
+    if (typeof id === "number" && id >= BASE_ID) { if (pending.delete(id)) w.postMessage([0, id]); }
+    else nativeClear(id);
+  };
+  return () => { globalThis.setTimeout = nativeSet; globalThis.clearTimeout = nativeClear; };
+}
+
+// the single-install lock: resolves to a release function, or null when another tab holds it
+async function takeLock() {
+  if (!navigator.locks) return () => {};
+  let release;
+  const held = new Promise((r) => { release = r; });
+  const got = await new Promise((answer) => {
+    navigator.locks.request(LOCK, { ifAvailable: true }, (lock) => {
+      answer(!!lock);
+      return lock ? held : undefined;
+    }).catch(() => answer(true));
+  });
+  return got ? release : null;
+}
+
+async function busyElsewhere() {
+  if (!navigator.locks || !navigator.locks.query) return false;
+  try { return (await navigator.locks.query()).held.some((l) => l.name === LOCK); } catch (_) { return false; }
+}
+
+// starts holding; -> release(), or null when another tab is installing. onHidden() / onVisible(ms away)
+async function hold({ leaveText = "", onHidden, onVisible } = {}) {
+  const unlock = await takeLock();
+  if (!unlock) return null;
+  const undo = [unlock, routeTimers()];
+  let wake = null, hiddenAt = 0, done = false;
+  const awake = async () => {
+    if (done || wake || document.visibilityState !== "visible" || !navigator.wakeLock) return;
+    try {
+      wake = await navigator.wakeLock.request("screen");
+      wake.addEventListener("release", () => { wake = null; });
+    } catch (_) { wake = null; }
+  };
+  const vis = () => {
+    if (document.visibilityState === "hidden") {
+      hiddenAt = Date.now();
+      if (onHidden) onHidden();
+    } else {
+      awake();
+      if (hiddenAt && onVisible) onVisible(Date.now() - hiddenAt);
+      hiddenAt = 0;
+    }
+  };
+  const leave = (e) => { e.preventDefault(); e.returnValue = leaveText; return leaveText; };
+  document.addEventListener("visibilitychange", vis);
+  window.addEventListener("beforeunload", leave);
+  undo.push(() => {
+    document.removeEventListener("visibilitychange", vis);
+    window.removeEventListener("beforeunload", leave);
+    if (wake) wake.release().catch(() => {});
+  });
+  awake();
+  return () => {
+    if (done) return;
+    done = true;
+    undo.reverse().forEach((f) => f());
+  };
+}
+
+return { busyElsewhere, hold };
+})();
+
+/* ---- installer.js ---- */
+const __installer_js = (() => {
+const { productOf, logicalImage } = __fm1pkg_js;
+const { SteadyUpdater } = __transfer_js;
+const { hold, busyElsewhere } = __keepalive_js;
+const { IS_OTA, describeDevice, planFor, progressModel, remaining, afterFailure } = __flow_js;
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (C) 2026 Kerem Kilic (Ellic Studio)
+// Portions Copyright (C) 2026 Charles Vestal
+// Portions Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+//
+// The installer page (index.html): find the FM-1, show what it runs, choose m-bootloader, then install in a
+// screen of its own. Before writing: the rules (stay on the tab, keep the cable and power) and the backup. While
+// writing: keepalive.js holds the page (one install at a time, awake, asks before leaving) and the screen says so
+// again whenever the tab comes back. An install that stops after the FM-1 entered update mode can be resumed,
+// now or on a later visit (a mark in localStorage and the device itself say so). fm1-base's installer.html is the
+// origin of the m-bootloader option, the stock firmware path and the crash report.
+
+
+const $ = (id) => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const DEMO = params.has("demo") ? (params.get("demo") || "stock") : null;
+const MARK = "saadet-install-pending";               // an install that has not reported Done (localStorage)
+const LANG = "saadet-lang";
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const IS_STOCK = (p) => /^FM-1_0\d\d$/.test(p) && p !== "FM-1_099";
+const fail = (code, msg, detail = "") => Object.assign(new Error(msg), { code, detail });
+
+const TEXT = {
+  en: {
+    navEditor: "Editor", navInstall: "Install", navManual: "Manual", other: "日本語",
+    demo: "Demo: a simulated FM-1. Nothing is written.", demoleave: "Leave the demo",
+    kicker: "Firmware for the M-VAVE FM-1", title: "Install Saadet",
+    lede: "One polyphonic synthesizer: Prophet, FM6, CZ-1 and JUNO-106, installed over USB from this page.",
+    factBrowser: "Chrome or Edge", factCable: "A USB data cable", factTime: "About 3 minutes",
+    resumeBannerH: "An installation didn't finish.",
+    resumeBanner: "Your FM-1 is waiting in update mode. Connect it and press Find FM-1 to finish.",
+    s1h: "Connect the FM-1",
+    s1p: "Plug it straight into this computer, without a hub, and switch it on. Close other music apps and editor tabs. When the browser asks to use MIDI devices, choose Allow.",
+    find: "Find FM-1", findAgain: "Look again", finding: "Looking for the FM-1…",
+    s2h: "Recovery bootloader", optional: "Optional",
+    mboot: "Also install m-bootloader {v}",
+    mbootwhy: "A recovery menu (hold PLAY while switching on) and USB download mode (hold REC) that work even when a firmware won't start. It replaces M-VAVE's bootloader and stays through firmware updates.",
+    mbootrisk: "It writes the FM-1's boot area, the one step where a power cut can need hardware recovery. Leave it off if you're unsure: you can add it later from this page.",
+    mbootby: "By Julius Vitkauskas, MIT licence.", newtab: " (opens in a new tab)",
+    s3h: "Install", s3p: "Back up your sounds first: Settings, then Backup, in the editor.",
+    gohint: "Find your FM-1 first.",
+    goInstall: "Install Saadet {v}", goUpdate: "Update to Saadet {v}", goReinstall: "Reinstall Saadet {v}",
+    goResume: "Resume installation", goBoot: "Install m-bootloader",
+    planInstall: "Saadet {v} replaces this FM-1's firmware. Back up your sounds first: Settings, then Backup, in the editor.",
+    planUpdate: "Updates keep your saved sounds, but back them up first: Settings, then Backup, in the editor.",
+    planResume: "The FM-1 is waiting in update mode. Resuming writes Saadet {v} again from the start of the write.",
+    planThis: "Saadet {v} is already on this FM-1. Reinstalling is safe and keeps your sounds.",
+    planBoot: "Saadet {v} is already on this FM-1, so only m-bootloader is written.",
+    planOpen: "This FM-1 runs M-VAVE's Open firmware. Go back to M-VAVE's firmware first (below), then install Saadet.",
+    planModel: "This is not an FM-1 ({id}). Saadet runs only on the M-VAVE FM-1.",
+    devLoader: "In update mode: an installation is waiting to finish", devThis: "Saadet {v}", devSaadet: "Saadet {v}",
+    devDev: "Saadet development build", devStock: "M-VAVE firmware {v}", devOpen: "M-VAVE Open firmware",
+    devOther: "Another firmware ({id})", devModel: "Not an FM-1 ({id})",
+    chipReady: "Ready", chipResume: "Update mode", chipCurrent: "Up to date", chipBlocked: "Can't install",
+    nomidi: "This browser can't reach USB MIDI devices. Open this page in Chrome or Edge on a computer.",
+    denied: "MIDI access was not allowed. Allow MIDI devices in the site settings (the icon in the address bar), then press Find FM-1 again.",
+    notfound: "No FM-1 answered. Check that it is on and connected with a data cable (not a charging-only one), close other apps and tabs that use MIDI, then look again.",
+    busy: "An installation is already running in another tab. Finish it there first.",
+    loadfail: "The firmware package could not be loaded: {m}", badpkg: "The firmware package is damaged. Reload the page.",
+    nopkg: "There is no firmware package beside this page. Try the demo instead:",
+    pfh: "Before you start",
+    pf1h: "Keep this tab open and in front", pf1: "Don't switch tabs, minimise the window or close it until the page says Done.",
+    pf2h: "Leave the FM-1 connected and on", pf2: "Don't unplug the cable or switch the FM-1 off. Plug a laptop into power.",
+    pf3h: "It takes about 3 minutes", pf3: "The FM-1's screen shows UPDATING, or stays dark. Both are normal.",
+    pfboot: "m-bootloader is written last, after one more restart. Keep the power on until the page says Done.",
+    pfbootonly: "Writing the boot area takes a few seconds. Keep the power on until the page says Done.",
+    pfok: "I've backed up my sounds, or have nothing to keep.", cancel: "Cancel", start: "Start installation",
+    runwarn: "Keep this tab open and in front. Don't unplug the FM-1.",
+    runInstall: "Installing Saadet {v}", runResume: "Finishing the installation", runBoot: "Installing m-bootloader",
+    runStock: "Installing M-VAVE's firmware",
+    phPrepare: "Prepare", phWrite: "Write", phRestart: "Restart", phBoot: "m-bootloader",
+    stStart: "Starting", stVerify: "Checking the package", stLoader: "Switching the FM-1 to update mode",
+    stWrite: "Writing the firmware", stReboot: "Restarting the FM-1", stBootWait: "Waiting for Saadet to start",
+    stBoot: "Writing m-bootloader. The FM-1 restarts by itself", stFind: "Finding the FM-1 in update mode",
+    etaMin: "About {n} min left", etaSec: "Less than a minute left",
+    stall: "Waiting for the FM-1… keep the cable connected.",
+    backKept: "You left this tab for {s}. The installation kept going, but please stay here until it's done.",
+    backSlow: "You left this tab for {s}, and the browser slowed the page. It continues now: please stay on this tab.",
+    titleRun: "{p}% · Installing Saadet", titleHidden: "⚠ Come back: installing, {p}%", titleDone: "Done · Saadet",
+    leave: "Installing. Leaving now can stop the installation.",
+    endDoneH: "Saadet {v} is installed", endDoneBootH: "Saadet {v} and m-bootloader are installed",
+    endDone: "The FM-1 has restarted with Saadet {v}. You can unplug it now.",
+    endBootH: "m-bootloader is installed", endBoot: "The FM-1 has restarted with Saadet {v}.",
+    endStockH: "M-VAVE's firmware is back", endStock: "The FM-1 has restarted with its original firmware.",
+    tipEditor: "Open the editor to browse sounds and make backups.",
+    tipBoot: "To check m-bootloader: switch the FM-1 off, hold PLAY and switch it on. Its recovery menu appears.",
+    endPausedH: "Installation paused",
+    endPaused: "The FM-1 is safe. It waits in update mode until the installation finishes, even if it's switched off.",
+    tipCable: "Check the cable, or plug it in again. The screen shows UPDATING, or stays dark.",
+    tipApps: "Close other music apps and editor tabs.", tipResume: "Then press Resume. The write starts again from the beginning.",
+    endSafeH: "Nothing was changed", endSafe: "The FM-1 still runs its previous firmware.",
+    endRestartH: "The FM-1 didn't come back",
+    endRestart: "The write finished, but the FM-1 didn't report back. Switch it off and on again.",
+    tipStill: "If it shows UPDATING or stays dark, it is still in update mode: press Find FM-1 and resume.",
+    tipBrick: "If it doesn't start at all, see “If the FM-1 won't start” on this page.",
+    endPartialH: "Saadet is installed, m-bootloader isn't",
+    endPartial: "Saadet {v} is installed. m-bootloader could not be written and nothing else was changed. You can try again later from this page.",
+    btnEditor: "Open the editor", btnManual: "Read the manual", btnClose: "Close", btnResume: "Resume installation",
+    btnRetry: "Try again",
+    e_notfound: "The FM-1 stopped answering before anything was written.",
+    e_model: "The connected device is not an FM-1.",
+    e_lost: "The USB connection was lost.", e_stopped: "The FM-1 stopped asking for data.",
+    e_noloader: "The FM-1 in update mode was not found.", e_noreturn: "The FM-1 did not come back after restarting.",
+    e_mismatch: "Written, but the FM-1 reports another version: {d}.", e_badreq: "The FM-1 asked for data outside the package.",
+    e_open: "This FM-1 runs M-VAVE's Open firmware. Go back to M-VAVE's firmware first.",
+    e_bootrefused: "The firmware refused m-bootloader.", e_other: "Error: {m}",
+    mResumeH: "If an installation stopped",
+    mResume1: "Nothing is lost. Until an installation finishes, the FM-1 starts in update mode: its screen shows UPDATING, or stays dark. That holds even after switching it off.",
+    mResume2: "Connect it, open this page and press Find FM-1. The page offers to resume, and continues from the start of the write.",
+    mStockH: "Go back to M-VAVE's firmware",
+    mStock1: "This writes M-VAVE's own FM-1 firmware back over the same cable. It also puts back M-VAVE's bootloader, and what Saadet saved may be lost.",
+    mStock2: "Download M-VAVE's firmware:", mStock3: "Choose the file you downloaded:",
+    mStock4: "Connect the FM-1, press Find FM-1 above, then the button below.", mStockGo: "Install M-VAVE's firmware",
+    stockok: "That is M-VAVE's FM-1 firmware ({p}).", stockbad: "That is not M-VAVE's FM-1 firmware. Choose the file from the link above.",
+    stockfind: "Find the FM-1 above first.",
+    mReportH: "Report a problem",
+    mReport1: "If the FM-1 crashed, don't switch it off: the crash record survives a restart, not a power cycle. Connect it and read the record, then send it with what you were doing.",
+    mReportGo: "Read the crash report", mReportCopy: "Copy", mReportLabel: "Crash report",
+    reportwait: "Reading…", reportnone: "No answer. Check that the FM-1 is running Saadet.",
+    reportok: "Read. Copy it and send it.", reportcopied: "Copied.",
+    mBrickH: "If the FM-1 won't start",
+    mBrick1: "With m-bootloader: switch off, hold PLAY and switch on for its recovery menu, or hold REC for USB download mode.",
+    mBrick2: "Without it, the FM-1's USB recovery route can put a firmware back from a computer:",
+    mBrickLink: "felucca-bsp recovery tools",
+    credits: "Saadet by Kerem Kilic (Ellic Studio). Built on fm1-base by Charles Vestal and felucca-bsp, from Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments. m-bootloader by Julius Vitkauskas.",
+    legal: "Firmware: MPL-2.0. Editor: GPL-3.0-only. Third-party terms apply. Without warranty. M-VAVE and FM-1 are trademarks of their respective owners.",
+    details: "Details", sec: "{n} s", min: "{n} min",
+  },
+  ja: {
+    navEditor: "エディター", navInstall: "インストール", navManual: "マニュアル", other: "English",
+    demo: "デモ：FM-1 をシミュレートしています。何も書き込まれません。", demoleave: "デモを終了",
+    kicker: "M-VAVE FM-1 用ファームウェア", title: "Saadet をインストール",
+    lede: "Prophet、FM6、CZ-1、JUNO-106 を備えたポリフォニック・シンセサイザー。このページから USB でインストールできます。",
+    factBrowser: "Chrome または Edge", factCable: "USB データケーブル", factTime: "約 3 分",
+    resumeBannerH: "前回のインストールが完了していません。",
+    resumeBanner: "FM-1 はアップデートモードで待機しています。接続して「FM-1 を探す」を押すと、続きから完了できます。",
+    s1h: "FM-1 を接続する",
+    s1p: "ハブを使わずにこのパソコンへ直接つなぎ、電源を入れてください。ほかの音楽アプリやエディターのタブは閉じてください。ブラウザが MIDI デバイスの使用許可を求めたら「許可」を選びます。",
+    find: "FM-1 を探す", findAgain: "もう一度探す", finding: "FM-1 を探しています…",
+    s2h: "リカバリー用ブートローダー", optional: "任意",
+    mboot: "m-bootloader {v} もインストールする",
+    mbootwhy: "ファームウェアが起動しないときでも使えるリカバリーメニュー（PLAY を押しながら電源オン）と USB ダウンロードモード（REC）を追加します。M-VAVE のブートローダーと置き換わり、ファームウェアを更新しても残ります。",
+    mbootrisk: "FM-1 のブート領域に書き込みます。この工程中に電源が切れると、ハードウェアでの復旧が必要になることがあります。迷ったらオフのままで構いません。あとからこのページで追加できます。",
+    mbootby: "Julius Vitkauskas 作、MIT ライセンス。", newtab: "（新しいタブで開きます）",
+    s3h: "インストール", s3p: "先にサウンドをバックアップしてください（エディターの「設定」→「バックアップ」）。",
+    gohint: "先に FM-1 を探してください。",
+    goInstall: "Saadet {v} をインストール", goUpdate: "Saadet {v} にアップデート", goReinstall: "Saadet {v} を再インストール",
+    goResume: "インストールを再開", goBoot: "m-bootloader をインストール",
+    planInstall: "この FM-1 のファームウェアを Saadet {v} に置き換えます。先にサウンドをバックアップしてください（エディターの「設定」→「バックアップ」）。",
+    planUpdate: "アップデートしても保存したサウンドは残りますが、念のため先にバックアップしてください（エディターの「設定」→「バックアップ」）。",
+    planResume: "FM-1 はアップデートモードで待機しています。再開すると、書き込みの最初から Saadet {v} を書き込み直します。",
+    planThis: "この FM-1 には Saadet {v} がすでに入っています。再インストールしても安全で、サウンドは残ります。",
+    planBoot: "この FM-1 には Saadet {v} がすでに入っているため、m-bootloader だけを書き込みます。",
+    planOpen: "この FM-1 は M-VAVE の Open ファームウェアで動いています。先に下の手順で M-VAVE のファームウェアに戻してから、Saadet をインストールしてください。",
+    planModel: "これは FM-1 ではありません（{id}）。Saadet は M-VAVE FM-1 専用です。",
+    devLoader: "アップデートモード：インストールの完了待ち", devThis: "Saadet {v}", devSaadet: "Saadet {v}",
+    devDev: "Saadet 開発版", devStock: "M-VAVE ファームウェア {v}", devOpen: "M-VAVE Open ファームウェア",
+    devOther: "別のファームウェア（{id}）", devModel: "FM-1 ではありません（{id}）",
+    chipReady: "準備完了", chipResume: "アップデートモード", chipCurrent: "最新", chipBlocked: "インストール不可",
+    nomidi: "このブラウザは USB MIDI デバイスを使えません。パソコンの Chrome か Edge で開いてください。",
+    denied: "MIDI の使用が許可されませんでした。アドレスバーのアイコンからサイトの設定で MIDI デバイスを許可し、もう一度「FM-1 を探す」を押してください。",
+    notfound: "FM-1 が応答しません。電源が入っていて、データ通信用のケーブル（充電専用ではないもの）でつながっているか確かめ、MIDI を使うほかのアプリやタブを閉じてから、もう一度探してください。",
+    busy: "別のタブでインストールが進行中です。先にそちらを完了させてください。",
+    loadfail: "ファームウェアを読み込めませんでした：{m}", badpkg: "ファームウェアのファイルが壊れています。ページを再読み込みしてください。",
+    nopkg: "このページの隣にファームウェアがありません。代わりにデモを試せます：",
+    pfh: "始める前に",
+    pf1h: "このタブを開いたまま、前面に", pf1: "「完了」と表示されるまで、タブの切り替え、ウィンドウの最小化、ページを閉じることはしないでください。",
+    pf2h: "FM-1 は接続したまま、電源も入れたまま", pf2: "ケーブルを抜いたり、FM-1 の電源を切ったりしないでください。ノートパソコンは電源につないでください。",
+    pf3h: "約 3 分かかります", pf3: "FM-1 の画面には UPDATING と表示されるか、暗いままになります。どちらも正常です。",
+    pfboot: "m-bootloader は最後に、もう一度再起動してから書き込みます。「完了」と表示されるまで電源を切らないでください。",
+    pfbootonly: "ブート領域の書き込みは数秒で終わります。「完了」と表示されるまで電源を切らないでください。",
+    pfok: "サウンドをバックアップした（または残したいものはない）", cancel: "キャンセル", start: "インストールを開始",
+    runwarn: "このタブを開いたまま前面に。FM-1 のケーブルを抜かないでください。",
+    runInstall: "Saadet {v} をインストール中", runResume: "インストールを完了しています", runBoot: "m-bootloader をインストール中",
+    runStock: "M-VAVE のファームウェアをインストール中",
+    phPrepare: "準備", phWrite: "書き込み", phRestart: "再起動", phBoot: "m-bootloader",
+    stStart: "開始しています", stVerify: "ファイルを確認しています", stLoader: "FM-1 をアップデートモードに切り替えています",
+    stWrite: "ファームウェアを書き込んでいます", stReboot: "FM-1 を再起動しています", stBootWait: "Saadet の起動を待っています",
+    stBoot: "m-bootloader を書き込んでいます。FM-1 は自動で再起動します", stFind: "アップデートモードの FM-1 を探しています",
+    etaMin: "残り約 {n} 分", etaSec: "残り 1 分未満",
+    stall: "FM-1 を待っています… ケーブルは接続したままにしてください。",
+    backKept: "このタブを {s} 離れていました。インストールは続いていましたが、完了までこのタブにいてください。",
+    backSlow: "このタブを {s} 離れていたため、ブラウザがページを遅くしていました。今は再開しています。このタブにいてください。",
+    titleRun: "{p}% · Saadet をインストール中", titleHidden: "⚠ 戻ってください：インストール中 {p}%", titleDone: "完了 · Saadet",
+    leave: "インストール中です。今ページを離れると中断することがあります。",
+    endDoneH: "Saadet {v} をインストールしました", endDoneBootH: "Saadet {v} と m-bootloader をインストールしました",
+    endDone: "FM-1 は Saadet {v} で再起動しました。ケーブルを抜いて構いません。",
+    endBootH: "m-bootloader をインストールしました", endBoot: "FM-1 は Saadet {v} で再起動しました。",
+    endStockH: "M-VAVE のファームウェアに戻しました", endStock: "FM-1 は純正ファームウェアで再起動しました。",
+    tipEditor: "エディターでサウンドの閲覧やバックアップができます。",
+    tipBoot: "m-bootloader の確認：FM-1 の電源を切り、PLAY を押しながら電源を入れると、リカバリーメニューが表示されます。",
+    endPausedH: "インストールが中断しました",
+    endPaused: "FM-1 は安全です。インストールが完了するまで、電源を切ってもアップデートモードで待機します。",
+    tipCable: "ケーブルを確かめるか、挿し直してください。画面には UPDATING と表示されるか、暗いままです。",
+    tipApps: "ほかの音楽アプリやエディターのタブを閉じてください。", tipResume: "それから「再開」を押します。書き込みを最初からやり直します。",
+    endSafeH: "何も変更されていません", endSafe: "FM-1 は以前のファームウェアのままです。",
+    endRestartH: "FM-1 が戻ってきません",
+    endRestart: "書き込みは終わりましたが、FM-1 から応答がありません。電源を入れ直してください。",
+    tipStill: "UPDATING と表示されるか暗いままなら、まだアップデートモードです。「FM-1 を探す」を押して再開してください。",
+    tipBrick: "まったく起動しない場合は、このページの「FM-1 が起動しないとき」を見てください。",
+    endPartialH: "Saadet はインストールされ、m-bootloader はされていません",
+    endPartial: "Saadet {v} はインストールされました。m-bootloader は書き込めず、ほかには何も変更されていません。あとでこのページからもう一度試せます。",
+    btnEditor: "エディターを開く", btnManual: "マニュアルを読む", btnClose: "閉じる", btnResume: "インストールを再開",
+    btnRetry: "もう一度",
+    e_notfound: "何も書き込まれる前に FM-1 が応答しなくなりました。",
+    e_model: "接続されている機器は FM-1 ではありません。",
+    e_lost: "USB の接続が切れました。", e_stopped: "FM-1 がデータを要求しなくなりました。",
+    e_noloader: "アップデートモードの FM-1 が見つかりません。", e_noreturn: "再起動のあと、FM-1 が戻ってきませんでした。",
+    e_mismatch: "書き込みましたが、FM-1 は別のバージョンを報告しています：{d}。", e_badreq: "FM-1 がファイルの範囲外を要求しました。",
+    e_open: "この FM-1 は M-VAVE の Open ファームウェアで動いています。先に M-VAVE のファームウェアに戻してください。",
+    e_bootrefused: "ファームウェアが m-bootloader を受け付けませんでした。", e_other: "エラー：{m}",
+    mResumeH: "インストールが途中で止まったら",
+    mResume1: "何も失われていません。インストールが完了するまで、FM-1 はアップデートモードで起動します（画面に UPDATING、または暗いまま）。電源を切っても同じです。",
+    mResume2: "FM-1 を接続してこのページを開き、「FM-1 を探す」を押してください。再開を案内し、書き込みの最初から続けます。",
+    mStockH: "M-VAVE のファームウェアに戻す",
+    mStock1: "M-VAVE 純正の FM-1 ファームウェアを同じケーブルで書き込みます。M-VAVE のブートローダーも元に戻り、Saadet で保存したものは消えることがあります。",
+    mStock2: "M-VAVE のファームウェアをダウンロード：", mStock3: "ダウンロードしたファイルを選ぶ：",
+    mStock4: "FM-1 を接続し、上の「FM-1 を探す」を押してから、下のボタンを押します。", mStockGo: "M-VAVE のファームウェアを書き込む",
+    stockok: "M-VAVE の FM-1 ファームウェアです（{p}）。", stockbad: "M-VAVE の FM-1 ファームウェアではありません。上のリンクのファイルを選んでください。",
+    stockfind: "先に上で FM-1 を探してください。",
+    mReportH: "不具合を報告する",
+    mReport1: "FM-1 がクラッシュしたら、電源を切らないでください。クラッシュの記録は再起動では残りますが、電源を切ると消えます。接続して記録を読み、何をしていたかと一緒に送ってください。",
+    mReportGo: "クラッシュの記録を読む", mReportCopy: "コピー", mReportLabel: "クラッシュの記録",
+    reportwait: "読み込み中…", reportnone: "応答がありません。FM-1 が Saadet を実行しているか確かめてください。",
+    reportok: "読み込みました。コピーして送ってください。", reportcopied: "コピーしました。",
+    mBrickH: "FM-1 が起動しないとき",
+    mBrick1: "m-bootloader がある場合：電源を切り、PLAY を押しながら電源を入れるとリカバリーメニュー、REC なら USB ダウンロードモードになります。",
+    mBrick2: "ない場合は、FM-1 の USB リカバリー手順でパソコンからファームウェアを書き戻せます：",
+    mBrickLink: "felucca-bsp のリカバリーツール（英語）",
+    credits: "Saadet：Kerem Kilic（Ellic Studio）。Charles Vestal の fm1-base と felucca-bsp を基盤に、Leo Kuroshita（@kurogedelic）、Hügelton Instruments の Felucca から。m-bootloader：Julius Vitkauskas。",
+    legal: "ファームウェア：MPL-2.0。エディター：GPL-3.0-only。第三者の利用条件も適用されます。無保証。M-VAVE および FM-1 は各所有者の商標です。",
+    details: "詳細", sec: "{n} 秒", min: "{n} 分",
+  },
+};
+
+let lang = (() => {
+  try { const s = localStorage.getItem(LANG); if (s === "en" || s === "ja") return s; } catch (_) { /* none kept */ }
+  return (navigator.language || "en").toLowerCase().startsWith("ja") ? "ja" : "en";
+})();
+const t = (k, vars = {}) => (TEXT[lang][k] ?? TEXT.en[k] ?? k).replace(/\{(\w+)\}/g, (_, n) => vars[n] ?? "");
+
+const st = {
+  meta: null, image: null, boot: null, stock: null,  // the release, its images, a chosen stock package
+  access: null, dev: null,                            // the MIDI access; the FM-1 found: { id, kind, version, text }
+  running: false, run: null,                          // the install under way (its screen's state)
+  connErr: null, stockErr: null, demo: null,
+};
+const ver = () => (st.meta ? st.meta.version : "");
+const mark = (on) => { try { if (on) localStorage.setItem(MARK, st.meta.product); else localStorage.removeItem(MARK); } catch (_) { /* not kept */ } };
+
+/* ---- language ---- */
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-t]").forEach((e) => { e.textContent = t(e.dataset.t, { v: st.meta?.boot?.version ?? "" }); });
+  $("lang").textContent = t("other");
+  $("lang").lang = lang === "ja" ? "en" : "ja";
+  render();
+}
+$("lang").addEventListener("click", () => {
+  lang = lang === "ja" ? "en" : "ja";
+  try { localStorage.setItem(LANG, lang); } catch (_) { /* not kept */ }
+  applyLang();
+});
+
+/* ---- the release: release.json, its package and m-bootloader, each checked ---- */
+const sha256 = async (raw) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", raw))].map((b) => b.toString(16).padStart(2, "0")).join("");
+async function fetchBytes(url) {
+  const r = await fetch(url, { cache: "no-cache" });
+  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  return new Uint8Array(await r.arrayBuffer());
+}
+async function loadRelease() {
+  let meta = null;
+  try {
+    const r = await fetch("release.json", { cache: "no-cache" });
+    if (r.ok) meta = await r.json();
+  } catch (_) { /* none here */ }
+  if (DEMO) return demoRelease(meta);
+  if (!meta) { pageFail(t("nopkg"), true); return; }
+  st.meta = meta;
+  try {
+    const raw = await fetchBytes(meta.pkg);
+    if ((await sha256(raw)) !== meta.sha256 || productOf(raw) !== meta.product) { pageFail(t("badpkg")); return; }
+    st.image = logicalImage(raw);
+  } catch (e) { pageFail(t("loadfail", { m: e.message })); return; }
+  try {                                               /* offered only when it is exactly the pinned package */
+    if (meta.boot) {
+      const raw = await fetchBytes(meta.boot.pkg);
+      if ((await sha256(raw)) === meta.boot.sha256 && productOf(raw) === "FM-1_099") st.boot = { image: logicalImage(raw), version: meta.boot.version };
+    }
+  } catch (_) { /* no option, then */ }
+}
+
+/* the demo: a simulated FM-1 (fakefm1.js) and small images of its own; nothing is fetched or written */
+function demoImage(n, seed) { const b = new Uint8Array(n); for (let i = 0; i < n; i++) b[i] = (i * 131 + seed * 7 + (i >> 8)) & 0xFF; return b; }
+function demoRelease(meta) {
+  const version = meta?.version || "1.0";
+  const product = meta?.product || "FM-1_9010000";
+  st.meta = { name: "Saadet", version, product, boot: { version: meta?.boot?.version || "1.2" } };
+  st.image = demoImage(0x30000, 1);
+  st.boot = { image: demoImage(0x4800, 2), version: st.meta.boot.version };
+  $("demo").hidden = false;
+}
+async function demoAccess() {
+  if (DEMO === "none") return { inputs: new Map(), outputs: new Map(), sysexEnabled: true };
+  if (!st.demo) {
+    const { fakeAccess } = await import("./fakefm1.js");
+    const p = st.meta.product;
+    const opts = {
+      stock: { identity: "FM-1_016" }, saadet: { identity: "FM-1_9000900" }, current: { identity: p },
+      update: { identity: "FM-1_016", state: "loader" }, interrupt: { identity: "FM-1_016", interruptAt: 0.45 },
+      open: { identity: "FM1_OFFICIAL_OPEN" },
+    }[DEMO] || { identity: "FM-1_016" };
+    st.demo = fakeAccess({ images: { firmware: st.image, boot: st.boot.image }, after: p, ...opts });
+  }
+  return st.demo.access;
+}
+
+function pageFail(text, demoLink = false) {
+  $("pagefail").hidden = false;
+  $("pagefailtext").textContent = text + " ";
+  if (demoLink) {
+    const a = document.createElement("a");
+    a.href = "?demo";
+    a.textContent = "?demo";
+    $("pagefailtext").append(a);
+  }
+  $("find").disabled = true;
+}
+
+/* ---- finding the FM-1 ---- */
+async function midi() {
+  if (DEMO) return demoAccess();
+  if (!navigator.requestMIDIAccess) throw fail("nomidi", "no Web MIDI");
+  try { return await navigator.requestMIDIAccess({ sysex: true }); }
+  catch (_) { throw fail("denied", "MIDI not allowed"); }
+}
+
+let finding = false;
+async function connect() {
+  if (finding || st.running) return;
+  finding = true;
+  st.connErr = null;
+  render();
+  try {
+    st.access = await midi();
+    if (await busyElsewhere()) throw fail("busy", "busy");
+    const dev = await new SteadyUpdater(st.access).find();
+    if (!dev) { st.dev = null; throw fail("notfound", "not found"); }
+    dev.link.close();
+    st.dev = { id: dev.id, ...describeDevice(dev.id, st.meta.product) };
+  } catch (e) {
+    st.connErr = ["nomidi", "denied", "notfound", "busy"].includes(e.code) ? e.code : "notfound";
+  }
+  finding = false;
+  render();
+}
+$("find").addEventListener("click", connect);
+$("mboot").addEventListener("change", render);
+
+/* ---- the page's state, drawn ---- */
+function render() {
+  if (!st.meta) return;
+  $("hver").textContent = ver();
+  const dev = st.dev, plan = currentPlan();
+  /* step 1 */
+  const fb = $("find");
+  fb.replaceChildren();
+  if (finding) { const s = document.createElement("span"); s.className = "spin"; fb.append(s, t("finding")); }
+  else fb.append(t(dev || st.connErr ? "findAgain" : "find"));
+  fb.disabled = finding || st.running || !st.image;
+  fb.classList.toggle("primary", !dev);
+  $("connmsg").textContent = st.connErr ? t(st.connErr) : "";
+  $("device").hidden = !dev;
+  if (dev) {
+    const words = { loader: "devLoader", this: "devThis", saadet: "devSaadet", dev: "devDev", stock: "devStock",
+                    open: "devOpen", other: "devOther", model: "devModel" }[dev.kind];
+    $("devwhat").textContent = t(words, { v: dev.version, id: dev.text || dev.id.text });
+    const chip = dev.kind === "loader" ? ["chipResume", "warn"] : dev.kind === "this" ? ["chipCurrent", "ok"]
+      : plan ? ["chipReady", "ok"] : ["chipBlocked", "bad"];
+    $("devchip").textContent = t(chip[0]);
+    $("devchip").className = "chip " + chip[1];
+  }
+  /* step 2: only with m-bootloader's package, never for M-VAVE's firmware */
+  $("st-options").hidden = !st.boot;
+  /* step 3 */
+  const go = $("go");
+  if (!dev || !plan) {
+    go.textContent = t(dev?.kind === "loader" ? "goResume" : "goInstall", { v: ver() });
+    go.disabled = true;
+    $("gohint").hidden = !!dev;
+    $("plantext").textContent = !dev ? t("s3p") : t(dev.kind === "open" ? "planOpen" : "planModel", { id: dev.id.text });
+  } else {
+    const label = plan.resume ? "goResume" : !plan.firmware ? "goBoot" : dev.kind === "this" ? "goReinstall"
+      : ["saadet", "dev"].includes(dev.kind) ? "goUpdate" : "goInstall";
+    go.textContent = t(label, { v: ver() });
+    go.disabled = st.running;
+    $("gohint").hidden = true;
+    const words = plan.resume ? "planResume" : !plan.firmware ? "planBoot" : dev.kind === "this" ? "planThis"
+      : ["saadet", "dev"].includes(dev.kind) ? "planUpdate" : "planInstall";
+    $("plantext").textContent = t(words, { v: ver() });
+  }
+  $("st-connect").dataset.state = dev ? "done" : "active";
+  $("st-options").dataset.state = dev && plan ? "active" : "todo";
+  $("st-install").dataset.state = dev && plan ? "active" : "todo";
+  $("stockgo").disabled = !st.stock || st.running;
+  $("stockmsg").textContent = st.stockErr || (st.stock ? t("stockok", { p: st.stock.product }) : "");
+  $("stockmsg").classList.toggle("msg", !!st.stockErr);
+  /* an unfinished install: kept from an earlier visit, or the FM-1 itself in update mode */
+  let pending = false;
+  try { pending = !!localStorage.getItem(MARK); } catch (_) { /* unknown */ }
+  if (pending && dev && dev.kind !== "loader" && !st.running) { mark(false); pending = false; }   /* it finished after all */
+  $("resumebanner").hidden = !(pending || dev?.kind === "loader");
+}
+
+function currentPlan() {
+  if (!st.dev) return null;
+  return planFor(st.dev.kind, !!st.boot && $("mboot").checked);
+}
+
+/* ---- before writing: the rules, and the backup (asked every time) ---- */
+function preflight(plan) {
+  const d = $("preflight");
+  $("pfboot").hidden = !plan.boot;
+  $("pfboot").lastElementChild.textContent = t(plan.firmware ? "pfboot" : "pfbootonly");
+  const askBackup = plan.firmware && !plan.resume;   /* in update mode there is no firmware running to back up */
+  $("pfcheck").hidden = !askBackup;
+  $("pfok").checked = false;
+  $("pfgo").disabled = askBackup;
+  d.showModal();
+  (askBackup ? $("pfok") : $("pfgo")).focus();
+  /* answered by the button itself (submit), not the dialog's close event, which a browser may hold back while
+     the page is not drawn */
+  return new Promise((resolve) => {
+    const form = d.querySelector("form");
+    const done = (go) => {
+      form.removeEventListener("submit", submit);
+      d.removeEventListener("cancel", cancel);
+      d.close();
+      resolve(go);
+    };
+    const submit = (e) => { e.preventDefault(); done(e.submitter?.value === "go"); };
+    const cancel = (e) => { e.preventDefault(); done(false); };
+    form.addEventListener("submit", submit);
+    d.addEventListener("cancel", cancel);
+  });
+}
+$("pfok").addEventListener("change", () => { $("pfgo").disabled = !$("pfok").checked; });
+
+/* ---- the install's screen ---- */
+const ICON = { done: "#i-check", paused: "#i-pause", safe: "#i-info", restart: "#i-alert", partial: "#i-alert" };
+const FAVICON = (c) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='4' fill='${c}'/></svg>`)}`;
+const baseTitle = document.title;
+
+function log(line) {
+  const el = $("log"), atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  el.append(line + "\n");
+  if (atEnd) el.scrollTop = el.scrollHeight;
+}
+
+function phasesFor(plan) {
+  return [plan.firmware && !plan.resume && "prepare", plan.firmware && "write", plan.firmware && "restart", plan.boot && "boot"].filter(Boolean);
+}
+
+function openRun(plan, isStock) {
+  const r = { plan, isStock, pct: 0, phase: null, writeAt: 0, lastAt: Date.now(), hiddenPct: 0, list: phasesFor(plan) };
+  st.run = r;
+  const d = $("run");
+  d.dataset.state = "running";
+  $("end").hidden = true;
+  $("log").textContent = "";
+  $("backnote").hidden = $("stall").hidden = true;
+  $("eta").textContent = "";
+  $("runtitle").textContent = t(isStock ? "runStock" : plan.resume ? "runResume" : plan.firmware ? "runInstall" : "runBoot", { v: ver() });
+  document.querySelectorAll("#phases li").forEach((li) => { li.hidden = !r.list.includes(li.dataset.ph); li.className = ""; });
+  setPct(0);
+  setStep(plan.resume ? "stFind" : "stStart", r.list[0]);
+  $("favicon").href = FAVICON("#d08a00");
+  if (!d.open) d.showModal();
+}
+$("run").addEventListener("cancel", (e) => { if (st.running) e.preventDefault(); });
+
+function setPct(p) {
+  const r = st.run;
+  r.pct = Math.max(r.pct, Math.min(100, Math.floor(p)));
+  $("pct").textContent = r.pct;
+  $("barfill").style.width = r.pct + "%";
+  $("bar").setAttribute("aria-valuenow", r.pct);
+  document.title = document.visibilityState === "hidden" ? t("titleHidden", { p: r.pct }) : t("titleRun", { p: r.pct });
+}
+
+function setStep(key, phase) {
+  const r = st.run;
+  $("runstep").textContent = t(key);
+  if (phase && phase !== r.phase) {
+    r.phase = phase;
+    const at = r.list.indexOf(phase);
+    document.querySelectorAll("#phases li").forEach((li) => {
+      const i = r.list.indexOf(li.dataset.ph);
+      li.className = i < 0 ? "" : i < at ? "past" : i === at ? "now" : "";
+    });
+  }
+  $("bar").classList.toggle("indet", phase === "boot" && !r.plan.firmware);
+}
+
+// fm1ota.js's steps -> the screen. The firmware fills the bar, or most of it when m-bootloader follows.
+function stepper(pm) {
+  const r = st.run, share = r.plan.boot ? (r.plan.firmware ? 0.94 : 0) : 1;
+  return (k, a, b) => {
+    log(`${k} ${a ?? ""}${b != null ? " " + b : ""}`);
+    r.lastAt = Date.now();
+    $("stall").hidden = true;
+    if (k === "start") setStep("stStart", "prepare");
+    else if (k === "verify") { setStep("stVerify", "prepare"); setPct(pm.verify(b) * share); }
+    else if (k === "loader") setStep("stLoader", "prepare");
+    else if (k === "write") {
+      if (!r.writeAt) r.writeAt = Date.now() - 1;
+      setStep("stWrite", "write");
+      setPct(pm.writing(b) * share);
+      const s = remaining(b, pm.write, Date.now() - r.writeAt);
+      $("eta").textContent = s == null ? "" : s >= 60 ? t("etaMin", { n: Math.ceil(s / 60) }) : t("etaSec");
+    } else if (k === "reboot") { $("eta").textContent = ""; setStep("stReboot", "restart"); setPct(99 * share); }
+    else if (k === "done" && r.plan.boot) setStep("stBootWait", "boot");
+    else if (k === "bootstart") { setStep("stBoot", "boot"); setPct(share ? 96 : 30); }
+    else if (k === "bootwrite") { setStep("stBoot", "boot"); setPct(share ? 98 : 70); }
+  };
+}
+
+// no progress for a while during a transfer: say what the page is waiting for (UI only)
+setInterval(() => {
+  const r = st.run;
+  if (!st.running || !r || !["prepare", "write"].includes(r.phase)) return;
+  $("stall").hidden = Date.now() - r.lastAt < 12000;
+}, 1000);
+
+function away(ms) {
+  const s = Math.round(ms / 1000);
+  return s < 60 ? t("sec", { n: s }) : t("min", { n: Math.round(s / 60) });
+}
+const onHidden = () => {
+  const r = st.run;
+  if (!r) return;
+  r.hiddenPct = r.pct;
+  document.title = t("titleHidden", { p: r.pct });
+};
+const onVisible = (ms) => {
+  const r = st.run;
+  if (!r || !st.running) return;
+  document.title = t("titleRun", { p: r.pct });
+  if (ms < 1500) return;
+  const kept = r.pct > r.hiddenPct || r.phase === "restart" || r.phase === "boot";
+  $("backtext").textContent = t(kept ? "backKept" : "backSlow", { s: away(ms) });
+  $("backnote").hidden = false;
+};
+
+function endRun(state, err) {
+  const r = st.run, plan = r.plan, v = { v: ver() };
+  const d = $("run");
+  d.dataset.state = state;
+  $("end").hidden = false;
+  $("endicon").setAttribute("href", ICON[state]);
+  const tips = [], acts = [];
+  const button = (key, primary, fn) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn" + (primary ? " primary" : "");
+    b.textContent = t(key);
+    b.addEventListener("click", fn);
+    acts.push(b);
+  };
+  const link = (key, href, primary) => {
+    const a = document.createElement("a");
+    a.className = "btn" + (primary ? " primary" : "");
+    a.href = href;
+    a.textContent = t(key);
+    a.style.textDecoration = "none";
+    acts.push(a);
+  };
+  const reason = err ? (err.code && TEXT.en["e_" + err.code] ? t("e_" + err.code, { d: err.detail }) : t("e_other", { m: err.message })) : "";
+  let title, text;
+  if (state === "done") {
+    if (r.isStock) { title = t("endStockH"); text = t("endStock"); }
+    else if (!plan.firmware) { title = t("endBootH"); text = t("endBoot", v); tips.push(t("tipBoot")); }
+    else {
+      title = t(plan.boot ? "endDoneBootH" : "endDoneH", v);
+      text = t("endDone", v);
+      tips.push(t("tipEditor"));
+      if (plan.boot) tips.push(t("tipBoot"));
+    }
+    if (!r.isStock) { link("btnEditor", "../editor.html", true); link("btnManual", "../manual/index.html"); }
+    button("btnClose", r.isStock, closeRun);
+    setPct(100);
+    document.title = t("titleDone");
+    $("favicon").href = FAVICON("#1f8a46");
+  } else if (state === "paused") {
+    title = t("endPausedH"); text = t("endPaused");
+    tips.push(reason, t("tipCable"), t("tipApps"), t("tipResume"));
+    st.dev = { id: { text: "ota-FM-1", model: "ota-FM-1" }, kind: "loader" };
+    button("btnResume", true, () => { closeRun(); start(); });
+    button("btnClose", false, closeRun);
+  } else if (state === "restart") {
+    title = t("endRestartH"); text = err?.code === "mismatch" ? reason : t("endRestart");
+    tips.push(t("tipStill"), t("tipBrick"));
+    st.dev = null;
+    button("btnClose", true, closeRun);
+  } else if (state === "partial") {
+    title = t("endPartialH"); text = t("endPartial", v);
+    if (reason) tips.push(reason);
+    button("btnClose", true, closeRun);
+  } else {
+    title = t("endSafeH"); text = t("endSafe");
+    if (reason) tips.unshift(reason);
+    tips.push(t("tipCable"), t("tipApps"));
+    button("btnRetry", true, () => { closeRun(); connect(); });
+    button("btnClose", false, closeRun);
+  }
+  $("endtitle").textContent = title;
+  $("endtext").textContent = text;
+  $("endtips").replaceChildren(...tips.filter(Boolean).map((x) => Object.assign(document.createElement("li"), { textContent: x })));
+  $("endactions").replaceChildren(...acts);
+  if (state !== "done") { document.title = baseTitle; $("favicon").href = FAVICON(state === "safe" ? "#777" : "#d08a00"); }
+  (acts[0] || $("endtitle")).focus();
+}
+
+function closeRun() {
+  $("run").close();
+  document.title = baseTitle;
+  render();
+}
+
+/* ---- the install ---- */
+async function resumeWrite(up, image, product, step) {
+  const ota = await up.waitFor(IS_OTA, 8000);
+  if (!ota) throw fail("noloader", "the FM-1 in update mode was not found");
+  const s2 = await up.write(ota, image, step);
+  if (!s2.finished) throw fail(s2.lost ? "lost" : "stopped", `the loader stopped after ${s2.served} requests`);
+  step("reboot");
+  await sleep(3000);
+  const back = await up.waitFor((id) => !IS_OTA(id), 40000);
+  if (!back) throw fail("noreturn", "the FM-1 did not come back");
+  back.link.close();
+  if (back.id.text !== product) throw fail("mismatch", `the FM-1 reports ${back.id.text}`, back.id.text);
+  step("done", back.id.text);
+}
+async function start(isStock = false) {
+  if (st.running) return;
+  const plan = isStock ? { firmware: true, resume: st.dev?.kind === "loader", boot: false } : currentPlan();
+  if (!plan) return;
+  st.running = true;                                  /* from the first click: a second one starts nothing */
+  render();
+  const release = (await preflight(plan)) && await hold({ leaveText: t("leave"), onHidden, onVisible });
+  if (!release) {
+    st.running = false;
+    if (release === null) st.connErr = "busy";
+    render();
+    return;
+  }
+  render();
+  openRun(plan, isStock);
+  const image = isStock ? st.stock.image : st.image;
+  const product = isStock ? st.stock.product : st.meta.product;
+  const up = new SteadyUpdater(st.access, log);
+  const step = stepper(progressModel(image, plan.resume));
+  let phase = "start", state = "done", error = null;
+  if (plan.firmware) mark(true);
+  try {
+    if (!st.access) st.access = await midi();
+    if (plan.firmware) {
+      if (plan.resume) { phase = "staged"; await resumeWrite(up, image, product, step); }
+      else {
+        await up.install(image, product, (k, a, b) => { if (k === "loader") phase = "staged"; step(k, a, b); },
+                         isStock ? st.stock.sha256 : undefined);
+      }
+      phase = "done";
+      mark(false);
+    }
+    if (plan.boot) { phase = "boot"; await up.installBoot(st.boot.image, product, step); }
+  } catch (e) {
+    if (isStock && e?.code === "mismatch") { mark(false); }   /* M-VAVE's firmware names itself its own way */
+    else {
+      state = afterFailure(e?.code, phase);
+      error = e;
+      if (state === "safe") mark(false);
+      log(String(e?.stack || e));
+    }
+  }
+  st.running = false;
+  release();
+  if (state === "done") st.dev = null;               /* what it runs now is shown on the next Find */
+  endRun(state, error);
+  render();
+}
+$("go").addEventListener("click", () => start(false));
+
+/* ---- M-VAVE's firmware, chosen by the player (M-VAVE's server allows no cross-site download); the FM-1 checks
+   the package itself before writing ---- */
+$("stockfile").addEventListener("change", async (e) => {
+  st.stock = null;
+  st.stockErr = null;
+  const f = e.target.files && e.target.files[0];
+  if (f) {
+    try {
+      const raw = new Uint8Array(await f.arrayBuffer());
+      const product = productOf(raw);
+      if (!IS_STOCK(product)) st.stockErr = t("stockbad");
+      else st.stock = { image: logicalImage(raw), product, sha256: await sha256(raw) };
+    } catch (_) { st.stockErr = t("stockbad"); }
+  }
+  render();
+});
+$("stockgo").addEventListener("click", () => {
+  if (!st.stock) return;
+  if (!st.dev) { st.stockErr = t("stockfind"); render(); return; }
+  start(true);
+});
+
+/* ---- the crash report: the firmware's log readout (F0 7D 4C 47 F7 asks; a frame a line, "end" last) ---- */
+const LG = [0x7D, 0x4C, 0x47];
+$("reportgo").addEventListener("click", async () => {
+  const say = (k) => { $("reportstatus").textContent = t(k); };
+  if (st.running) return;
+  try { st.access = st.access || await midi(); } catch (e) { say(e.code); return; }
+  $("reportgo").disabled = true;
+  say("reportwait");
+  const lines = [];
+  try {
+    const dev = await new SteadyUpdater(st.access).find((id) => !IS_OTA(id));
+    if (dev) {
+      lines.push(`${dev.id.text} (${dev.name}), ${new Date().toISOString()}`);
+      dev.link.drain();
+      dev.link.send([0xF0, ...LG, 0xF7]);
+      const end = Date.now() + 4000;
+      while (Date.now() < end) {
+        const p = await dev.link.read(end - Date.now());
+        if (!p) break;
+        if (p.length < 5 || p[1] !== LG[0] || p[2] !== LG[1] || p[3] !== LG[2]) continue;
+        const txt = String.fromCharCode(...p.slice(4, -1));
+        if (txt === "end") break;
+        lines.push(txt);
+      }
+      dev.link.close();
+    }
+  } catch (e) { lines.push(String(e?.message || e)); }
+  $("reportgo").disabled = false;
+  if (lines.length < 2) { say("reportnone"); return; }
+  $("report").value = lines.join("\n");
+  $("report").hidden = $("reportcopy").hidden = false;
+  say("reportok");
+});
+$("reportcopy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("report").value); $("reportstatus").textContent = t("reportcopied"); }
+  catch (_) { $("report").select(); }
+});
+
+/* ---- start ---- */
+(async () => {
+  applyLang();
+  await loadRelease();
+  applyLang();
+  if (!st.image) return;
+  /* MIDI already allowed (a returning visit, or a reload during an install): look without asking */
+  let granted = !!DEMO && DEMO !== "none" && params.has("auto");
+  try {
+    if (!DEMO && navigator.permissions && navigator.requestMIDIAccess) {
+      granted = (await navigator.permissions.query({ name: "midi", sysex: true })).state === "granted";
+    }
+  } catch (_) { /* unknown: wait for the button */ }
+  if (granted) connect();
+})();
+
+return {  };
+})();
+</script>
+</body>
+</html>

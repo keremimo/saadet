@@ -1,0 +1,24 @@
+felucca-bsp
+Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+
+This project was written against the public documentation and headers of the JieLi AC79 AIoT
+SDK (Apache-2.0, JieLi Technology), and follows the register sequences of its flash, USB and
+debug drivers. No SDK source is intended to be included. The SDK files needed to build a
+firmware package (uboot.boot, cfg_tool.bin, eq_cfg_hw.bin) are not distributed here.
+
+chip/ota.c speaks the SysEx update protocol of the M-VAVE updater and reads the JieLi update
+package header. No vendor code is intended to be included.
+
+Switching the divide-by-zero trap off in chip/fm1_irq.h follows a fix proposed by Steve Pinkham
+(spinkham) for Felucca (pull request 111). The code and the comment here are written independently.
+
+chip/usb.c comes from Felucca, where it is GPL-3.0-only; only the include path of one header was changed. Here it
+is MPL-2.0: its MIDI clock and transport sync is keremimo's (Felucca commit 019e2ad), licensed under MPL-2.0 by
+agreement: https://github.com/hugelton/felucca-bsp/pull/3
+
+The history of these files comes from Felucca (https://github.com/hugelton/Felucca), where
+they were first published under GPL-3.0-only by the same copyright holder. Each commit
+message names the Felucca commit it was taken from. Releases of Felucca that already
+contain these files stay under GPL-3.0-only.
+
+Unofficial. Not affiliated with or endorsed by M-VAVE or JieLi.
