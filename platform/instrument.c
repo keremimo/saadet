@@ -85,6 +85,8 @@ static void lcd_fill(uint32_t x,uint32_t y,uint32_t w,uint32_t h,uint16_t c){sd_
 #define MQ 128u
 static uint32_t midi_in_q[MQ],midi_in_ms[MQ],midi_in_time[MQ];
 static uint8_t midi_in_source[MQ];
+/* Reception counts survive note-queue overflow; both BLE links share CLK=BLE. */
+static uint16_t midi_in_pulse[MQ],midi_rx_pulses[3];
 static volatile uint32_t mi_w,mi_r;
 static volatile uint8_t midi_in_overflow;
 static uint32_t midi_render_time;
@@ -146,6 +148,7 @@ void saadet_init(void)
 {
     fm1_ms=sd_ms();dsp_tables_init();
     mi_w=mi_r=0;midi_in_overflow=0;
+    memset(midi_rx_pulses,0,sizeof midi_rx_pulses);
     memset(sd_midi_keys,0,sizeof sd_midi_keys);memset(sd_midi_pedal,0,sizeof sd_midi_pedal);
     midi_input_reset();memset(mchord,0,sizeof mchord);sd_ble_was_up=sd_thru_was=0;
     memset(trk,0,sizeof trk);memset(&song,0,sizeof song);eng_state_reset();

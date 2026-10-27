@@ -13,6 +13,7 @@ static void sd_queue_midi(uint32_t packet,uint32_t source)
     }
     uint32_t i=mi_w%MQ;midi_in_q[i]=packet;midi_in_ms[i]=fm1_ms;
     midi_in_time[i]=fm1_ticks();midi_in_source[i]=(uint8_t)(source==4u?3u:source); /* either BLE link shares the clock source */
+    midi_in_pulse[i]=midi_rx_pulses[midi_in_source[i]-1u];
     RING_PUBLISH();mi_w++;
 }
 static uint32_t sd_other_key(uint32_t port,uint32_t ch,uint32_t note)
@@ -41,7 +42,11 @@ static void sd_ingress(uint32_t packet,uint32_t source)
 {
     uint32_t port=source-1u,status=(packet>>8)&255u,ch=status&15u;
     uint32_t st=status&240u,note=(packet>>16)&127u,vel=(packet>>24)&127u;
-    if(port>=4u||midi_in_overflow)return;
+    if(port>=4u)return;
+    /* Count real-time pulses even while the audio consumer is clearing an
+     * overflowing note stream. Queue snapshots recover every discarded pulse. */
+    if(status==0xF8u)midi_rx_pulses[(source==4u?3u:source)-1u]++;
+    if(midi_in_overflow)return;
     if(st==0x80u||(st==0x90u&&!vel)){
         uint32_t *word=&sd_midi_keys[port][ch][note>>5],bit=1u<<(note&31u);
         if(!(*word&bit))return;*word&=~bit;

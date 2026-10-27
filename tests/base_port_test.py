@@ -136,6 +136,7 @@ ingress=r'''
 #define RING_PUBLISH() ((void)0)
 static uint32_t midi_in_q[MQ],midi_in_ms[MQ],midi_in_time[MQ],fm1_ms;
 static uint8_t midi_in_source[MQ],midi_in_overflow;
+static uint16_t midi_in_pulse[MQ],midi_rx_pulses[3];
 static uint32_t mi_w,mi_r;
 static uint32_t fm1_ticks(void){return 0;}
 static int sd_ble_connected(void){return 1;}

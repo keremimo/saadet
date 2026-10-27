@@ -1,7 +1,15 @@
-# Saadet 0.1.0
+# Saadet 0.1.1
 
-First public release for the M-VAVE FM-1, with Bluetooth MIDI enabled.
+MIDI clock drift fix for the M-VAVE FM-1, based on Saadet 0.1.0.
+The audio rate remains 44.1 kHz.
 This is an experimental release; the outstanding hardware checks are listed below.
+
+## Fixed in 0.1.1
+
+- Recover MIDI clock pulses discarded during an input queue overflow, keeping USB, TRS and BLE transport
+  phase aligned with the selected master while still releasing stuck notes.
+- Consume every overdue arpeggiator step after a clock burst, retaining swing, residual phase and gate timing.
+- Backport the timing changes from Melodee commit `0e3d353`; retain Saadet's single-synth MIDI input handling.
 
 ## Included
 
@@ -38,13 +46,14 @@ Automated checks cover native engines/audio, MIDI, storage, UI, BLE protocol and
 transfer/resume, bootloader handling, source/package consistency and licence notices. Hardware records include
 successful displayed-code iPhone pairing and a MIDI subscription on an earlier build.
 
-Final acceptance of this exact 0.1.0 package on an FM-1 remains to be recorded:
+Final acceptance of this exact 0.1.1 package on an FM-1 remains to be recorded:
 
-1. Install and confirm the release identity FM-1_9000100 and the on-screen version.
-2. Play and receive BLE notes, sustain and pitch bend; check that disconnect leaves no stuck notes.
-3. Reboot and test the remembered outgoing device, retries, manual Disconnect, Radio Off and Forget.
-4. Exercise USB/TRS/BLE together while playing all four engines, and check audio continuity under load.
-5. Save/reopen sounds and settings, and check the normal update and recovery path.
+1. Verify sustained USB/TRS/BLE clock sync under MIDI input load and check ARP swing and gates.
+2. Install and confirm the release identity FM-1_9000101 and the on-screen version.
+3. Play and receive BLE notes, sustain and pitch bend; check that disconnect leaves no stuck notes.
+4. Reboot and test the remembered outgoing device, retries, manual Disconnect, Radio Off and Forget.
+5. Exercise USB/TRS/BLE together while playing all four engines, and check audio continuity under load.
+6. Save/reopen sounds and settings, and check the normal update and recovery path.
 
 The preparation tools do not install or publish anything. BUILD_INFO.json and SHA256SUMS identify the exact
 package and corresponding source; VERIFICATION.json records the completed automated preparation checks.

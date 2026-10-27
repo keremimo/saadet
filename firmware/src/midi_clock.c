@@ -6,7 +6,8 @@
  * the measured tempo cannot move steps, gates, ties or the arpeggiator. */
 static struct {
     uint32_t pos, rendered, last_ms, start_ms, last_time, interval_time, tempo_time, tempo_dt;
-    uint8_t mode, selected, have_pulse, tempo_valid, tempo_n, tempo_count;
+    uint16_t pulse_count;
+    uint8_t mode, selected, have_pulse, tempo_valid, tempo_n, tempo_count, count_valid;
 } midi_clock;
 
 /* Preserve fractional sequencer/ARP phase when external transport takes over. */
@@ -42,12 +43,14 @@ static __attribute__((noinline)) void midi_clock_transport(uint32_t status, uint
     if (status == 0xFAu) {
         midi_clock.pos = midi_clock.rendered = 0;
         midi_clock.have_pulse = midi_clock.tempo_valid = 0;
+        midi_clock.count_valid = 0;
         midi_clock.interval_time = 0;
         midi_clock.start_ms = ms;
         transport_start();
     } else if (status == 0xFBu) {
         midi_clock.pos = midi_clock.rendered;
         midi_clock.have_pulse = midi_clock.tempo_valid = 0;
+        midi_clock.count_valid = 0;
         midi_clock.interval_time = 0;
         midi_clock.start_ms = ms;
         song.playing = 1;
@@ -56,8 +59,15 @@ static __attribute__((noinline)) void midi_clock_transport(uint32_t status, uint
     }
 }
 
-static __attribute__((noinline)) void midi_clock_pulse(uint32_t ms, uint32_t time)
+static __attribute__((noinline)) void midi_clock_pulse(uint32_t ms, uint32_t time, uint16_t count)
 {
+    uint32_t pulses = midi_clock.count_valid ? (uint16_t)(count - midi_clock.pulse_count) : 1u;
+    if (!pulses || (midi_clock.have_pulse && ms - midi_clock.last_ms > 500u)) pulses = 1u;
+    midi_clock.pulse_count = count;
+    midi_clock.count_valid = 1;
+    /* Missing queue entries have no usable timing endpoints. Keep the last
+     * interpolated rate and acquire tempo again from consecutive pulses. */
+    if (pulses > 1u) midi_clock.tempo_valid = 0;
     if (!midi_clock.tempo_valid || ms - midi_clock.last_ms > 500u) {
         midi_clock.tempo_valid = 1;
         midi_clock.tempo_time = time;
@@ -101,9 +111,12 @@ static __attribute__((noinline)) void midi_clock_pulse(uint32_t ms, uint32_t tim
     if (song.playing) {
         if (midi_clock.have_pulse) {
             uint32_t interval = time - midi_clock.last_time;
-            if (!midi_clock.tempo_dt && interval >= 8u * MIDI_TICKS_PER_MS && interval <= 80u * MIDI_TICKS_PER_MS)
+            if (pulses == 1u && !midi_clock.tempo_dt && interval >= 8u * MIDI_TICKS_PER_MS && interval <= 80u * MIDI_TICKS_PER_MS)
                 midi_clock.interval_time = interval;
-            midi_clock.pos += MIDI_BEAT_UNITS / 24u;
+            midi_clock.pos += pulses * (MIDI_BEAT_UNITS / 24u);
+        } else if (pulses > 1u) {
+            /* Start's first clock is phase zero, even when it was discarded. */
+            midi_clock.pos += (pulses - 1u) * (MIDI_BEAT_UNITS / 24u);
         }
         midi_clock.have_pulse = 1;
     }

@@ -93,6 +93,10 @@ static uint32_t midi_in_q[MQ], midi_out_q[MQ];
 static uint32_t midi_in_ms[MQ];
 static uint32_t midi_in_time[MQ];
 static uint8_t midi_in_source[MQ];                    /* 1 USB, 2 TRS */
+/* Count before queue admission so an overflow cannot erase musical time.
+ * Each packet snapshots its source's count; uint16 differences wrap safely
+ * within the running clock's 500 ms timeout. */
+static uint16_t midi_in_pulse[MQ], midi_rx_pulses[3];
 static volatile uint32_t fm1_ms;                    /* also declared by core.h; parser-only host tests */
 static volatile uint32_t mi_w, mi_r, mo_w, mo_r;
 static volatile uint8_t midi_in_overflow;               /* audio ISR discards a broken stream and releases notes */
@@ -109,6 +113,9 @@ static uint8_t midi_render_timed;                  /* audio ISR supplies the blo
 static int midi_enqueue(uint32_t pkt, uint32_t source)
 {
     uint32_t at = mi_w % MQ;
+    uint32_t clock_source = source >= 1u && source <= 3u ? source - 1u : 0u;
+    if (((pkt >> 8) & 0xFFu) == 0xF8u)
+        midi_rx_pulses[clock_source]++;
     if (midi_in_overflow)
         return 0;
     if (mi_w - mi_r >= MQ) {
@@ -119,6 +126,7 @@ static int midi_enqueue(uint32_t pkt, uint32_t source)
     midi_in_ms[at] = fm1_ms;
     midi_in_time[at] = MIDI_TIME_NOW();
     midi_in_source[at] = (uint8_t)source;
+    midi_in_pulse[at] = midi_rx_pulses[clock_source];
     RING_PUBLISH();
     mi_w++;
     return 1;
