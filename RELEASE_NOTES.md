@@ -1,8 +1,17 @@
-# Saadet 0.1.1
+# Saadet 0.2.0
 
-MIDI clock drift fix for the M-VAVE FM-1, based on Saadet 0.1.0.
+A sustain pedal on the panel for the M-VAVE FM-1, based on Saadet 0.1.1.
 The audio rate remains 44.1 kHz.
 This is an experimental release; the outstanding hardware checks are listed below.
+
+## New in 0.2.0
+
+- Hold ARP as a sustain pedal. The notes you let go of keep sounding and new notes join them until you let go
+  of ARP; with REC on, the latch then keeps them. Striking a sustained note again restarts it, and with the arp
+  on, the arp keeps playing the notes you let go of. Their MIDI note-offs wait for ARP too.
+- Tap ARP to open it or turn its page. Holding ARP no longer lists its pages on the keys; the keys play while
+  it is held. HOME's status line shows SUSTAIN while ARP is down.
+- The pedal applies to the panel keys. External MIDI notes still follow their own CC64 sustain.
 
 ## Fixed in 0.1.1
 
@@ -15,7 +24,7 @@ This is an experimental release; the outstanding hardware checks are listed belo
 
 - One polyphonic synthesizer with Prophet, FM6, CZ-1 and JUNO-106 engines.
 - Native tone editing, SysEx import/export, factory sounds and 384 shared user sound slots.
-- Arpeggiator, HOLD, chords, strum, scales, microtonal tuning and MIDI expression.
+- Arpeggiator, HOLD, panel sustain, chords, strum, scales, microtonal tuning and MIDI expression.
 - Native 24-bit audio, stereo USB playback and synth-master capture at 44.1 kHz.
 - USB, TRS and Bluetooth MIDI. GLOBAL > BLE manages the phone/computer link;
   GLOBAL > DEV discovers and connects an external Bluetooth MIDI device.
@@ -46,14 +55,16 @@ Automated checks cover native engines/audio, MIDI, storage, UI, BLE protocol and
 transfer/resume, bootloader handling, source/package consistency and licence notices. Hardware records include
 successful displayed-code iPhone pairing and a MIDI subscription on an earlier build.
 
-Final acceptance of this exact 0.1.1 package on an FM-1 remains to be recorded:
+Final acceptance of this exact 0.2.0 package on an FM-1 remains to be recorded:
 
-1. Verify sustained USB/TRS/BLE clock sync under MIDI input load and check ARP swing and gates.
-2. Install and confirm the release identity FM-1_9000101 and the on-screen version.
-3. Play and receive BLE notes, sustain and pitch bend; check that disconnect leaves no stuck notes.
-4. Reboot and test the remembered outgoing device, retries, manual Disconnect, Radio Off and Forget.
-5. Exercise USB/TRS/BLE together while playing all four engines, and check audio continuity under load.
-6. Save/reopen sounds and settings, and check the normal update and recovery path.
+1. Hold ARP and play: released notes sustain and stack, letting go ends them (REC on: they latch), with the
+   arp on and off; a quick ARP tap still opens and pages ARP; MIDI out sends the waiting note-offs.
+2. Verify sustained USB/TRS/BLE clock sync under MIDI input load and check ARP swing and gates.
+3. Install and confirm the release identity FM-1_9000200 and the on-screen version.
+4. Play and receive BLE notes, sustain and pitch bend; check that disconnect leaves no stuck notes.
+5. Reboot and test the remembered outgoing device, retries, manual Disconnect, Radio Off and Forget.
+6. Exercise USB/TRS/BLE together while playing all four engines, and check audio continuity under load.
+7. Save/reopen sounds and settings, and check the normal update and recovery path.
 
 The preparation tools do not install or publish anything. BUILD_INFO.json and SHA256SUMS identify the exact
 package and corresponding source; VERIFICATION.json records the completed automated preparation checks.
