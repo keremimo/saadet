@@ -2,9 +2,9 @@
  * Copyright (C) 2026 Kerem Kilic (Ellic Studio) */
 /* The interface. Every button is one place (ui_pages.c) and the screen names it; the four knobs edit the four values at
  * the foot of the screen; pressing the place's button again or turning SELECT turns its page; holding the button lists
- * what is inside on the screen and on the keys (a key jumps there, the keys play no notes while it is held). On HOME the
- * four knobs are the sound's macros and a turn shows its value over the whole screen; holding HOME lists the favourites
- * on the keys. PRESETS browses the sounds and ALGORITHM the engines (the sound loads when they rest); FX opens the
+ * what is inside on the screen and on the keys (a key jumps there, the keys play no notes while it is held), but ARP
+ * held is the sustain pedal (seq.c) and opens its place on a tap only. On HOME the four knobs are the sound's macros
+ * and a turn shows its value over the whole screen; holding HOME lists the favourites on the keys. PRESETS browses the sounds and ALGORITHM the engines (the sound loads when they rest); FX opens the
  * library, SAVE stores the sound (pressed again) or a dump that came in. REC latches the notes held, OCT- / OCT+ shift
  * the octave (both: back to 0; both for 5 s: UPDATE MODE, main.c). Startup maintenance (ui_boot.c), the update
  * countdown below, UPDATE (ota_hw.c) and the crash report (main.c) are the system's own screens. */
@@ -192,12 +192,16 @@ static void ui_button_down(uint32_t b)
     if (p >= PL_N)
         return;
     uix.held_new = uix.place != p || browsing;
-    if (uix.held_new)
-        ui_open(p);
-    uix.pop = 0;
     uix.held = (uint8_t)p;
     uix.held_t = fm1_ms;
     uix.jumped = uix.reveal = 0;
+    if (p == PL_ARP) {                                 /* held, ARP is the sustain pedal (seq.c): it opens on a tap. */
+        uix.jumped = fm1_in.notes != 0u;               /* Keys already down: the pedal */
+        return;
+    }
+    if (uix.held_new)
+        ui_open(p);
+    uix.pop = 0;
 }
 static void ui_button_up(uint32_t b)
 {
@@ -208,8 +212,13 @@ static void ui_button_up(uint32_t b)
         lib.erase = uix.erasing = 0;
         uix.jumped = 1;
     }
-    if (!uix.held_new && !uix.jumped && !uix.reveal) { /* a tap on the open place: its next page; SAVE: it stores */
-        if (p == PL_SAVE) {
+    if (p == PL_ARP) {                                 /* a tap: ARP opens, or turns its page (else it was the pedal) */
+        if (!uix.jumped && fm1_ms - uix.held_t < HOLD_MS[settings_hold % 4u]) {
+            if (uix.held_new) ui_open(p);
+            else ui_turn_page(p, 1);
+        }
+    } else if (!uix.held_new && !uix.jumped && !uix.reveal) {  /* a tap on the open place: its next page; SAVE: */
+        if (p == PL_SAVE) {                                     /* it stores */
             if (sx_staged()) import_store(); else save_store();
         } else {
             ui_turn_page(p, 1);
@@ -241,6 +250,10 @@ static void ui_keys(uint32_t notes)                    /* a key while a place's 
     uint32_t k, n, cur;
     if (uix.held >= PL_N || !notes || uix.erasing)
         return;
+    if (uix.held == PL_ARP) {                          /* the keys play under the pedal: no tap */
+        uix.jumped = 1;
+        return;
+    }
     n = held_entries(uix.held, s, &cur);
     for (k = 0; k < 27u && !((notes >> k) & 1u); k++)
         ;
@@ -309,7 +322,8 @@ static void ui_timers(void)
     lib_poll(now, LOAD_MS);
     if (uix.br.on && !lib.pending && now - uix.br.t >= BROWSE_MS)
         uix.br.on = 0;
-    if (uix.held < PL_N && !uix.erasing && !uix.jumped && !uix.reveal && now - uix.held_t >= HOLD_MS[settings_hold % 4u]) {
+    if (uix.held < PL_N && uix.held != PL_ARP && !uix.erasing && !uix.jumped && !uix.reveal &&
+        now - uix.held_t >= HOLD_MS[settings_hold % 4u]) {
         ui_place_t pl = place_of(uix.held);
         uix.reveal = uix.held == PL_HOME ? lib_count(LIB_FAV) > 0u : pl.n > 1u;
     }
@@ -337,9 +351,11 @@ static void ui_input(void)
         boot_work_input(pressed);
         return;
     }
-    kb_mask = 0;                                 /* a place's button held: the keys choose, they play no notes */
-    for (k = 0; k < PL_N; k++)
-        kb_mask |= ui_btn_bit(button_of_place(k));
+    kb_mask = 0;                                 /* a place's button held: the keys choose, they play no notes; */
+    for (k = 0; k < PL_N; k++)                   /* ARP's is the sustain pedal, they play */
+        if (k != PL_ARP)
+            kb_mask |= ui_btn_bit(button_of_place(k));
+    kb_pedal = ui_btn_bit(B_ARP);
     if (scr_input(pressed, notes)) return;
     for (k = 0; k < NB; k++) {
         if (pressed & ui_btn_bit(k)) ui_button_down(k);
@@ -396,7 +412,7 @@ static void vm_col_of(vm_col_t *c, const ui_field_t *f)
         c->bar = BAR_FILL; c->b = (int16_t)((v - d->min) * 50 / r);
     }
 }
-static void vm_state(char *b, uint32_t n)        /* what changes the notes now: arp, chords, latch (the key: the
+static void vm_state(char *b, uint32_t n)        /* what changes the notes now: arp, chords, latch, pedal (the key: the
                                                   * chord line) */
 {
     const track_t *t = TSEL;
@@ -416,6 +432,8 @@ static void vm_state(char *b, uint32_t n)        /* what changes the notes now: 
     }
     if (t->p[P_AHOLD])
         ADD("LATCH");
+    if (fm1_in.buttons & kb_pedal)
+        ADD("SUSTAIN");
 #undef ADD
 }
 /* the list's five sounds around the one chosen (an empty list: its word in name); the count */

@@ -5,7 +5,7 @@
 /* Engine output -> track level, pan and spread -> master. */
 static int32_t part_storage[CTL],mix_l[CTL],mix_r[CTL];
 static int32_t *part_buf=part_storage;
-static volatile uint32_t kb_mask, kb_layer;
+static volatile uint32_t kb_mask, kb_layer, kb_pedal;   /* kb_pedal: the button that is the sustain pedal (ARP) */
 static volatile uint8_t kb_lock;
 #define LIM_T AUDIO_Q15(18000)
 #define LIM_HOLD 2048u                   /* 46 ms: longer than a chord's repeat (30.6 ms for C major) */

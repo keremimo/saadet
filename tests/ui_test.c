@@ -3,7 +3,8 @@
 /* The interface on the host (ui_harness.c): every page of every place with each engine passes the lint (nothing cut,
  * off the screen or overlapping); the buttons open their places and turn their pages; a held button lists what is
  * inside and a key jumps there without playing; the knobs edit, and a change from elsewhere reaches the screen; HOME's
- * macros, the octave, the latch (of the arp and of plain notes), the LEDs, browsing the sounds and the engines; the
+ * macros, the octave, the latch (of the arp and of plain notes), ARP held as the sustain pedal, the LEDs, browsing the
+ * sounds and the engines; the
  * engines' own pages (every native value on one of them; an edit is the editor's edit); the library, its favourites
  * and HOME's; SAVE and its name; a SysEx dump imported into the slots; the system's own screens; an idle frame sends
  * nothing. UI_PNG=dir saves the screens. */
@@ -436,6 +437,50 @@ int main(void)
     press(B_REC);
     for (uint32_t i = 0; i < 50; i++) tick();
     bad |= check(".. REC again lets go", gates() == 0u);
+
+    /* ARP held is the sustain pedal: the keys play, the notes let go keep sounding and the next join them; one struck
+     * again ends first; letting go ends them, or REC latches them; the arp keeps its notes; no list, no tap */
+    hold_down(B_ARP);
+    key_down(0); frame(); key_up(0);
+    key_down(4); frame(); key_up(4);
+    for (uint32_t i = 0; i < 50; i++) tick();
+    frame();
+    bad |= check("ARP held: the notes let go keep sounding, together", gates() == 2u && lint_has("SUSTAIN"));
+    key_down(0); frame(); key_up(0);
+    for (uint32_t i = 0; i < 50; i++) tick();
+    bad |= check(".. one struck again sounds once", gates() == 2u);
+    frames(600);
+    bad |= check(".. no list", !uix.reveal && uix.place == PL_HOME);
+    hold_up(B_ARP);
+    for (uint32_t i = 0; i < 50; i++) tick();
+    bad |= check(".. letting go ends them, ARP stays shut", gates() == 0u && uix.place == PL_HOME && !lint_has("SUSTAIN"));
+    hold_down(B_ARP);
+    frames(600);
+    hold_up(B_ARP);
+    bad |= check(".. held long alone: no tap", uix.place == PL_HOME);
+    press(B_REC);
+    hold_down(B_ARP);
+    key_down(0); frame(); key_up(0);
+    hold_up(B_ARP);
+    for (uint32_t i = 0; i < 50; i++) tick();
+    bad |= check(".. let go with REC on: latched", gates() == 1u);
+    key_down(4); frame(); key_up(4);
+    for (uint32_t i = 0; i < 50; i++) tick();
+    bad |= check(".. until the next keys", gates() == 1u);
+    press(B_REC);
+    for (uint32_t i = 0; i < 50; i++) tick();
+    TSEL->p[P_AMODE] = 1;
+    hold_down(B_ARP);
+    key_down(0); frame(); key_up(0);
+    key_down(4); frame(); key_up(4);
+    key_down(0); frame(); key_up(0);
+    for (uint32_t i = 0; i < 50; i++) tick();
+    bad |= check(".. the arp keeps the notes let go", TSEL->nheld == 2u && TSEL->arp_phys == 2u);
+    hold_up(B_ARP);
+    for (uint32_t i = 0; i < 50; i++) tick();
+    bad |= check(".. letting go ends them", TSEL->nheld == 0u && TSEL->arp_phys == 0u);
+    TSEL->p[P_AMODE] = 0;
+    for (uint32_t i = 0; i < 400; i++) tick();
 
     /* HOME's key and chord: the chord the notes make (a slash for another bass), its notes; let go: faded, still
      * there; one note: its name; nothing played: the key */

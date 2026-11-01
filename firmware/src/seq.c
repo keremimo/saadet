@@ -297,32 +297,52 @@ static void input_off(track_t *t, uint32_t note)
     trk_note_off(t, note);                          /* other mode (ARP switched while held) */
 }
 
+/* REC (P_AHOLD) with the arp off: the notes the keys let go of keep sounding (and their MIDI note-offs wait) until
+ * the next keys go down from none, or REC lets go (seq_block). The arp latches its own (arp_add) */
+static uint32_t kb_latched[NTRK][4];
+/* ARP held (kb_pedal, ui.c) is the sustain pedal: while it is down the notes the keys let go of keep sounding (and
+ * their MIDI note-offs wait), the next keys joining them, the arp's too (they stay in its notes); letting it go ends
+ * them (seq_block), or REC latches them. A key striking one again ends it first, then starts it anew */
+static uint32_t kb_sustained[NTRK][4];
+static int latch_plain(const track_t *t) { return t->p[P_AHOLD] && !t->p[P_AMODE]; }
+static int pedal_down(void) { return (fm1_in.buttons & kb_pedal) != 0u; }
+static void note_bit(uint32_t *set, uint32_t x) { set[x >> 5] |= 1u << (x & 31u); }
+static void key_note_off(track_t *t, uint32_t x)
+{
+    input_off(t, x);
+    midi_out_event(0x08u | (0x80u | trk_midi_ch(trk_index(t))) << 8 | x << 16);
+}
+/* the notes of set no key sounds end (latch: REC keeps them instead); set empties */
+static void kept_release(track_t *t, uint32_t *set, int latch)
+{
+    uint32_t x;
+    if (!(set[0] | set[1] | set[2] | set[3]))
+        return;
+    for (x = 0; x < 128u; x++)
+        if ((set[x >> 5] >> (x & 31u)) & 1u && !midi_local_held(t, x)) {
+            if (latch)
+                note_bit(kb_latched[trk_index(t)], x);
+            else
+                key_note_off(t, x);
+        }
+    memset(set, 0, 4u * sizeof *set);
+}
+static void latch_release(track_t *t) { kept_release(t, kb_latched[trk_index(t)], 0); }
+static void pedal_release(track_t *t) { kept_release(t, kb_sustained[trk_index(t)], latch_plain(t)); }
+
 /* the effect of key k in the FX layer (PF_N none): the first PF_M1 white keys (F3 .. A4) in order, black keys
  * 1..4 (F#3 G#3 A#3 C#4) the track mutes */
 static void key_chord_tone(uint32_t k, track_t *t)
 {
-    uint32_t x = kb_chord[k][kb_chn[k]], held = midi_local_held(t, x);
+    uint32_t x = kb_chord[k][kb_chn[k]], held = midi_local_held(t, x), *sus = kb_sustained[trk_index(t)];
     kb_chn[k]++;
     if (held) return;
+    if ((sus[x >> 5] >> (x & 31u)) & 1u) {          /* the pedal keeps it: struck again, it ends first */
+        sus[x >> 5] &= ~(1u << (x & 31u));
+        key_note_off(t, x);
+    }
     input_on(t, x, 100);
     midi_out_event(0x09u | (0x90u | trk_midi_ch(trk_index(t))) << 8 | x << 16 | 100u << 24);
-}
-
-/* REC (P_AHOLD) with the arp off: the notes the keys let go of keep sounding (and their MIDI note-offs wait) until
- * the next keys go down from none, or REC lets go (seq_block). The arp latches its own (arp_add) */
-static uint32_t kb_latched[NTRK][4];
-static int latch_plain(const track_t *t) { return t->p[P_AHOLD] && !t->p[P_AMODE]; }
-static void latch_release(track_t *t)
-{
-    uint32_t tr = trk_index(t), mc = trk_midi_ch(tr), x;
-    if (!(kb_latched[tr][0] | kb_latched[tr][1] | kb_latched[tr][2] | kb_latched[tr][3]))
-        return;
-    for (x = 0; x < 128u; x++)
-        if ((kb_latched[tr][x >> 5] >> (x & 31u)) & 1u && !midi_local_held(t, x)) {
-            input_off(t, x);
-            midi_out_event(0x08u | (0x80u | mc) << 8 | x << 16);
-        }
-    memset(kb_latched[tr], 0, sizeof kb_latched[tr]);
 }
 
 static void key_on(uint32_t k, track_t *t)
@@ -342,19 +362,19 @@ static void key_on(uint32_t k, track_t *t)
 /* key k is up: the notes it started end, but those another key still holds */
 static void key_off(uint32_t k, track_t *t)
 {
-    uint32_t n = kb_chn[k], i, mc = trk_midi_ch(trk_index(t));
+    uint32_t n = kb_chn[k], i;
     kb_strum_pending &= ~(1u << k);
     kb_strum[k].total = 0;
     kb_chn[k] = 0;
     for (i = 0; i < n; i++) {
         uint32_t x = kb_chord[k][i];
         if (midi_local_held(t, x)) continue;
-        if (latch_plain(t)) {
-            kb_latched[trk_index(t)][x >> 5] |= 1u << (x & 31u);
-            continue;
-        }
-        input_off(t, x);
-        midi_out_event(0x08u | (0x80u | mc) << 8 | x << 16);
+        if (pedal_down())
+            note_bit(kb_sustained[trk_index(t)], x);
+        else if (latch_plain(t))
+            note_bit(kb_latched[trk_index(t)], x);
+        else
+            key_note_off(t, x);
     }
 }
 
@@ -526,6 +546,7 @@ static void events_block(uint32_t n)
             midi_forget_track(i);
             trk_all_off(t);
             memset(kb_latched[i], 0, sizeof kb_latched[i]);
+            memset(kb_sustained[i], 0, sizeof kb_sustained[i]);
             t->nheld = 0;
             t->arp_phys = 0;
             t->arp_note = 0;
@@ -541,6 +562,8 @@ static void events_block(uint32_t n)
                 t->arp_note = 0;
             }
         }
+        if (!pedal_down())                            /* ARP let go: what the pedal kept ends, or REC latches it */
+            pedal_release(t);
         if (!latch_plain(t))                          /* REC let go (or the arp took over): what it latched ends */
             latch_release(t);
         t->armp = t->p[P_AMODE];
