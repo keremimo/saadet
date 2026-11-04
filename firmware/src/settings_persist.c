@@ -99,6 +99,10 @@ static int settings_import(persist_t *p, int length)
     settings_screen = p->favorites.factory[15][27] < 8u ? p->favorites.factory[15][27] : 0;
     settings_autosave = p->favorites.factory[15][28] != AUTOSAVE_OFF_TAG;
     settings_thru = !!(p->favorites.factory[15][24] & 64u);
+#ifdef SAADET_SMK37
+    settings_key_vel = (p->favorites.factory[15][29] & 0xFCu) == 0xA4u ? p->favorites.factory[15][29] & 3u : 0u;
+    settings_trs_off = p->favorites.factory[15][30] == 0xA9u;
+#endif
     const uint8_t *costs = p->favorites.factory[8] + 8;
     int cost_tag = costs[0] == 'W' && costs[1] == 1;
     for (uint32_t i = 0; i < VOICE_KINDS; ++i)
@@ -142,6 +146,15 @@ static void settings_export(persist_t *p)
     p->ext.spare[1] = tuning_a4 == A4_DEFAULT ? 0 : A4_TAG | (uint32_t)tuning_a4;
     p->favorites.factory[15][27] = settings_screen;
     p->favorites.factory[15][28] = settings_autosave ? 0 : AUTOSAVE_OFF_TAG;
+#ifdef SAADET_SMK37
+    {   /* (bytes that are not our tags stay as they came: settings keep an opaque legacy tail) */
+        uint8_t *vel = &p->favorites.factory[15][29], *trs = &p->favorites.factory[15][30];
+        if (settings_key_vel) *vel = (uint8_t)(0xA4u | (settings_key_vel & 3u));
+        else if ((*vel & 0xFCu) == 0xA4u && (*vel & 3u)) *vel = 0u;
+        if (settings_trs_off) *trs = 0xA9u;
+        else if (*trs == 0xA9u) *trs = 0u;
+    }
+#endif
     uint8_t *thru = &p->favorites.factory[15][24];
     *thru = (uint8_t)((*thru & ~64u) | (settings_thru ? 64u : 0u));
     uint8_t *costs = p->favorites.factory[8] + 8;

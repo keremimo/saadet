@@ -11,8 +11,8 @@
  * the internal clock they run free at BPM. */
 #define KB_SILENT 255u
 static volatile uint8_t kb_asleep;
-static uint32_t kb_prev;
-static uint8_t kb_note[27], kb_trk[27];  /* per key: the note it started and on which track */
+static kb_word_t kb_prev;
+static uint8_t kb_note[KB_N], kb_trk[KB_N];  /* per key: the note it started and on which track */
 static uint8_t last_note = 60;
 /* Stage's played notes, after scale/chord mapping. The ISR owns the held bits per
  * track; each track's last complete voicing survives release, including a tap between UI frames. */
@@ -114,7 +114,7 @@ static uint32_t kb_map(const track_t *t, uint32_t k)
     int32_t n;
     if (e->keys && (n = e->keys(t, k)) >= 0)           /* the engine's own key map (GM kit, slices) */
         return (uint32_t)n;
-    n = 53 + (int32_t)k;
+    n = 53 + KB_OFS(k);
     if (t->p[P_QUANT] == Q_SNAP) {                     /* SNAP: every key, rounded down to the scale */
         if (micro_active(t)) {
             uint32_t note = micro_snap(t, n + t->p[P_TRANS]);
@@ -305,7 +305,11 @@ static uint32_t kb_latched[NTRK][4];
  * them (seq_block), or REC latches them. A key striking one again ends it first, then starts it anew */
 static uint32_t kb_sustained[NTRK][4];
 static int latch_plain(const track_t *t) { return t->p[P_AHOLD] && !t->p[P_AMODE]; }
+#ifdef SAADET_SMK37
+static int pedal_down(void) { return (fm1_in.buttons & kb_pedal) != 0u || sd_jack_pedal; }
+#else
 static int pedal_down(void) { return (fm1_in.buttons & kb_pedal) != 0u; }
+#endif
 static void note_bit(uint32_t *set, uint32_t x) { set[x >> 5] |= 1u << (x & 31u); }
 static void key_note_off(track_t *t, uint32_t x)
 {
@@ -341,21 +345,21 @@ static void key_chord_tone(uint32_t k, track_t *t)
         sus[x >> 5] &= ~(1u << (x & 31u));
         key_note_off(t, x);
     }
-    input_on(t, x, 100);
-    midi_out_event(0x09u | (0x90u | trk_midi_ch(trk_index(t))) << 8 | x << 16 | 100u << 24);
+    input_on(t, x, KB_VEL(k));
+    midi_out_event(0x09u | (0x90u | trk_midi_ch(trk_index(t))) << 8 | x << 16 | KB_VEL(k) << 24);
 }
 
 static void key_on(uint32_t k, track_t *t)
 {
     uint32_t n;
-    if (!(kb_prev & ~(1u << k)))                    /* keys from none: a new chord replaces the latched one */
+    if (!(kb_prev & ~KB_BIT(k)))                    /* keys from none: a new chord replaces the latched one */
         latch_release(t);
     n = chord_build(t, kb_note[k], kb_chord[k]);
-    n = chord_strum_begin(t, kb_chord[k], n, &kb_strum[k], 100);
+    n = chord_strum_begin(t, kb_chord[k], n, &kb_strum[k], KB_VEL(k));
     kb_chn[k] = 0;
     /* Publish pending work after the first tone: input_on may start transport. */
     for (uint32_t i = 0; i < n; i++) key_chord_tone(k, t);
-    if (kb_strum[k].total) kb_strum_pending |= 1u << k;
+    if (kb_strum[k].total) kb_strum_pending |= KB_BIT(k);
     last_note = kb_note[k];
 }
 
@@ -363,7 +367,7 @@ static void key_on(uint32_t k, track_t *t)
 static void key_off(uint32_t k, track_t *t)
 {
     uint32_t n = kb_chn[k], i;
-    kb_strum_pending &= ~(1u << k);
+    kb_strum_pending &= ~KB_BIT(k);
     kb_strum[k].total = 0;
     kb_chn[k] = 0;
     for (i = 0; i < n; i++) {
@@ -398,10 +402,29 @@ static __attribute__((noinline)) void kb_lat(uint32_t k)
 
 static void keyboard_block(void)
 {
-    uint32_t cur = fm1_in.notes, ch, k;
+    kb_word_t cur = KB_KEYS(), ch;
+    uint32_t k;
+#ifdef SAADET_SMK37
+    {   /* the jack's pedal tells the outside; keys struck again before a full lift: their bit never dropped, so the note
+         * ends and starts anew at the new velocity (a key a held button owns, or that just went down or up: as is) */
+        static uint8_t pedal_was;
+        kb_word_t rt = sd_kb_retrig;              /* (the main loop's writer locks against this interrupt) */
+        sd_kb_retrig = 0;
+        if (sd_jack_pedal != pedal_was) {
+            pedal_was = sd_jack_pedal;
+            midi_out_event(0x0Bu | (0xB0u | trk_midi_ch(song.sel)) << 8 | 64u << 16 | (pedal_was ? 127u : 0u) << 24);
+        }
+        rt &= cur & kb_prev & ~kb_layer;
+        for (k = 0; rt && k < KB_N; k++)
+            if ((rt >> k) & 1u && kb_note[k] != KB_SILENT) {
+                key_off(k, &trk[kb_trk[k] % NTRK]);
+                key_on(k, &trk[kb_trk[k] % NTRK]);
+            }
+    }
+#endif
     ch = cur ^ kb_prev;                           /* keys also sound while entering steps */
     if (!ch) return;
-    for (k = 0; k < 27u; k++) {
+    for (k = 0; k < KB_N; k++) {
         if (!((ch >> k) & 1u))
             continue;
         if ((cur >> k) & 1u) {                    /* the selected track; the key-up goes to the same one */
@@ -409,7 +432,7 @@ static void keyboard_block(void)
             if (kb_asleep) { kb_note[k]=KB_SILENT; continue; }
             if ((fm1_in.buttons & kb_mask) || kb_lock) {       /* a layer's button held: the key is the layer's (ui_layer.c), */
                 kb_note[k] = KB_SILENT;           /* a quick-layer key */
-                kb_layer |= 1u << k;
+                kb_layer |= KB_BIT(k);
                 continue;
             }
             kb_note[k] = song.grid ? KB_SILENT : (uint8_t)kb_map(TSEL, k);
@@ -421,7 +444,7 @@ static void keyboard_block(void)
 #endif
         } else {
             if ((kb_layer >> k) & 1u) {
-                kb_layer &= ~(1u << k);
+                kb_layer &= ~KB_BIT(k);
                 continue;
             }
             if (kb_note[k] == KB_SILENT)
@@ -471,7 +494,7 @@ static void midi_chord_tone(mchord_t *m)
 
 static uint32_t chord_strum_next(uint32_t limit)
 {
-    for (uint32_t k = 0; kb_strum_pending && k < 27u; k++) if (kb_strum_pending & (1u << k)) {
+    for (uint32_t k = 0; kb_strum_pending && k < KB_N; k++) if (kb_strum_pending & KB_BIT(k)) {
         uint32_t due = chord_strum_due(&kb_strum[k], kb_chn[k], 0);
         if (due < limit) limit = due;
     }
@@ -484,11 +507,11 @@ static uint32_t chord_strum_next(uint32_t limit)
 
 static void chord_strum_tick(uint32_t n)
 {
-    for (uint32_t k = 0; kb_strum_pending && k < 27u; k++) if (kb_strum_pending & (1u << k)) {
+    for (uint32_t k = 0; kb_strum_pending && k < KB_N; k++) if (kb_strum_pending & KB_BIT(k)) {
         chord_strum_t *s = &kb_strum[k];
         chord_strum_due(s, kb_chn[k], n);
         while (kb_chn[k] < s->total && !chord_strum_due(s, kb_chn[k], 0)) key_chord_tone(k, &trk[kb_trk[k]]);
-        if (kb_chn[k] == s->total) kb_strum_pending &= ~(1u << k);
+        if (kb_chn[k] == s->total) kb_strum_pending &= ~KB_BIT(k);
     }
     for (uint32_t k = 0; midi_strum_pending && k < MCHORD_N; k++) if (midi_strum_pending & (1u << k)) {
         mchord_t *m = &mchord[k];

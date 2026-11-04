@@ -28,6 +28,9 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 #include "../firmware/src/gfx.c"
 #include "../firmware/src/panel.c"
 static void settings_save(void) {}
+#ifdef SAADET_SMK37
+static uint8_t settings_key_vel, settings_trs_off;
+#endif
 static uint8_t settings_boot, settings_drumch = 10, settings_thru;  /* (params.c) */
 #define VOICE_BUDGET_DEFAULT 16u
 static int16_t settings_budget=VOICE_BUDGET_DEFAULT;
@@ -170,6 +173,13 @@ int main(void)
         settings_thru = 0;
         assert(settings_import(&q, sizeof q) && settings_thru);
         settings_thru = 0;
+#ifdef SAADET_SMK37
+        settings_key_vel = 2; settings_trs_off = 1;
+        settings_export(&q);
+        settings_key_vel = 0; settings_trs_off = 0;
+        assert(settings_import(&q, sizeof q) && settings_key_vel == 2u && settings_trs_off == 1u);
+        settings_key_vel = 0; settings_trs_off = 0;
+#endif
         settings_export(&q);
         assert(q.favorites.factory[15][24] == 0xBFu);
         p = original; settings_import(&p, sizeof p);

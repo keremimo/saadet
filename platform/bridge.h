@@ -76,4 +76,12 @@ void saadet_panel_calibrated(const uint8_t *buttons,const uint8_t *enc,const int
 
 void sd_usb_state(uint32_t *values);
 
+#ifdef SAADET_SMK37
+/* the SMK-37's own controls, from the main loop: the 37 keys by keybed position (0 = C3), their last velocities, the
+ * wheels, the pedal, and KNOB BANK, FADER BANK, <, > as bits 0..3 of extra */
+typedef struct { uint64_t keys, retrig; uint8_t vel[37]; int32_t bend, mod; uint8_t pedal; uint32_t extra; } sd_smk_t;
+void sd_smk_read(sd_smk_t *s);
+void sd_smk_config(uint32_t vel, uint32_t trs_off);
+#endif
+
 void saadet_deadline(uint32_t us,uint32_t budget);

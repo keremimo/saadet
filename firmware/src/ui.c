@@ -432,7 +432,11 @@ static void vm_state(char *b, uint32_t n)        /* what changes the notes now: 
     }
     if (t->p[P_AHOLD])
         ADD("LATCH");
+#ifdef SAADET_SMK37
+    if ((fm1_in.buttons & kb_pedal) || sd_jack_pedal)
+#else
     if (fm1_in.buttons & kb_pedal)
+#endif
         ADD("SUSTAIN");
 #undef ADD
 }
@@ -512,7 +516,7 @@ static void vm_keys_now(ui_vm_t *v)
         if ((bits[i >> 5] >> (i & 31u)) & 1u) {
             pcs |= 1u << (i % 12u);
             if (n < sizeof note) note[n] = (uint8_t)i;
-            if (i >= KB_LO && i < KB_LO + 48u) v->kon[(i - KB_LO) >> 5] |= 1u << ((i - KB_LO) & 31u);
+            if (i >= KB_LO && i < KB_LO + KB_SPAN) v->kon[(i - KB_LO) >> 5] |= 1u << ((i - KB_LO) & 31u);
             n++;
         }
     v->kscale = micro ? 0u : (uint16_t)scale_mask(TSEL);

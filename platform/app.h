@@ -12,6 +12,7 @@
 #else
 #define APP_NAME "SAADET MKE"
 #endif
+#define APP_DATA_FAMILY "SAADET"                  /* the SMK-37 store's owner (the base's plat_smk37.c) */
 #define APP_BLOCK 128u
 #define APP_SPLASH_RGB 0xFBA0u
 #define APP_CANVAS_PX (240u*24u)

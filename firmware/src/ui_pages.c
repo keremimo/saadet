@@ -210,6 +210,9 @@ static const ui_stop_t ST_GLO[] = {
 #endif
     {"", "VOICES", PIC_VOICES, {FD(DEV_BUDGET, "BUDGET"), F0, F0, F0}},
     {"", "DISPLAY", PIC_READOUT, {FD(DEV_SLEEP, "SLEEP"), FD(DEV_LIGHTS, "LIGHTS"), F0, F0}},
+#ifdef SAADET_SMK37
+    {"", "KEYS", PIC_READOUT, {FD(DEV_VEL, "VELOCITY"), FD(DEV_TRS, "TRS OUT"), F0, F0}},
+#endif
     {"", "ERASE", PIC_ERASE, {FL(LF_ERASE, "ERASE ALL"), F0, F0, F0}},
 };
 static const ui_stop_t ST_ARP[] = {

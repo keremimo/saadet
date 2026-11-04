@@ -24,8 +24,8 @@ REV="6c0b47e4bfc56fd3cd5b34463210d0e7e0ce0431"
 BSP_REV="0f08fcaa6610b7cabe8cfdcc5c50d6facdae0e7f"
 # The SMK-37 board layer: Kerem's unpushed branches smk37-board-24705d (fm1-base) and smk37-board (felucca-bsp), used
 # from their local worktree until they are pushed. The revisions pin it as REV and BSP_REV pin the FM-1's.
-SMK_REV="c1082696f249c650a556871b397e3f2fb05cf0b3"
-SMK_BSP_REV="af07023f1704214afdf971c278dba2e092a3e899"
+SMK_REV="3cd26864bc4dcffdf21434c4d56f796eb590ad8e"
+SMK_BSP_REV="1ff40a522e7f9cb2ecb0c4925a6a4316fde5c1c9"
 SMK_SOURCE=Path.home()/"code/personal/fm1-base/.claude/worktrees/smk37-board-24705d"
 SMK_MODELS={"pro":("Pro",""),"elite":("Elite","-elite"),"mke":("MKE","-mke")}  # the product's name, the file's suffix
 parser=argparse.ArgumentParser(add_help=False)

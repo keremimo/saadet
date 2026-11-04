@@ -45,6 +45,9 @@ static int16_t drumch_cell;
 /* GLO > MIDI KNOB 3, THRU (fm1-base): what comes in goes out again where it did not come from (platform/app.c
  * sd_midi_thru), 0 OFF. A device setting kept with the settings (favorites row 15 byte 24 bit 6) */
 static uint8_t settings_thru;
+#ifdef SAADET_SMK37
+static uint8_t settings_key_vel, settings_trs_off;   /* GLOBAL > KEYS: 0 NORMAL .. 3 FIXED; the TRS jack silent */
+#endif
 #define PROJ_TMPL 5                                      /* SLOT 5: the template (project.c tmpl) */
 /* SAVE > PROJECT KNOB 2, BOOT: the project power-on loads (OFF, A..D; OFF or an empty slot: the template, if one is
  * saved). A device setting kept with the settings (ext.boot), not the project's: the column shows boot_cell */

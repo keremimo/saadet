@@ -10,7 +10,12 @@ typedef struct { uint8_t kind, id; const char *label; uint8_t sub; } ui_field_t;
                                                                                      * sub: FM6's operator 0..5 (OP1..) */
 /* the device's settings (kept with the settings, not the sound): screen sleep, the LEDs' level, the voice budget,
  * MIDI THRU */
+#ifdef SAADET_SMK37
+enum { DEV_SLEEP, DEV_LIGHTS, DEV_BUDGET, DEV_THRU, DEV_VEL, DEV_TRS, DEV_N };
+static const char *const N_KEYVEL[] = {"NORMAL", "SOFT", "HARD", "FIXED"};
+#else
 enum { DEV_SLEEP, DEV_LIGHTS, DEV_BUDGET, DEV_THRU, DEV_N };
+#endif
 enum { BL_RADIO, BL_RETRY, BL_PICK, BL_DROP, BL_FORGET, BL_ACTION };
 static const char *const N_SLEEP[] = {"NEVER", "5 MIN", "15 MIN", "30 MIN", "60 MIN"};
 static const param_desc_t DEV_D[DEV_N] = {
@@ -18,6 +23,10 @@ static const param_desc_t DEV_D[DEV_N] = {
     {"LIGHTS", F_ENUM, 0, LIGHTS_N - 1, LIGHTS_MID, LIGHTS_NAME, 0},
     {"BUDGET", F_INT, 8, 32, VOICE_BUDGET_DEFAULT, 0, "pts"},
     {"THRU", F_ENUM, 0, 1, 0, N_ONOFF, 0},
+#ifdef SAADET_SMK37
+    {"VELOCITY", F_ENUM, 0, 3, 0, N_KEYVEL, 0},
+    {"TRS OUT", F_ENUM, 0, 1, 1, N_ONOFF, 0},
+#endif
 };
 static const param_desc_t *lib_desc(uint32_t id);        /* ui_lib.c: FK_LIB */
 static int32_t lib_get(uint32_t id);
@@ -82,6 +91,10 @@ static int32_t field_get(const ui_field_t *f)
     }
     case FK_J106: return j106_get(TSEL, f->id);
     case FK_DEV:
+#ifdef SAADET_SMK37
+        if (f->id == DEV_VEL) return settings_key_vel;
+        if (f->id == DEV_TRS) return !settings_trs_off;
+#endif
         return f->id == DEV_SLEEP ? (int32_t)scr_get() : f->id == DEV_LIGHTS ? settings_lights :
                f->id == DEV_THRU ? settings_thru : settings_budget;
     case FK_LIB: return lib_get(f->id);
@@ -188,6 +201,10 @@ static int field_step(const ui_field_t *f, int32_t steps)
         if (f->id == DEV_SLEEP) scr_put((uint32_t)v);
         else if (f->id == DEV_LIGHTS) settings_lights = (uint8_t)v;
         else if (f->id == DEV_THRU) settings_thru = (uint8_t)v;
+#ifdef SAADET_SMK37
+        else if (f->id == DEV_VEL) settings_key_vel = (uint8_t)v;
+        else if (f->id == DEV_TRS) settings_trs_off = (uint8_t)!v;
+#endif
         else settings_budget = (int16_t)v;
         settings_save();
         break;

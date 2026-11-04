@@ -105,8 +105,8 @@ class SmkPackagesTest(unittest.TestCase):
                 self.assertIn(product.encode(), image)
                 self.assertNotIn(b"Saadet FM-1", image)
                 receipt = json.loads((out / (Path(name).stem + ".build.json")).read_text())
-                self.assertEqual(receipt["dependencies"]["fm1-base"], "c1082696f249c650a556871b397e3f2fb05cf0b3")
-                self.assertEqual(receipt["dependencies"]["felucca-bsp"], "af07023f1704214afdf971c278dba2e092a3e899")
+                self.assertEqual(receipt["dependencies"]["fm1-base"], "3cd26864bc4dcffdf21434c4d56f796eb590ad8e")
+                self.assertEqual(receipt["dependencies"]["felucca-bsp"], "1ff40a522e7f9cb2ecb0c4925a6a4316fde5c1c9")
                 self.assertEqual(receipt["product"], identity)
 
     def test_the_instrument_was_built_for_the_smk_map(self):

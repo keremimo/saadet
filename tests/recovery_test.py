@@ -21,8 +21,8 @@ import fm1_recover as R
 import fm1pkg_make as P
 
 
-def make_package(key=0x980F):
-    flash = bytearray(b"\xff" * R.APP_HI)
+def make_package(key=0x980F, app_hi=R.APP_HI, product="FM-1_91030"):
+    flash = bytearray(b"\xff" * app_hi)
     blob = P.key_blob(key)
     flash[0x400:0x400 + len(blob)] = blob
     entry = bytearray(32)
@@ -36,7 +36,7 @@ def make_package(key=0x980F):
     struct.pack_into("<H", app, 0, P.crc16(app[2:]))
     P.sfc(app, 0, 32, 0, key)
     flash[R.APP_LO:R.APP_LO + 32] = app
-    return P.ufw(bytes(flash), b"FELUCCA-LOADER-1", "FM-1_91030")
+    return P.ufw(bytes(flash), b"FELUCCA-LOADER-1", product)
 
 
 def make_stock_fixture():
@@ -74,7 +74,8 @@ def make_stock_fixture():
 
 
 class FakeROM(R.Link):
-    def __init__(self, nor, key=0x980F):
+    def __init__(self, nor, key=0x980F, flash_id=0x856014):
+        self.flash_id_reported = flash_id
         self.nor = bytearray(nor)
         self.key = key
         self.erases = []
@@ -104,7 +105,7 @@ class FakeROM(R.Link):
         if cmd == 0xFC0A:
             data = bytearray(14)
             data[0] = 3
-            data[2:6] = (0x856014).to_bytes(4, "little")
+            data[2:6] = self.flash_id_reported.to_bytes(4, "little")
             return bytes(data)
         address = struct.unpack_from(">I", args)[0]
         if cmd == 0xFD05:
@@ -280,6 +281,107 @@ class RecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(R.RecoveryError, "outside"):
                 self.link.write_sector(address, bytes(R.SECTOR))
         self.assertEqual(self.link.erases, [])
+
+
+class SmkRecoveryTests(unittest.TestCase):
+    PRODUCT = "SMK-37 Elite_900"
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.folder = Path(self.temp.name)
+        self.path = self.folder / "smk.fwsc"
+        self.path.write_bytes(make_package(app_hi=R.SMK_APP_HI, product=self.PRODUCT))
+        self.package = R.Package(self.path)
+        self.before = bytearray(b"\x5a" * R.FLASH_SIZE)
+        self.before[R.TRIM_MARK_OFF:R.TRIM_MARK_OFF + 8] = R.TRIM_MARK
+        self.before[R.APP_LO:R.SMK_APP_HI] = self.package.flash[R.APP_LO:]
+        self.before[R.APP_HI + R.SECTOR] = 0x33     # a changed sector above the FM-1's boundary, inside the SMK's
+        self.output = self.folder / "session"
+        self.output.mkdir()
+        self.quiet = contextlib.redirect_stdout(io.StringIO())
+        self.quiet.__enter__()
+
+    def tearDown(self):
+        self.quiet.__exit__(None, None, None)
+        self.temp.cleanup()
+
+    def link(self, nor=None, flash_id=0xEB6014):
+        link = FakeROM(self.before if nor is None else nor, flash_id=flash_id)
+        link.output = self.output
+        return link
+
+    def test_every_model_is_recognised(self):
+        for product in ("SMK-37 Pro_900", "SMK-37 Elite_900", "MKE-P37_900"):
+            self.path.write_bytes(make_package(app_hi=R.SMK_APP_HI, product=product))
+            package = R.Package(self.path)
+            self.assertTrue(package.smk)
+            self.assertEqual(package.app_hi, R.SMK_APP_HI)
+
+    def test_fm1_sized_flash_in_an_smk_package_is_refused(self):
+        self.path.write_bytes(make_package(product=self.PRODUCT))
+        with self.assertRaisesRegex(R.RecoveryError, "boundary 0x9d000"):
+            R.Package(self.path)
+
+    def test_every_listed_flash_part_writes_only_the_app_area(self):
+        for flash_id in R.SMK_FLASH_IDS:
+            output = self.folder / f"s{flash_id:x}"
+            output.mkdir()
+            link = self.link(flash_id=flash_id)
+            link.output = output
+            result = R.recover(link, self.package, bytes(512), output, True)
+            self.assertEqual(link.erases, [R.APP_HI + R.SECTOR - (R.APP_HI + R.SECTOR) % R.SECTOR])
+            self.assertTrue(result["full_flash_verified"] and result["bootloader_unchanged"] and result["saved_data_unchanged"])
+            self.assertEqual(result["flash_id"], f"{flash_id:06x}")
+            self.assertEqual(link.nor[:R.APP_LO], self.before[:R.APP_LO])
+            self.assertEqual(link.nor[R.SMK_APP_HI:], self.before[R.SMK_APP_HI:])
+            self.assertEqual(link.nor[R.APP_LO:R.SMK_APP_HI], self.package.flash[R.APP_LO:])
+
+    def test_an_unlisted_flash_part_is_refused_before_any_read(self):
+        link = self.link(flash_id=0xEF4014)
+        with self.assertRaisesRegex(R.RecoveryError, "Unexpected flash"):
+            R.recover(link, self.package, bytes(512), self.output, True)
+        self.assertEqual(link.erases, [])
+        self.assertNotIn(0xFD05, link.calls)
+
+    def test_an_smk_package_needs_the_factory_record(self):
+        nor = bytearray(self.before)
+        nor[R.TRIM_MARK_OFF:R.TRIM_MARK_OFF + 8] = bytes(8)
+        link = self.link(nor)
+        with self.assertRaisesRegex(R.RecoveryError, "no SMK-37 factory record"):
+            R.recover(link, self.package, bytes(512), self.output, True)
+        self.assertEqual(link.erases, [])
+        self.assertEqual((self.output / "full-flash-before.bin").read_bytes(), nor)
+
+    def test_an_fm1_package_refuses_a_flash_with_the_factory_record(self):
+        self.path.write_bytes(make_package())
+        link = self.link(flash_id=0x856014)
+        with self.assertRaisesRegex(R.RecoveryError, "has an SMK-37 factory record"):
+            R.recover(link, R.Package(self.path), bytes(512), self.output, True)
+        self.assertEqual(link.erases, [])
+
+    def test_two_reads_that_differ_stop_it_before_a_write(self):
+        link = self.link()
+        reads = []
+        real = link.read_flash
+
+        def flaky(address, length):
+            data = bytearray(real(address, length))
+            reads.append(length)
+            if len(reads) == 2:
+                data[0x20000] ^= 1
+            return bytes(data)
+        link.read_flash = flaky
+        with self.assertRaisesRegex(R.RecoveryError, "Two reads"):
+            R.recover(link, self.package, bytes(512), self.output, True)
+        self.assertEqual(link.erases, [])
+
+    def test_write_boundary_guard(self):
+        link = self.link()
+        link.app_hi = self.package.app_hi
+        for address in (0, R.APP_LO - R.SECTOR, R.APP_LO + 1, R.SMK_APP_HI, 0xC0000, 0xC1000, 0xEA000, 0xF4000, 0xFF000):
+            with self.assertRaisesRegex(R.RecoveryError, "outside"):
+                link.write_sector(address, bytes(R.SECTOR))
+        self.assertEqual(link.erases, [])
 
 
 class OfficialRecoveryTests(RecoveryTests):

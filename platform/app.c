@@ -68,10 +68,17 @@ void sd_input(uint32_t *buttons,uint32_t *keys,int32_t *enc){
 #endif
 }
 #ifdef SAADET_SMK37
-/* SAADET_SMK37 stub: what the pads, faders, wheels, pedal, velocity keys, the outer 10 keys and KNOB BANK, FADER BANK,
- * <, > will do (docs/SMK37_PORT.md section 5 steps 4-6, docs/SMK37_UX.md). The board reads them all; nothing here uses
- * them yet, and the velocity is the UI's one level. */
-void sd_input_smk(void){}
+void sd_smk_read(sd_smk_t *s){
+    s->keys=plat_keys37();s->retrig=plat_keys37_retrig();
+    for(int i=0;i<37;i++)s->vel[i]=(uint8_t)plat_key_vel(i);
+    s->bend=plat_wheel(PLAT_WHEEL_PITCH);s->mod=plat_wheel(PLAT_WHEEL_MOD);s->pedal=(uint8_t)plat_pedal();
+    s->extra=plat_buttons()>>B_KBANK;
+}
+void sd_smk_config(uint32_t vel,uint32_t trs_off){
+    static uint32_t was_vel=255u,was_off=255u;
+    if(vel!=was_vel){was_vel=vel;plat_vel_curve((int)vel);}
+    if(trs_off!=was_off){was_off=trs_off;plat_trs_out(!trs_off);}
+}
 /* SAADET_SMK37 stub: the LEDs the UI has nothing to say on yet, in plat_lights' bits (B_KBANK, B_FBANK, B_LEFT, B_RIGHT,
  * LED_PLAY_GREEN). With the 14 functions below, all 19 LEDs go through sd_lights */
 static const uint32_t sd_smk_lit=0;
@@ -97,6 +104,11 @@ void sd_lights(const uint8_t *bright,const uint8_t *dim,const uint8_t *masks){
             else glow|=1u<<i;
         }
     }
+    /* SEQ PLAY's own LED is its green (the base's LED_PLAY_GREEN); B_PLAY would light its red */
+    {uint32_t play=1u<<B_PLAY;
+     if(lit&play)lit=(lit&~play)|LED_PLAY_GREEN;
+     if(mid&play)mid=(mid&~play)|LED_PLAY_GREEN;
+     if(glow&play)glow=(glow&~play)|LED_PLAY_GREEN;}
     plat_lights(lit,0,glow,0,2);plat_lights_mid(mid,0);
 #elif !defined(PLAT_HOST)
     for(uint32_t i=0;i<11u;i++)fm1_led[i]=bright[i];

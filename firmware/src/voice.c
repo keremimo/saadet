@@ -711,6 +711,9 @@ static __attribute__((noinline)) void spread_sum(int32_t *out)
 /* MIDI pitch bend per track, Q8 semitones: the target seq.c's MIDI input (midi_input.c) and the Prophet's block set,
  * and the smoothed value the voices play (track_render_audio moves it to the target, a step each block) */
 static int32_t midi_bend_target[NTRK], midi_bend_q8[NTRK];
+#ifdef SAADET_SMK37
+static volatile int16_t sd_vib_q8;                  /* the mod wheel on an engine with no wheel of its own (instrument.c) */
+#endif
 /* a 14-bit bend (-8192..8191) at range (Q8 semitones) -> Q8 semitones, rounded. Each side is scaled by its own full
  * scale: the centre is 0, the ends exactly +-range */
 static int32_t midi_bend_scale(int32_t raw, int32_t range)
@@ -799,7 +802,11 @@ static __attribute__((noinline)) uint32_t track_render_audio(track_t *t, int32_t
     tune=tune_cache.pitch;tune_fine=tune_cache.fine;
     /* the bend as TUNE: whole 1/16 semitones (rounded down, so a negative bend's rest is positive too) and the rest,
      * 0..15 Q8 units of 100/256 cent, in 1/4096 (2.367 a cent) */
+#ifdef SAADET_SMK37
+    {int32_t bend_q8=midi_bend_q8[ti]+sd_vib_q8;bend=bend_q8>>4;bend_fine=((bend_q8&15)*2367+1280)/2560;}
+#else
     bend=midi_bend_q8[ti]>>4;bend_fine=((midi_bend_q8[ti]&15)*2367+1280)/2560;
+#endif
     for (i = 0; i < NVOICE; i++) {
         voice_t *v = &t->v[i];
         vmod_t m;

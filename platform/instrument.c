@@ -131,6 +131,62 @@ static uint32_t sd_render_max_us;
 
 #include "midi_ingress.h"
 
+#ifdef SAADET_SMK37
+/* The SMK-37's own controls. Keys by keybed position go to seq.c's numbering (mix.c KB_OFS); the wheels play the sound as
+ * a controller's would, and go out as one, only when they move, so MIDI IN's bend and CC1 keep working. The mod wheel
+ * on the CZ-1, which has no wheel of its own, is a vibrato unless the matrix routes it; < and > are one detent of SELECT,
+ * on HOME of PRESETS. Pads, faders and the two BANK buttons: docs/SMK37_UX.md */
+static void sd_smk_poll(void)
+{
+    static sd_smk_t s;
+    static int32_t sent_bend,sent_mod=-1;
+    static uint32_t extra_was;
+    track_t *t=TSEL;
+    uint32_t ch=trk_midi_ch(trk_index(t)),hit,token;
+    kb_word_t keys=0,retrig=0;
+    sd_smk_read(&s);
+    for(uint32_t i=0;i<37u;i++){
+        uint32_t k=i<5u?32u+i:i-5u;
+        if((s.keys>>i)&1u)keys|=KB_BIT(k);
+        if((s.retrig>>i)&1u)retrig|=KB_BIT(k);
+        sd_kb_vel[k]=s.vel[i];
+    }
+    token=sd_lock();sd_kb_keys=keys;sd_kb_retrig|=retrig;sd_unlock(token);
+    sd_jack_pedal=s.pedal;
+    if(s.bend!=sent_bend){
+        uint32_t v=(uint32_t)(s.bend+8192);
+        sent_bend=s.bend;t->bend_raw=(int16_t)s.bend;
+        if(t->eng_req==ENGI_PROPHET)p5_update_bend(t);
+        else midi_bend_target[trk_index(t)]=midi_bend_scale(s.bend,2*256);
+        sd_midi_out(0x0Eu|(0xE0u|ch)<<8|(v&127u)<<16|(v>>7)<<24);
+    }
+    if(s.mod!=sent_mod){
+        sent_mod=s.mod;t->mw=(uint8_t)s.mod;
+        sd_midi_out(0x0Bu|(0xB0u|ch)<<8|1u<<16|(uint32_t)s.mod<<24);
+    }
+    {
+        int32_t vib=0;
+        if(s.mod&&t->eng_req==ENGI_CZ){
+            uint32_t routed=0;
+            for(uint32_t i=0;i<4u;i++)routed|=t->p[P_M1SRC+3u*i]==MS_MODW;
+            if(!routed){
+                uint32_t ph=sd_ticks()*1790u;                      /* 10 Hz from the 24 MHz time base */
+                int32_t tri=(int32_t)((ph>>15)&0xFFFFu);
+                tri=(ph&0x80000000u?0xFFFF-tri:tri)-32768;
+                vib=(tri*s.mod)>>14;                               /* up to a semitone, Q8 */
+            }
+        }
+        sd_vib_q8=(int16_t)vib;
+    }
+    hit=s.extra&~extra_was;extra_was=s.extra;
+    if(hit&12u){
+        int32_t d=(int32_t)((hit>>3)&1u)-(int32_t)((hit>>2)&1u);
+        sd_enc[panel.enc[uix.place==PL_HOME?EN_PRESET:EN_SELECT]%7u]+=d;
+    }
+    sd_smk_config(settings_key_vel,settings_trs_off);
+}
+#endif
+
 static void sd_poll(void)
 {
     uint32_t u[5];sd_usb_state(u);usb.config=u[0];usb.resets=u[1];usb.up=u[2];usb.suspended=u[3];usb.rx_pkts=u[4];
@@ -139,7 +195,7 @@ static void sd_poll(void)
     sd_notes|=keys&~fm1_in.notes;fm1_in.buttons=buttons;fm1_in.notes=keys;
     for(uint32_t i=0;i<7u;i++)sd_enc[i]+=enc[i];
 #ifdef SAADET_SMK37
-    sd_input_smk(); /* the SMK's own controls: not wired yet (platform/app.c) */
+    sd_smk_poll();
 #endif
     uint32_t packet;int port;
     while(sd_midi_in(&packet,&port)){

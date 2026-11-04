@@ -7,7 +7,17 @@
 enum { VM_PAGE, VM_HOME, VM_POP, VM_REVEAL, VM_BROWSE, VM_SAVE, VM_IMPORT, VM_ERASE, VM_COUNTDOWN };
 enum { BAR_NONE, BAR_FILL, BAR_BIPOLAR, BAR_TICK, BAR_STEPS };
 enum { KM_KEY, KM_CHORD, KM_NOTE, KM_NOTES };      /* HOME's chord line: the key, a chord, one note, notes */
+#ifdef SAADET_SMK37
+#define KB_LO 48u                                   /* HOME's keyboard: the keybed, C3 .. C6 */
+#define KB_SPAN 37u
+#define KB_WW 10                                    /* a white key's pitch and width */
+#define KB_KW 9
+#else
 #define KB_LO 36u                                   /* HOME's keyboard: C2 .. B5 */
+#define KB_SPAN 48u
+#define KB_WW 8
+#define KB_KW 7
+#endif
 #define KB_Y 180
 #define KB_H 32
 #define VM_ROWS 7u                                  /* the held button's list: rows on the screen */
@@ -161,16 +171,16 @@ static void vm_keyboard(const ui_vm_t *v)
     uint16_t lit = v->kfade ? ux_mix(T_BG, T_THEME, 45) : T_THEME;
     uint32_t pass, n, w;
     for (pass = 0; pass < 2u; pass++)
-        for (n = KB_LO, w = 0; n < KB_LO + 48u; n++) {
+        for (n = KB_LO, w = 0; n < KB_LO + KB_SPAN; n++) {
             uint32_t pc = n % 12u, black = (0x54Au >> pc) & 1u, rel = (pc + 12u - v->kkey) % 12u;
             uint16_t c = (v->kon[(n - KB_LO) >> 5] >> ((n - KB_LO) & 31u)) & 1u ? lit :
                          v->kscale && !rel ? T_FILL : (v->kscale >> rel) & 1u ? (black ? T_OFF : T_LIT) :
                          black ? T_BG : T_WELL;
             if (!black) {
-                if (!pass) cv_rect(8 + 8 * (int32_t)w, KB_Y, 7, KB_H, c);
+                if (!pass) cv_rect(8 + KB_WW * (int32_t)w, KB_Y, KB_KW, KB_H, c);
                 w++;
             } else if (pass) {
-                int32_t x = 8 + 8 * (int32_t)w - 3;
+                int32_t x = 8 + KB_WW * (int32_t)w - 3;
                 cv_rect(x - 1, KB_Y, 7, 20, T_BG);
                 cv_rect(x, KB_Y, 5, 19, c == T_BG ? ux_mix(T_BG, T_WELL, 50) : c);   /* (off the scale: darkest) */
             }

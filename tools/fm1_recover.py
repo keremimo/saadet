@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Kerem Kilic (Ellic Studio)
-"""Recover an FM-1 already in WL82 ROM UBOOT over direct USB.
+"""Recover an FM-1 or SMK-37 already in WL82 ROM UBOOT over direct USB.
 
   fm1_recover.py --info
   fm1_recover.py PACKAGE.fwsc --check
@@ -11,6 +11,8 @@
 Without --write, the connected-device operation only loads a temporary RAM
 loader and backs up flash. Source runs require PyUSB and libusb; standalone
 executables bundle them. The RAM helper is included; --check needs no USB.
+The package names its target. An SMK-37 package (Pro, Elite, MKE-P37) writes only its own app area,
+0x4000..0x9D000, and needs the keyboard's factory record on the flash; an FM-1 package refuses a flash that has it.
 The USB BOT/LoaderV2 protocol is documented by FM-1-transporter:
 https://github.com/kurogedelic/FM-1-transporter
 """
@@ -32,6 +34,11 @@ from fm1_install import STOCK_V15_SHA256, logical_image, product_of
 from fm1pkg_make import chipkey_decode, crc16, enc, sfc
 
 APP_LO, APP_HI, FLASH_SIZE, SECTOR = 0x4000, 0x93000, 0x100000, 4096
+SMK_APP_HI = 0x9D000
+FM1_FLASH_IDS = (0x856014,)
+SMK_FLASH_IDS = (0xEB6014, 0x856014, 0xB36014)         # units differ; each is 1 MiB
+SMK_PRODUCT = r"(?:SMK-37 (?:Pro|Elite)|MKE-P37)_\d+"
+TRIM_MARK, TRIM_MARK_OFF = b"trimdat\0", 0xC1224       # the SMK-37's factory record (USRTRIM); never written here
 VERSION = "1.4.0-rc.4"
 LOADER_SHA256 = "d9de9f1c81a3bb52998e5bced678f0ca851223014a7d43965b03f0719a44eb55"
 LOADER_ADDRESS = 0x1C02000
@@ -65,7 +72,10 @@ class Package:
         self.path = Path(path).resolve()
         raw = self.path.read_bytes()
         self.product = product_of(raw)
-        require(re.fullmatch(r"FM-1_\d+", self.product), "Package is not for an FM-1")
+        self.smk = re.fullmatch(SMK_PRODUCT, self.product) is not None
+        require(self.smk or re.fullmatch(r"FM-1_\d+", self.product), "Package is not for an FM-1 or SMK-37")
+        self.app_hi = SMK_APP_HI if self.smk else APP_HI
+        self.flash_ids = SMK_FLASH_IDS if self.smk else FM1_FLASH_IDS
         self.digest = sha256(raw)
         self.stock_v15 = self.product == "FM-1_015"
         if self.stock_v15:
@@ -100,8 +110,8 @@ class Package:
             if not self.stock_v15 or kind in (0, 100):
                 require(crc16(data) == check, "Bad package data checksum")
             if kind == 0:
-                require(self.flash is None and size == APP_HI and entry[64:].split(b"\0", 1)[0] == b"flash.bin",
-                        "Expected one flash.bin with application boundary 0x93000")
+                require(self.flash is None and size == self.app_hi and entry[64:].split(b"\0", 1)[0] == b"flash.bin",
+                        f"Expected one flash.bin with application boundary {self.app_hi:#x}")
                 self.flash = data
         require(self.flash is not None, "Package has no flash.bin")
         self.key = None
@@ -153,6 +163,8 @@ def durable_write(path, data):
 
 
 class Link:
+    app_hi, flash_ids, flash_id = APP_HI, FM1_FLASH_IDS, None   # recover() sets the package's
+
     def __init__(self, wait=15, library=None, bus=None, address=None):
         try:
             import usb.core
@@ -175,7 +187,7 @@ class Link:
         while True:
             devices = [d for d in usb.core.find(find_all=True, idVendor=0x4C4A, idProduct=0x8057, backend=backend)
                        if (bus is None or d.bus == bus) and (address is None or d.address == address)]
-            require(len(devices) <= 1, "Multiple ROM devices found; connect one FM-1 or use --bus and --address")
+            require(len(devices) <= 1, "Multiple ROM devices found; connect one device or use --bus and --address")
             if devices:
                 self.dev = devices[0]
                 break
@@ -240,7 +252,9 @@ class Link:
         key_data = self.command(0xFC09, struct.pack(">I", 0xAC6900))
         key = int.from_bytes(cipher(key_data[4:6][::-1]), "little")
         info = self.command(0xFC0A)
-        require(info[0] == 3 and int.from_bytes(info[2:6], "little") == 0x856014,
+        self.flash_id = int.from_bytes(info[2:6], "little")
+        print(f"Flash type {info[0]}, id {self.flash_id:06X}", flush=True)
+        require(info[0] == 3 and self.flash_id in self.flash_ids,
                 "Unexpected flash type or capacity; refusing recovery")
         return key
 
@@ -255,7 +269,8 @@ class Link:
         return bytes(data)
 
     def write_sector(self, address, data):
-        require(APP_LO <= address < APP_HI and address % SECTOR == 0 and len(data) == SECTOR,
+        require(self.app_hi in (APP_HI, SMK_APP_HI) and APP_LO <= address < self.app_hi and address % SECTOR == 0 and
+                len(data) == SECTOR,
                 "Refusing write outside the application region")
         self.command(0xFB01, struct.pack(">I", address))
         for off in range(0, SECTOR, 512):
@@ -268,7 +283,14 @@ class Link:
         self.util.dispose_resources(self.dev)
 
 
+def installed_head_valid(flash, key):
+    head = bytearray(flash[APP_LO:APP_LO + 32])
+    sfc(head, 0, 32, 0, key)
+    return crc16(head[2:]) == struct.unpack_from("<H", head)[0]
+
+
 def recover(link, package, loader, output, write=False):
+    link.app_hi, link.flash_ids = package.app_hi, package.flash_ids
     identity = link.identify()
     print("Connected to WL82 / UBOOT1.00. Loading recovery program into RAM...", flush=True)
     crash = cipher(link.command(0xFD07, struct.pack(">IH", 0x1C7C000, 512), incoming=512))
@@ -280,10 +302,20 @@ def recover(link, package, loader, output, write=False):
     backup = output / "full-flash-before.bin"
     durable_write(backup, before)
     print(f"Full flash backup verified on disk: {backup}", flush=True)
-    expected = before[:APP_LO] + package.flash[APP_LO:] + before[APP_HI:]
-    sectors = [a for a in range(APP_LO, APP_HI, SECTOR) if before[a:a + SECTOR] != expected[a:a + SECTOR]]
+    factory_record = before[TRIM_MARK_OFF:TRIM_MARK_OFF + len(TRIM_MARK)] == TRIM_MARK
+    require(factory_record == package.smk,
+            "This package is for an SMK-37, but the flash has no SMK-37 factory record; no flash writes" if package.smk else
+            "This package is for an FM-1, but the flash has an SMK-37 factory record; no flash writes")
+    if package.smk:
+        require(link.read_flash(0, FLASH_SIZE) == before, "Two reads of the flash differ; no flash writes")
+    app_hi = package.app_hi
+    expected = before[:APP_LO] + package.flash[APP_LO:] + before[app_hi:]
+    sectors = [a for a in range(APP_LO, app_hi, SECTOR) if before[a:a + SECTOR] != expected[a:a + SECTOR]]
+    head_valid = installed_head_valid(before, key)
+    print(f"Installed application header {'matches' if head_valid else 'does NOT match'} the chip key.", flush=True)
     report = {"package": str(package.path), "product": package.product, "package_sha256": package.digest,
-              "device": identity, "chip_key": f"{key:#06x}", "full_backup": str(backup.resolve()),
+              "device": identity, "chip_key": f"{key:#06x}", "flash_id": f"{link.flash_id:06x}",
+              "installed_head_valid": head_valid, "app_hi": f"{app_hi:#x}", "full_backup": str(backup.resolve()),
               "backup_sha256": sha256(before), "application_sectors_differ": len(sectors), "write_requested": write}
     durable_write(output / "backup.json", (json.dumps(report, indent=2) + "\n").encode())
     print(f"{len(sectors)} application sectors differ; protected regions will be retained.", flush=True)
@@ -297,9 +329,9 @@ def recover(link, package, loader, output, write=False):
     require(final == expected, "Final full-flash verification failed; keep the backup and retry recovery")
     report.update(restored_sectors=len(sectors), full_flash_verified=True,
                   bootloader_unchanged=final[:APP_LO] == before[:APP_LO],
-                  saved_data_unchanged=final[APP_HI:] == before[APP_HI:])
+                  saved_data_unchanged=final[app_hi:] == before[app_hi:])
     durable_write(output / "recovery-result.json", (json.dumps(report, indent=2) + "\n").encode())
-    print("RESTORE VERIFIED. Bootloader and saved data unchanged. Power-cycle the FM-1 to start it.")
+    print("RESTORE VERIFIED. Bootloader and saved data unchanged. Power-cycle the device to start it.")
     return report
 
 

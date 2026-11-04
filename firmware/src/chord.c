@@ -23,12 +23,13 @@ static const int8_t CHORD_SHAPE[CH_POW - CH_MAJ + 1][CHORD_MAX] = {
     {0, 4, 7, -1}, {0, 3, 7, -1}, {0, 4, 7, 10}, {0, 4, 7, 11}, {0, 3, 7, 10}, {0, 5, 7, -1}, {0, 7, 12, -1},
 };
 
-static uint8_t kb_chord[27][CHORD_MAX], kb_chn[27];   /* the notes key k started (kb_chn 0: none) */
+static uint8_t kb_chord[KB_N][CHORD_MAX], kb_chn[KB_N];   /* the notes key k started (kb_chn 0: none) */
 /* Pending tones are separate from started ownership: early release never emits
  * an unmatched note-off or lets an unplayed tone keep another source alive. */
 typedef struct { uint32_t pos, beat; uint8_t total, rate, vel; } chord_strum_t;
-static chord_strum_t kb_strum[27];
-static uint32_t kb_strum_pending, midi_strum_pending;
+static chord_strum_t kb_strum[KB_N];
+static kb_word_t kb_strum_pending;
+static uint32_t midi_strum_pending;
 static uint8_t chord_alternate[NTRK];
 typedef struct { uint8_t id, ch, src, n, note[CHORD_MAX]; chord_strum_t strum; } mchord_t;   /* id: track + 1, 0 = free */
 static mchord_t mchord[MCHORD_N];

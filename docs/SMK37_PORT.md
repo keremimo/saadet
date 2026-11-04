@@ -65,7 +65,7 @@ wiring differs. From Melodee's HAL headers and the fm1-to-smk37 README, unless m
 | Screen | 1.54" 240 x 240, the FM-1's panel protocol, SPI1 group A (PB6 CLK, PB7 DO, PC8 CS, PB5 D/C), always on (no backlight pin). | verified |
 | Audio | 3.5 mm headphone/line out; USB audio in stock is mono 24-bit 44.1 kHz. Whether Saadet's stereo USB audio and codec path work unchanged is unmeasured. | analysis (heise review of the stock Pro) |
 | MIDI | USB, Bluetooth MIDI (the BT button), TRS-A 3.5 mm as MIDI OUT only (UART1 TX on PC7). No TRS IN. | verified (out), review (BLE) |
-| Flash | 1 MiB (JEDEC 0xEB6014; the FM-1's is 0x856014). Region table in section 1. | verified |
+| Flash | 1 MiB. Parts differ by unit: 0xEB6014, 0x856014 or 0xB36014 are all accepted, as Melodee does; requiring one left an Elite RAM-only and refusing updates. Region table in section 1. | verified (behaviour on an Elite) |
 | Power | 2000 mAh battery; no backlight rail; the matrix and LEDs are always powered. | review |
 | Models | Pro, Elite and MKE-P37 are the same hardware; each reports its own model name to the updater. | Melodee: Elite run, Pro and MKE untried |
 
@@ -192,6 +192,24 @@ Each step ends with a measurable "done". Hardware steps need Kerem's Elite and a
 
 Image size is not the constraint it was for Melodee: the SMK app area (0x9D000) is 40 KiB larger than the FM-1's
 (0x93000), and Saadet is the smaller firmware. RAM is the FM-1's; the pad state and maps are under 200 bytes.
+
+## 5a. Audit against Melodee's SMK-37 build (2026-11-05, nightly `3fe570d2`)
+
+Every `BOARD_SMK37` branch was read against this port, for what the hardware needs. Fixed: the scan order (rows are read
+before the latch, one column behind the 595 bit: the cell codes assume it); the key contacts and re-strike; flash parts
+(`0xEB6014`, `0x856014`, `0xB36014`; the Elite here has `0x856014`); the store owner tag at `0xAF000`; update records only
+below `0xC0000`; a package for another board refused before anything is touched (-15, -16, -17); the update record's model
+name; ADC timing (`0x400D`); the pad baseline; pad LED chain order and a 250-byte reset; the fader filter; wheels that learn
+their range; the pedal's rest and re-learn; TRS without SysEx, with a switch; PLAY's LED colours; button release time;
+MASTER's level and step.
+
+Saadet: all 37 keys through the normal note path (`KB_N`), velocity and VELOCITY modes, the pedal jack with CC64, wheels with
+bend and CC1 out, the CZ-1's wheel vibrato, `<` `>`, GLOBAL > KEYS, HOME's keyboard as the keybed.
+
+Different on purpose: the encoders keep the FM-1's detent decoder (Melodee uses the stock one; same direction by the tables);
+the owner check clears the store at once, rather than keeping the stock mapping until the first write; Saadet's store layout
+is its own. Not done yet: pads, faders and the two BANK buttons do nothing until the UX phases in `SMK37_UX.md`; CLOCK still
+offers TRS, which has no input here.
 
 ## 6. Risks and unknowns
 

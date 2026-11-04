@@ -102,6 +102,9 @@ static void power_on(void)
     memset(kb_chn, 0, sizeof kb_chn); memset(mchord, 0, sizeof mchord);
     memset(chord_last, 0, sizeof chord_last);
     fm1_in.buttons = fm1_in.notes = host_pressed = host_released = host_notes = 0;
+#ifdef SAADET_SMK37
+    sd_kb_keys = sd_kb_retrig = 0; sd_jack_pedal = 0;
+#endif
     memset(host_enc, 0, sizeof host_enc);
     midi_sync_active=0;midi_beat_samples=beat_pos=beat_n=0;
     kb_strum_pending=midi_strum_pending=0;
@@ -123,8 +126,26 @@ static void turn(uint32_t role, int32_t s)
     host_enc[panel.enc[role]] += s * panel.dir[role]; frame();
     host_ticks += 200000u; fm1_ms += 200u;
 }
+#ifdef SAADET_SMK37
+/* the SMK-37's key path: mix.c's numbering, the FM-1's 27 first; the bridge publishes the keys and their velocities */
+static void key_down_vel(uint32_t k, uint32_t vel)
+{
+    if (k < 27u) { fm1_in.notes |= 1u << k; host_notes |= 1u << k; }
+    sd_kb_vel[k] = (uint8_t)vel;
+    sd_kb_keys |= KB_BIT(k);
+    keyboard_block();
+}
+static void key_down(uint32_t k) { key_down_vel(k, 100u); }
+static void key_up(uint32_t k)
+{
+    if (k < 27u) fm1_in.notes &= ~(1u << k);
+    sd_kb_keys &= ~KB_BIT(k);
+    keyboard_block();
+}
+#else
 static void key_down(uint32_t k) { fm1_in.notes |= 1u << k; host_notes |= 1u << k; keyboard_block(); }
 static void key_up(uint32_t k) { fm1_in.notes &= ~(1u << k); keyboard_block(); }
+#endif
 static uint32_t gates(void)                        /* voices of every track with their key down */
 {
     uint32_t p, i, n = 0;

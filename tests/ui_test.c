@@ -553,6 +553,48 @@ int main(void)
     bad |= check("lint: a cut", lint_check("probe") == 1u);
     (void)name;
 
+#ifdef SAADET_SMK37
+    {   /* the SMK-37's 37 keys, in seq.c's numbering (mix.c): each plays its own note, with its velocity */
+        static const struct { uint8_t k, note; } KEYS[] = {{32, 48}, {36, 52}, {0, 53}, {26, 79}, {27, 80}, {31, 84}};
+        uint32_t i, all = 1;
+#define HELD(n) ((live_held[0][(n) >> 5] >> ((n) & 31u)) & 1u)
+        power_on();
+        memset(uix.stop, 0, sizeof uix.stop);
+        song.octave = 0;
+        TSEL->p[P_CHRD] = 0;
+        TSEL->p[P_AHOLD] = 0;
+        TSEL->p[P_QUANT] = 0;
+        TSEL->p[P_AMODE] = 0;
+        frames(100);
+        for (i = 0; i < NELEM(KEYS); i++) {
+            key_down_vel(KEYS[i].k, 77u);
+            all &= HELD(KEYS[i].note) != 0u;
+            all &= kb_note[KEYS[i].k] == KEYS[i].note;
+            key_up(KEYS[i].k);
+            all &= HELD(KEYS[i].note) == 0u;
+        }
+        bad |= check("SMK-37: C3..C6, all the way, each key its note", all);
+        key_down_vel(31, 90u);                          /* the jack's pedal holds a key above the FM-1's 27 */
+        sd_jack_pedal = 1;
+        keyboard_block();
+        key_up(31);
+        keyboard_block();
+        bad |= check("SMK-37: the pedal jack keeps an outer key's note", HELD(84u) != 0u);
+        for (i = 0; i < 50u; i++) tick();
+        bad |= check(".. the sound keeps playing", gates() >= 1u);
+        sd_jack_pedal = 0;
+        for (i = 0; i < 50u; i++) tick();
+        bad |= check(".. and lets it go", HELD(84u) == 0u && gates() == 0u);
+        key_down_vel(32, 60u);                          /* struck again before a full lift */
+        sd_kb_vel[32] = 120u;
+        sd_kb_retrig |= KB_BIT(32);
+        keyboard_block();
+        bad |= check("SMK-37: a key struck again restarts, still held", HELD(48u) != 0u && !sd_kb_retrig);
+        key_up(32);
+        bad |= check(".. and ends with the key", HELD(48u) == 0u);
+#undef HELD
+    }
+#endif
     printf(bad ? "UI TEST FAILED\n" : "UI test passed\n");
     return bad;
 }
