@@ -2,6 +2,12 @@
  * Copyright (C) 2026 Kerem Kilic (Ellic Studio) */
 #pragma once
 #include <stdint.h>
+#if defined(PLAT_SMK37) && PLAT_SMK37 && !defined(SAADET_SMK37)
+#define SAADET_SMK37 1    /* tools/build_base.py --board smk37: instrument.c gets it from the generated fm1.toml's o2_cflags */
+#endif
+#ifdef SAADET_SMK37
+void sd_input_smk(void);
+#endif
 uint32_t sd_ms(void);
 uint32_t sd_ticks(void);
 uint32_t sd_lock(void);

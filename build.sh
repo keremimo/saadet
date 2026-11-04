@@ -6,6 +6,7 @@
 #   ./build.sh [--no-ble] [--release X.Y[.Z]]   fm1-base with Bluetooth MIDI (default): platform/build/saadet.fwsc;
 #                                               --no-ble: the USB-only platform/build/saadet-usb.fwsc
 #   ./build.sh --host                           the fm1-base host simulator (no toolchain or SDK)
+#   ./build.sh --board smk37 --model pro|elite|mke   the SMK-37: build/saadet-smk37[-elite|-mke].fwsc (docs/SMK37_PORT.md)
 #   JIELI_TOOLCHAIN  JieLi Linux toolchain (default: ~/.jieli/toolchain)
 #   AC79_SDK         JieLi AC79 SDK checkout (default: ~/fw-AC79_AIoT_SDK)
 set -e

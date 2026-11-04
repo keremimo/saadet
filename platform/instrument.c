@@ -109,7 +109,8 @@ static uint8_t flash_ok;
 static int st_read(uint32_t off,void *p,uint32_t n){return sd_read(off,p,n);}
 static int st_erase(uint32_t off){return sd_erase(off);}
 static int st_prog(uint32_t off,const void *p,uint32_t n){return sd_write(off,p,n);}
-static uint32_t fl_jedec_ram(void){return sd_flash_ok()?0x856014u:0;}
+#include "../firmware/src/store_map.h"
+static uint32_t fl_jedec_ram(void){return sd_flash_ok()?SD_FLASH_ID:0;}
 static void fl_plain_window_init(void){}
 #define FL_FAR(fn) (fn)
 #include "../firmware/src/storage.c"
@@ -137,6 +138,9 @@ static void sd_poll(void)
     fm1_ms=sd_ms();sd_pressed|=buttons&~fm1_in.buttons;sd_released|=fm1_in.buttons&~buttons;
     sd_notes|=keys&~fm1_in.notes;fm1_in.buttons=buttons;fm1_in.notes=keys;
     for(uint32_t i=0;i<7u;i++)sd_enc[i]+=enc[i];
+#ifdef SAADET_SMK37
+    sd_input_smk(); /* the SMK's own controls: not wired yet (platform/app.c) */
+#endif
     uint32_t packet;int port;
     while(sd_midi_in(&packet,&port)){
         if(settings_thru)sd_midi_thru(packet,port);
@@ -154,6 +158,9 @@ void saadet_init(void)
     memset(trk,0,sizeof trk);memset(&song,0,sizeof song);eng_state_reset();
     memset(&ui,0,sizeof ui);memset(&uix,0,sizeof uix);uix.held=PL_N;uix.hot=4;uix.eng=255;
     panel=PANEL_DEFAULT;settings_init();persist_boot();panel_init();settings_init();sd_panel_set(panel.btn,panel.enc,panel.dir);
+#ifdef SAADET_SMK37
+    panel=PANEL_DEFAULT; /* the UI's ids are the FM-1's defaults here; the base's panel map owns the 18 real buttons */
+#endif
     fm6_init();cz_init();
     for(uint32_t i=0;i<G_COUNT;i++)song.g[i]=GP[i].def;
     track_defaults(TSEL);set_engine_of(TSEL,TRK_DEF[0][0]);apply_preset_to(TSEL,TRK_DEF[0][1]);

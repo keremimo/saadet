@@ -204,7 +204,7 @@ static void persist_boot(void)                    /* before settings_init / pane
 #if MELODEE_FLASH
     persist_t p;
     uint32_t f = irq_save();
-    flash_ok = FL_FAR(fl_jedec_ram)() == 0x856014u;       /* the expected 1 MiB part, else stay RAM-only */
+    flash_ok = FL_FAR(fl_jedec_ram)() == SD_FLASH_ID;     /* the expected 1 MiB part, else stay RAM-only */
     irq_restore(f);
     if (!flash_ok)
         return;
@@ -288,8 +288,7 @@ static int persist_erase_all(void)
         if (st_retired(obj)) continue;
         for (copy = 0; copy < 2u; copy++) {
             uint32_t off = st_sector(obj, copy);
-            if (off < 0x93000u || off > 0x100000u - ST_SECTOR || off % ST_SECTOR ||
-                (off < 0xE5000u && off + ST_SECTOR > 0xE0000u)) return -1;
+            if (SD_SECTOR_BAD(off, ST_SECTOR)) return -1;
             total++;
         }
     }

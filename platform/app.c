@@ -3,6 +3,7 @@
 /* Platform half of the bridge. The instrument is a separate translation unit,
  * keeping its retained formats/types apart from the base's internal names. */
 #include "bridge.h"
+#include "store_map.h"
 void app_init(void){saadet_init();}
 static void (*volatile sd_render_fn)(int32_t *,uint32_t,uint32_t)=saadet_render;
 void app_render(int32_t *lr,uint32_t n,uint32_t gain){
@@ -49,13 +50,15 @@ void sd_input(uint32_t *buttons,uint32_t *keys,int32_t *enc){
     static const uint8_t bm[14]={2,3,4,5,6,7,8,9,10,11,12,13,0,1};
     static const uint8_t em[7]={0,1,6,2,3,4,5};
     uint32_t b;*buttons=0;*keys=plat_keys();
-#ifdef PLAT_HOST
+#if defined(PLAT_HOST)||defined(SAADET_SMK37)
+    /* The SMK-37: plat_buttons and plat_enc read the 18 buttons and 8 encoders by the base's panel map (K5 is its
+     * virtual MASTER), and the UI gets the FM-1's 14 functions and 7 roles in the FM-1's default ids */
     b=plat_buttons();
 #else
     *buttons=fm1_in.buttons;b=remote.btn;
 #endif
     for(uint32_t i=0;i<14u;i++)if(b&(1u<<i))*buttons|=1u<<bm[i];
-    #ifdef PLAT_HOST
+    #if defined(PLAT_HOST)||defined(SAADET_SMK37)
     for(uint32_t i=0;i<7u;i++)enc[em[i]]=plat_enc((int)i);
 #else
     uint32_t f=plat_lock();
@@ -64,8 +67,38 @@ void sd_input(uint32_t *buttons,uint32_t *keys,int32_t *enc){
     plat_unlock(f);
 #endif
 }
-void sd_lights(const uint8_t *bright,const uint8_t *dim,const uint8_t *masks){
+#ifdef SAADET_SMK37
+/* SAADET_SMK37 stub: what the pads, faders, wheels, pedal, velocity keys, the outer 10 keys and KNOB BANK, FADER BANK,
+ * <, > will do (docs/SMK37_PORT.md section 5 steps 4-6, docs/SMK37_UX.md). The board reads them all; nothing here uses
+ * them yet, and the velocity is the UI's one level. */
+void sd_input_smk(void){}
+/* SAADET_SMK37 stub: the LEDs the UI has nothing to say on yet, in plat_lights' bits (B_KBANK, B_FBANK, B_LEFT, B_RIGHT,
+ * LED_PLAY_GREEN). With the 14 functions below, all 19 LEDs go through sd_lights */
+static const uint32_t sd_smk_lit=0;
 #ifndef PLAT_HOST
+/* The UI draws the FM-1's LED cells (instrument.c FM1_KEYMAP): where each function's is, (column << 3) | row, in plat.h's
+ * button order. tests/build_targets_test.py checks this against FM1_KEYMAP */
+static const uint8_t sd_btn_cell[14]={49,33,17,1,74,66,57,41,25,9,82,58,4,12};
+_Static_assert(SD_SMK_DATA_LO==FL_DATA_LO&&SD_SMK_DATA_HI==FL_DATA_HI&&SD_SMK_GLOB_LO==FL_GLOB_LO&&SD_SMK_GLOB_HI==FL_GLOB_HI&&
+               SD_SMK_LOW_LO==FL_XDATA0_LO&&FL_XDATA0_HI==FL_AUTO_LO&&FL_AUTO_HI==FL_XDATA1_LO&&SD_SMK_LOW_HI==FL_XDATA1_HI&&
+               SD_FLASH_ID==FL_JEDEC_ID,"store_map.h is not this board's flash map");
+#endif
+#endif
+void sd_lights(const uint8_t *bright,const uint8_t *dim,const uint8_t *masks){
+#if defined(SAADET_SMK37)&&!defined(PLAT_HOST)
+    /* the UI's three dim planes, at the board's levels: a plane at full duty lit, 1/2 and 1/4 mid, 1/8 the glow */
+    uint32_t lit=sd_smk_lit,mid=0,glow=0;
+    for(uint32_t i=0;i<14u;i++){
+        uint32_t c=sd_btn_cell[i]>>3,bit=1u<<(sd_btn_cell[i]&7u);
+        if(bright[c]&bit)lit|=1u<<i;
+        for(uint32_t p=0;p<3u;p++)if(masks[p]!=255u&&(dim[p*11u+c]&bit)){
+            if(!masks[p])lit|=1u<<i;
+            else if(masks[p]<=3u)mid|=1u<<i;
+            else glow|=1u<<i;
+        }
+    }
+    plat_lights(lit,0,glow,0,2);plat_lights_mid(mid,0);
+#elif !defined(PLAT_HOST)
     for(uint32_t i=0;i<11u;i++)fm1_led[i]=bright[i];
     for(uint32_t i=0;i<33u;i++)sd_led_planes[i/11u][i%11u]=dim[i];
     for(uint32_t i=0;i<3u;i++)sd_led_masks[i]=masks[i];
@@ -89,7 +122,11 @@ void sd_lcd_power(uint32_t s){
 uint32_t sd_master(void){return plat_master();}
 int sd_midi_in(uint32_t *p,int *port){
     if(!plat_midi_in(p,port))return 0;
+#ifdef SAADET_SMK37
+    if(*port==PORT_BLE&&plat_midi_in_from()==TO_BLE_DEV)*port=3; /* external device, separate from the phone */
+#else
     if(*port==PORT_BLE&&(*p&0x10u))*port=3; /* external device, separate from the phone */
+#endif
     *p&=~0xF0u;return 1;
 }
 void sd_midi_out(uint32_t p){plat_midi_send(p,TO_USB|TO_BLE);}
@@ -110,7 +147,7 @@ int sd_sysex_send(const uint8_t *p,uint32_t n){
 #endif
 }
 #include "ble_devices.h"
-static int sd_data_ok(uint32_t off,uint32_t n){return (off>=0x93000u&&off<=0xE0000u&&n<=0xE0000u-off)||(off>=0xE5000u&&off<=0xFF000u&&n<=0xFF000u-off);}
+static int sd_data_ok(uint32_t off,uint32_t n){return SD_DATA_OK(off,n);}
 #ifdef PLAT_HOST
 static uint8_t sd_nor[0x100000];
 static uint8_t sd_nor_ready;
@@ -162,9 +199,14 @@ uint32_t sd_battery(void){
 #else
     static uint32_t last,at;
     if((uint32_t)(fm1_ms-at)<1000u)return last;
+#ifdef SAADET_SMK37
+    if(fm1_in.battery)last=fm1_in.battery; /* mux C's divider, from the board's scan: not yet measured on a unit */
+    at=fm1_ms;return last;
+#else
     uint32_t f=plat_lock();
     if(!fm1_an.con&&!fm1_an.pend){int32_t v=fm1_adc_read(FM1_ADC_BATT);if(v>0)last=(uint32_t)v;at=fm1_ms;}
     plat_unlock(f);return last;
+#endif
 #endif
 }
 
@@ -178,7 +220,7 @@ int sd_worker_allowed(void){return fm1_power_ready&&!bootguard.failed;}
 #endif
 
 void sd_panel_set(const uint8_t *buttons,const uint8_t *enc,const int8_t *direction){
-#ifndef PLAT_HOST
+#if !defined(PLAT_HOST)&&!defined(SAADET_SMK37) /* (the SMK's map is the base's alone: 18 buttons, its calibration) */
     for(uint32_t i=0;i<14u;i++)panel.btn[i]=buttons[i];
     for(uint32_t i=0;i<7u;i++){panel.enc[i]=enc[i];panel.dir[i]=direction[i];}
 #else

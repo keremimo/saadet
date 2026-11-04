@@ -1,6 +1,11 @@
 # SPDX-License-Identifier: MPL-2.0
 # Copyright (C) 2026 Kerem Kilic (Ellic Studio)
-"""Checked adaptations of the pinned base; upstream files keep their notices."""
+"""Checked adaptations of the pinned base; upstream files keep their notices.
+
+Two bases are pinned (tools/build_base.py): the FM-1's, and the newer one with the SMK-37 board layer. A patch that
+no longer matches its base fails the build. Where the two differ, a patch has an SMK equivalent or, where the SMK has
+nothing to patch, is skipped on purpose; each such place says so.
+"""
 from pathlib import Path
 
 
@@ -8,6 +13,12 @@ def replace(s, old, new):
     if old not in s:
         raise ValueError(f"Pinned fm1-base input changed: {old[:90]!r}")
     return s.replace(old, new)
+
+
+def require(s, text):
+    """the newer base already does what the FM-1's patch adds: it must still say so"""
+    if text not in s:
+        raise ValueError(f"Pinned fm1-base input changed: {text[:90]!r}")
 
 
 def function(s, name, body):
@@ -23,7 +34,7 @@ def function(s, name, body):
     return s[:start] + body.rstrip() + s[end:]
 
 
-def patch_usb(s):
+def patch_usb(s, board="fm1"):
     # Native stereo frames throughout both rings; format conversion at USB only.
     s = replace(s, '#define UAC_MAXP (UA_MAXF * 4u)', '#define UAC_MAXP (UA_MAXF * 6u)')
     s = replace(s, 'static uint32_t ua_ring[UA_N] FELUCCA_UAC_RING_ATTR;',
@@ -53,9 +64,22 @@ def patch_usb(s):
 #define SD_PLAY24(s)
 #endif
 #define D_AUDIO(a) D_AC(a) D_MIDI((a) + 1) D_AS((a) + 2) SD_CAP24((a)+2) D_ASO((a) + 3) SD_PLAY24((a)+3)'''
-    s = replace(s, marker, alt)
-    s = replace(s, '#define AUD_LEN (92 + (63 + FMT_LEN) * FELUCCA_UAC + 74 * FELUCCA_UAC_OUT)',
-        '#define AUD_LEN (92 + (106 + FMT_LEN) * FELUCCA_UAC + 117 * FELUCCA_UAC_OUT)')
+    if board == "smk37":
+        # The newer base numbers the interfaces (IF_AS, IF_ASO, IF_MIDI) and may put MIDI last; its AC header takes
+        # the terminals' length as a parameter.
+        alt = alt[:alt.rindex('#define D_AUDIO')]
+        s = replace(s, '/* audio + MIDI from interface a, in the order FELUCCA_UAC_MIDI_LAST picks */',
+                    alt + '/* audio + MIDI from interface a, in the order FELUCCA_UAC_MIDI_LAST picks */')
+        s = replace(s, '#define D_AUDIO(a) D_AC(a) D_AS((a) + IF_AS) D_ASO((a) + IF_ASO) D_MIDI((a) + IF_MIDI)',
+                    '#define D_AUDIO(a) D_AC(a) D_AS((a) + IF_AS) SD_CAP24((a)+IF_AS) D_ASO((a) + IF_ASO) SD_PLAY24((a)+IF_ASO) D_MIDI((a) + IF_MIDI)')
+        s = replace(s, '#define D_AUDIO(a) D_AC(a) D_MIDI((a) + IF_MIDI) D_AS((a) + IF_AS) D_ASO((a) + IF_ASO)',
+                    '#define D_AUDIO(a) D_AC(a) D_MIDI((a) + IF_MIDI) D_AS((a) + IF_AS) SD_CAP24((a)+IF_AS) D_ASO((a) + IF_ASO) SD_PLAY24((a)+IF_ASO)')
+        s = replace(s, '#define AUD_LEN (92 + (63 + FMT_LEN) * FELUCCA_UAC + 74 * FELUCCA_UAC_OUT - (FELUCCA_UAC_MIDI_LAST == 2))',
+                    '#define AUD_LEN (92 + (106 + FMT_LEN) * FELUCCA_UAC + 117 * FELUCCA_UAC_OUT - (FELUCCA_UAC_MIDI_LAST == 2))')
+    else:
+        s = replace(s, marker, alt)
+        s = replace(s, '#define AUD_LEN (92 + (63 + FMT_LEN) * FELUCCA_UAC + 74 * FELUCCA_UAC_OUT)',
+            '#define AUD_LEN (92 + (106 + FMT_LEN) * FELUCCA_UAC + 117 * FELUCCA_UAC_OUT)')
     s = replace(s, 'wvalue <= 1u && usb.config', 'wvalue <= 2u && usb.config')
     s = replace(s, 'uac.last = 0;', 'uac.last = (sd_pcm_frame){0,0};')
     s = replace(s, 'ua_ring[(r + i) & (UA_N - 1u)] = 0;', 'ua_ring[(r + i) & (UA_N - 1u)] = (sd_pcm_frame){0,0};')
@@ -119,9 +143,12 @@ static void sd_pcm_write(uint8_t *p,uint32_t width,int32_t v)
     s = replace(s, '(float)(int16_t)(a >> 16) + ((float)(int16_t)(b >> 16) - (float)(int16_t)(a >> 16))', '(float)a.r + ((float)b.r - (float)a.r)')
     s = replace(s, 'fm1_usb_ep4_send(ep4tx, n * 4u);', 'fm1_usb_ep4_send(ep4tx, n * (uac.alt==2u?6u:4u));')
     # Saadet's standard playback master mute/volume stays available to the OS.
-    s=replace(s,'0x01, 53, 0, 3,','0x01, 63, 0, 3,')
+    if board == "smk37":
+        s=replace(s,'D_AC_HEADER((a), 42)','D_AC_HEADER((a), 52)')
+    else:
+        s=replace(s,'0x01, 53, 0, 3,','0x01, 63, 0, 3,')
     s=replace(s,'9, 0x24, 3, 4, 0x01, 0x03, 0, 3, 0,', '10, 0x24, 6, 5, 3, 1, 3, 0, 0, 0, 9, 0x24, 3, 4, 0x01, 0x03, 0, 5, 0,')
-    s=replace(s,'117 * FELUCCA_UAC_OUT)', '127 * FELUCCA_UAC_OUT)')
+    s=replace(s,'117 * FELUCCA_UAC_OUT', '127 * FELUCCA_UAC_OUT')
     s=replace(s,'static void ep0_service(void)', '#if FELUCCA_UAC_OUT\n#include "usb_volume.h"\n#endif\nstatic void ep0_service(void)')
     s=replace(s,'    for (i = 0; i < 8u; i++)\n        s[i] = ep0buf[i];', '#if FELUCCA_UAC_OUT\n    if(sd_volume_pending){\n        int ok=sd_volume_data(ep0buf,sie_rd(S_COUNT0));if(ok)goto ack;goto stall;\n    }\n#endif\n    for (i = 0; i < 8u; i++)\n        s[i] = ep0buf[i];')
     s=replace(s,'    usb.setups++;', '    usb.setups++;\n#if FELUCCA_UAC_OUT\n    if(sd_volume_setup(s))return;\n#endif')
@@ -147,7 +174,22 @@ static void sd_pcm_write(uint8_t *p,uint32_t width,int32_t v)
     return s
 
 
-def apply(work):
+def smk37_toml(source, model, name):
+    """platform/fm1.toml for one SMK-37 model: its board and model, its USB product (the base adds " SMK-37")."""
+    text = replace(source, 'usb_product = "Saadet FM-1"', f'usb_product = "Saadet {name}"')
+    text = replace(text, 'o2_cflags = ["-DMELODEE_RAM_AUDIO=1"]', 'o2_cflags = ["-DMELODEE_RAM_AUDIO=1", "-DSAADET_SMK37=1"]')
+    return f'board = "smk37"\nmodel = "{model}"\n' + text
+
+
+def smk37_linker(source):
+    """platform/app.ld (Saadet's sections) with the SMK's app slot, as the base's device/app_smk37.ld has it."""
+    text = replace(source, 'XIP    (rx)  : ORIGIN = 0x02000120, LENGTH = 0x8DFBC',
+                   'XIP    (rx)  : ORIGIN = 0x02000120, LENGTH = 0xA7FBC')
+    return replace(text, '    .pool (NOLOAD) :', '    _app_xip_end = ORIGIN(XIP) + 0x97FBC;\n    .pool (NOLOAD) :')
+
+
+def apply(work, board="fm1", model=None, product="Saadet"):
+    smk = board == "smk37"
     # BLE-only builds have no sys_timer task. SDK timers naming that service
     # belong to the main-loop timer pump, as unnamed BLE timers already do.
     p=work/'ble/shim/systimer.c';s=p.read_text()
@@ -157,18 +199,24 @@ def apply(work):
     s=replace(s,'("data.bin", "_data_load")):', '("data.bin", "_data_load"), ("audio.bin", "_sd_audio_load")):')
     s=replace(s,'    img = bytearray((OUT / "text.bin").read_bytes())', '    tc("common/bin/objcopy", "-O", "binary", "-j", ".audio_text", elf, OUT / "audio.bin")\n    img = bytearray((OUT / "text.bin").read_bytes())')
     s=replace(s,'    (OUT / (NAME + ".dis")).write_text(dis)', '    (OUT / (NAME + ".dis")).write_text(dis)\n    (OUT / (NAME + ".symbols")).write_text(syms)')
+    if smk:
+        # The generated fm1.toml (tools/build_base.py), and each model's outputs apart from the FM-1's: tests and the
+        # FM-1's tools read platform/build's saadet.bin.
+        s=replace(s,'CONF = read_conf(APP / "fm1.toml")','CONF = read_conf(SRC / "saadet-fm1.toml")')
+        s=replace(s,'    OUT = APP / "build"\n','    OUT = APP / "build" / f"smk37-{MODEL}"\n')
     p.write_text(s)
     p=work/'bsp/chip/fm1_guard.h';s=p.read_text()
     s=replace(s,'re = (uint32_t)(uintptr_t)_rt_end;', 're = (uint32_t)(uintptr_t)_sd_exec_end;')
     s=replace(s,'static void fm1_guard_enable(', 'extern uint32_t _sd_exec_end[];\nstatic void fm1_guard_enable(')
     p.write_text(s)
-    p=work/'bsp/chip/usb.c';s=patch_usb(p.read_text());p.write_text('/* Saadet integration modifications Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
+    p=work/'bsp/chip/usb.c';s=patch_usb(p.read_text(),board);p.write_text('/* Saadet integration modifications Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
     p=work/'device/main_fm1.c';s=p.read_text()
     # Use Melodee's complete stock V15 supply sequence and checked result,
     # rather than the base's two-rail-only raises. CPU1 stays held until the
     # DCDC/LDO mode, IO supplies and CPU/SRAM supplies have all verified.
     start=s.index('        for (rails_tries = 1;')
-    end=s.index('        flash_ok =',start)
+    # The newer base starts the stock 360 MHz clock here too: the SMK keeps that, and only the supplies are Saadet's.
+    end=s.index('        fm1_clock_read(clock_boot);' if smk else '        flash_ok =',start)
     s=s[:start]+'        rails_tries = 1;\n        sd_power_init(); /* Melodee stock V15 power setup; CPU1 held, IRQs off */\n'+s[end:]
     # Melodee firmware/src/main.c defers the PC limits until CPU1's bounded
     # handshake returns: CPU1 first executes mask-ROM outside our XIP/SRAM
@@ -187,16 +235,22 @@ def apply(work):
         '          hexs(cause+4,fm1_crash.emu); cause[12]=\' \';\n'
         '          hexs(cause+17,fm1_crash.dbg); log_line_send(cause); }\n'
         '        for (k = (int)FM1_CRASH_CTX_N - 1;')
-    start=s.index('#if FELUCCA_UAC_OUT\n            uac_play(');end=s.index('            if (full)',start)
-    s=s[:start]+'''#if FELUCCA_UAC
+    ceiling='            for(uint32_t i=0;i<2u*REND_FRAMES;i++){\n                int32_t v=o[2u*k+i];v=v>8388607?8388607:v<-8388608?-8388608:v;\n                o[2u*k+i]=v>>1; /* physical -6 dB ceiling after native USB capture/playback */\n            }\n'
+    if smk:
+        # The newer base's device/uac_mix.h already takes the capture before the computer's audio: only the ceiling.
+        s=replace(s,'#if FM1B_BT_AUDIO\n            if (own_bta_feed(', ceiling+'#if FM1B_BT_AUDIO\n            if (own_bta_feed(')
+        s=replace(s,'    us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;', '    us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;\n    saadet_deadline(us,budget);')
+    else:
+        start=s.index('#if FELUCCA_UAC_OUT\n            uac_play(');end=s.index('            if (full)',start)
+        s=s[:start]+'''#if FELUCCA_UAC
             uac_tap(o + 2u * k, REND_FRAMES); /* synth capture precedes computer playback */
 #endif
 #if FELUCCA_UAC_OUT
             uac_play(o + 2u * k, REND_FRAMES, full ? 4096u : master_pos * master_pos >> 12);
 #endif
 '''+s[end:]
-    s=replace(s,'    us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;', '    us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;\n    saadet_deadline(us,budget);')
-    s=replace(s,'            if (full) {', '            for(uint32_t i=0;i<2u*REND_FRAMES;i++){\n                int32_t v=o[2u*k+i];v=v>8388607?8388607:v<-8388608?-8388608:v;\n                o[2u*k+i]=v>>1; /* physical -6 dB ceiling after native USB capture/playback */\n            }\n            if (full) {')
+        s=replace(s,'    us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;', '    us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;\n    saadet_deadline(us,budget);')
+        s=replace(s,'            if (full) {', ceiling+'            if (full) {')
     # The platform's render/tick closure includes P33 and matrix helpers also
     # used during early boot. Initialize their code AND far-call pointers before
     # the first platform helper executes; clear POOL before copying code into it.
@@ -221,24 +275,33 @@ def apply(work):
     p=work/'bsp/chip/fm1_vec.S';s=p.read_text()
     restore=(Path(__file__).resolve().parents[1]/'firmware/hal/fm1_vec.S').read_text()
     restore=restore[restore.index('\t/* fm1_fault_c returns'):]
-    s=replace(s,'1:\tgoto 1b',restore)
+    if smk:
+        require(s,'fm1_fault_c returns only after a fault of the second core')  # upstream has the resume
+    else:
+        s=replace(s,'1:\tgoto 1b',restore)
     p.write_text('/* Saadet CPU1 recovery modifications Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
 
-    p=work/'bsp/boards/fm1/fm1_input.h';s=p.read_text()
-    s=replace(s,'#define FM1__LIT(c) (fm1_led[c] |', 'static volatile uint8_t sd_led_planes[3][11],sd_led_masks[3];\nstatic uint8_t sd_led_phase;\n#define SD_LED_PLANE(c,p) ((sd_led_masks[p]!=255u && !(sd_led_phase&sd_led_masks[p]))?sd_led_planes[p][c]:0u)\n#define FM1__LIT(c) (fm1_led[c] | SD_LED_PLANE(c,0) | SD_LED_PLANE(c,1) | SD_LED_PLANE(c,2) |')
-    s=replace(s,'if (p == 0u)\n        fm1__breath_frame();','if (p == 0u) { sd_led_phase++; fm1__breath_frame(); }')
-    p.write_text('/* Saadet LED planes Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
-    p=work/'device/panel.c';s=p.read_text()
-    s=replace(s,'    panel.magic = PANEL_MAGIC;\n    plat_store_save', '    panel.magic = PANEL_MAGIC;\n    saadet_panel_calibrated(panel.btn,panel.enc,panel.dir);\n    plat_store_save')
-    p.write_text('/* Saadet calibration bridge Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
+    if not smk:
+        # Skipped on the SMK: its LEDs take the board's own levels (platform/app.c sd_lights), and the base's panel
+        # map alone holds the 18 buttons (the UI keeps the FM-1's default ids, so calibration has nothing to tell it).
+        p=work/'bsp/boards/fm1/fm1_input.h';s=p.read_text()
+        s=replace(s,'#define FM1__LIT(c) (fm1_led[c] |', 'static volatile uint8_t sd_led_planes[3][11],sd_led_masks[3];\nstatic uint8_t sd_led_phase;\n#define SD_LED_PLANE(c,p) ((sd_led_masks[p]!=255u && !(sd_led_phase&sd_led_masks[p]))?sd_led_planes[p][c]:0u)\n#define FM1__LIT(c) (fm1_led[c] | SD_LED_PLANE(c,0) | SD_LED_PLANE(c,1) | SD_LED_PLANE(c,2) |')
+        s=replace(s,'if (p == 0u)\n        fm1__breath_frame();','if (p == 0u) { sd_led_phase++; fm1__breath_frame(); }')
+        p.write_text('/* Saadet LED planes Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
+        p=work/'device/panel.c';s=p.read_text()
+        s=replace(s,'    panel.magic = PANEL_MAGIC;\n    plat_store_save', '    panel.magic = PANEL_MAGIC;\n    saadet_panel_calibrated(panel.btn,panel.enc,panel.dir);\n    plat_store_save')
+        p.write_text('/* Saadet calibration bridge Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
 
     p=work/'ble/midi/le_midi.c';s=p.read_text()
     # Keep the two BLE links distinct until Saadet has tracked physical holds.
-    s=replace(s,'static void midi_parse(const u8 *b, u16 len)', 'static void midi_parse(const u8 *b, u16 len, u8 source)')
-    s=replace(s,'ble_midi_receive(0xFu |', 'ble_midi_receive(source | 0xFu |')
-    s=replace(s,'ble_midi_receive((uint32_t)cin_of', 'ble_midi_receive(source | (uint32_t)cin_of')
-    s=replace(s,'midi_parse(buffer, buffer_size);','midi_parse(buffer, buffer_size, 0);')
-    s=replace(s,'midi_parse(d->blob, d->blob_length);','midi_parse(d->blob, d->blob_length, 0x10);')
+    if smk:
+        require(s,'static void midi_parse(const u8 *b, u16 len, u32 cable)')   # upstream tags the links the same way
+    else:
+        s=replace(s,'static void midi_parse(const u8 *b, u16 len)', 'static void midi_parse(const u8 *b, u16 len, u8 source)')
+        s=replace(s,'ble_midi_receive(0xFu |', 'ble_midi_receive(source | 0xFu |')
+        s=replace(s,'ble_midi_receive((uint32_t)cin_of', 'ble_midi_receive(source | (uint32_t)cin_of')
+        s=replace(s,'midi_parse(buffer, buffer_size);','midi_parse(buffer, buffer_size, 0);')
+        s=replace(s,'midi_parse(d->blob, d->blob_length);','midi_parse(d->blob, d->blob_length, 0x10);')
     start=s.index('static void client_packet_handler(')
     end=s.index('/* one HCI handler for both roles:',start)
     s=s[:start]+replace(s[start:end],'        case HCI_SUBEVENT_LE_CONNECTION_COMPLETE:',
@@ -304,8 +367,9 @@ void ble_midi_disconnect(void)
         'void user_client_report_search_result(search_result_t *r) { sd_mc_search(r); }')
     s=function(s,'void user_client_report_descriptor_result(charact_descriptor_t *d)',
         'void user_client_report_descriptor_result(charact_descriptor_t *d) { sd_mc_descriptor(d); }')
-    s=replace(s,'            mc_value = 0;\n            printf("central: connected %x\\n", mc_handle);',
-        '            mc_value = 0;\n            sd_mc_reset();\n            sd_mc_phase = SD_MC_DISCOVER;\n            printf("central: connected %x\\n", mc_handle);')
+    mc_connected='            mc_mtu = 20;\n' if smk else '            mc_value = 0;\n'
+    s=replace(s,mc_connected+'            printf("central: connected %x\\n", mc_handle);',
+        mc_connected+'            sd_mc_reset();\n            sd_mc_phase = SD_MC_DISCOVER;\n            printf("central: connected %x\\n", mc_handle);')
     s=replace(s,'        mc_handle = 0;\n        mc_value = 0;',
         '        mc_handle = 0;\n        mc_value = 0;\n        sd_mc_reset();')
     start=s.index('static void client_packet_handler(')
@@ -342,7 +406,15 @@ void ble_midi_disconnect(void)
      * This changes only outgoing connections; pairing remains on demand. */
     sm_set_master_io_capabilities(IO_CAPABILITY_DISPLAY_ONLY);
     sm_set_master_authentication_requirements(SM_AUTHREQ_BONDING | SM_AUTHREQ_MITM_PROTECTION);''')
-    s=replace(s,'static const char gap_device_name[] = "FM-1";', 'static const char gap_device_name[] = "Saadet";')
+    if smk:
+        # The newer base names each unit "FM-1 1F2D" and advertises the first four letters; here the product's name,
+        # its first word advertised (31 bytes hold no more), the whole in the scan response.
+        s=replace(s,'static char gap_device_name[10];',f'static const char gap_device_name[] = "{product}";')
+        s=replace(s,'#define GAP_NAME_LEN 9u','#define GAP_NAME_LEN (sizeof gap_device_name - 1u)')
+        s=replace(s,'#define GAP_NAME_SHORT 4u','#define GAP_NAME_SHORT 6u')
+        s=replace(s,'    ble_midi_name(gap_device_name);\n','')
+    else:
+        s=replace(s,'static const char gap_device_name[] = "FM-1";', f'static const char gap_device_name[] = "{product}";')
     # A fresh link must negotiate its own subscription, MTU and parameters.
     s=replace(s,'    set_ble_work_state(BLE_ST_CONNECT);', '''    CCC_SET(handle, H_CCC, 0);
     send_mtu = 20;
@@ -399,16 +471,22 @@ void ble_midi_reconnect(void)
 '''
     p.write_text('/* Saadet connection adaptations Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
     p=work/'device/radio.c';s=p.read_text()
-    s=replace(s,'ble_in_q[bi_w % BQ] = pkt & ~0xF0u;', 'ble_in_q[bi_w % BQ] = pkt; /* internal cable tag identifies the BLE link */')
-    s=replace(s,'BT ready: advertising as FM-1','BT ready: advertising as Saadet')
+    if smk:
+        # The newer base keeps the link's tag itself and reports it through plat_midi_in_from (platform/app.c).
+        require(s,'ble_in_q[bi_w % BQ] = pkt & ~0xE0u;')
+        s=replace(s,'            ble_midi_name(b + 25);\n',
+                  f'            {{ const char *n = "{product}"; char *q = b + 25; while (*n) *q++ = *n++; *q = 0; }}\n')
+    else:
+        s=replace(s,'ble_in_q[bi_w % BQ] = pkt & ~0xF0u;', 'ble_in_q[bi_w % BQ] = pkt; /* internal cable tag identifies the BLE link */')
+        s=replace(s,'BT ready: advertising as FM-1',f'BT ready: advertising as {product}')
     s=replace(s,'static volatile uint8_t ble_state;', 'static volatile uint8_t ble_state;\nstatic uint8_t ble_off;')
     s=replace(s,'static uint8_t ble_off;                           /* switched off by the player (plat_ble_enable) */', '')
-    s=replace(s,'        bt_ble_init();\n        ble_state = BLE_READY;', '''        bt_ble_init();
-        if (ble_off) {
+    ble_ready=('        bt_ble_init();\n        radio_cal_log();\n' if smk else '        bt_ble_init();\n')+'        ble_state = BLE_READY;'
+    s=replace(s,ble_ready, ble_ready.replace('        ble_state = BLE_READY;','''        if (ble_off) {
             extern void ble_midi_enable(int on);
             ble_midi_enable(0); /* an OFF requested during startup still wins */
         }
-        ble_state = BLE_READY;''')
+        ble_state = BLE_READY;'''))
     p.write_text('/* Saadet radio naming Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
 
     p=work/'host/plat_host.c';s=p.read_text()
@@ -417,7 +495,14 @@ void ble_midi_reconnect(void)
             min_port[mi_w++ % MQ] = PORT_BLE;
             run_ms(2);
         } else if (!strcmp(cmd, "midi")) {''')
-    s=replace(s,'''        } else if (!strcmp(cmd, "expect_out")) {
+    if smk:   # the newer base's expect_no_out is the same check; BLE stays either link, as the scripts mean it
+        s=replace(s,'uint32_t to = !strcmp(port, "BLE-DEV") ? TO_BLE_DEV : p >= 0 ? 1u << p : 0u, i;',
+                  'uint32_t to = !strcmp(port, "BLE-DEV") ? TO_BLE_DEV : !strcmp(port, "BLE") ? TO_BLE : p >= 0 ? 1u << p : 0u, i;')
+        s=replace(s,'''        } else if (!strcmp(cmd, "expect_out") || !strcmp(cmd, "expect_no_out")) {''','''        } else if (!strcmp(cmd, "expect_unsent")) {
+            fails += expect_out(a, mk_pkt(b, c, d), 0);
+        } else if (!strcmp(cmd, "expect_out") || !strcmp(cmd, "expect_no_out")) {''')
+    else:
+      s=replace(s,'''        } else if (!strcmp(cmd, "expect_out")) {
             fails += expect_out(a, mk_pkt(b, c, d));''','''        } else if (!strcmp(cmd, "expect_out")) {
             fails += expect_out(a, mk_pkt(b, c, d));
         } else if (!strcmp(cmd, "expect_unsent")) {   /* this message did not go out to PORT since the last "out" */

@@ -13,6 +13,7 @@
  * Flash access goes through three hooks (also used by the host test):
  *   st_read(off, dst, n)   st_erase(off)   st_prog(off, src, n)
  */
+#include "store_map.h"
 #define ST_MAGIC 0x554C4546u                   /* "FELU" */
 #define ST_COMPACT_TAG 0x32504D43u             /* CMP2: preset payload begins at byte 32 */
 #define ST_SECTOR 4096u
@@ -54,6 +55,22 @@ static uint32_t st_crc32(const void *p,uint32_t n)
 
 static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
 {
+#ifdef SAADET_SMK37
+    /* The SMK-37 (store_map.h, docs/SMK37_PORT.md section 5): the FM-1's address where it lies in a data window, a
+     * new one where it does not. The retired identities have no sector here: st_retired stops them first */
+    if (obj == OBJ_SYNTH) return 0xA1000u + copy * ST_SECTOR;
+    if (obj == OBJ_SHARED_EXT) return 0x9D000u + copy * ST_SECTOR;
+    if (obj >= OBJ_P5BANK0) return 0xA3000u + (obj - OBJ_P5BANK0) * 2u * ST_SECTOR + copy * ST_SECTOR;
+    if (obj >= OBJ_NATIVEFM0) return 0xD8000u + (obj - OBJ_NATIVEFM0) * 2u * ST_SECTOR + copy * ST_SECTOR;
+    if (obj == OBJ_UPFM6_EXT) return copy ? 0xE2000u : 0xE9000u;
+    if (obj >= OBJ_UPRESET_EXT0) return 0xE5000u + (obj - OBJ_UPRESET_EXT0) * 2u * ST_SECTOR + copy * ST_SECTOR;
+    if (obj >= OBJ_CZBANK0) return 0xC8000u + (obj - OBJ_CZBANK0) * 2u * ST_SECTOR + copy * ST_SECTOR;
+    if (obj >= OBJ_BANK0) return 0;
+    if (obj == OBJ_SETTINGS) return 0xEB000u + copy * ST_SECTOR;
+    if (obj == OBJ_FM6BANK) return 0xE0000u + copy * ST_SECTOR;
+    if (obj >= OBJ_UPRESET0) return 0xDC000u + (obj - OBJ_UPRESET0) * 2u * ST_SECTOR + copy * ST_SECTOR;
+    return 0;
+#else
     if (obj == OBJ_SYNTH) return 0xA0000u+copy*ST_SECTOR;
     if (obj == OBJ_SHARED_EXT) return 0x9D000u+copy*ST_SECTOR;
     if (obj >= OBJ_P5BANK0) return 0x93000u+(obj-OBJ_P5BANK0)*2u*ST_SECTOR+copy*ST_SECTOR;
@@ -70,6 +87,7 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
     if (obj >= OBJ_UPRESET0)
         return 0xDC000u + (obj - OBJ_UPRESET0) * 2u * ST_SECTOR + copy * ST_SECTOR;
     return 0x97000u + (obj - OBJ_PROJECT0) * 2u * ST_SECTOR + copy * ST_SECTOR;
+#endif
 }
 
 

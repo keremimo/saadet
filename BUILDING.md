@@ -64,6 +64,14 @@ PYTHON="$PWD/build/venv/bin/python" ./build.sh --host
 tests/run_base_tests.sh
 ```
 
+The SMK-37 (Pro, Elite, MKE-P37; [docs/SMK37_PORT.md](docs/SMK37_PORT.md)) builds from the board layer's local
+worktree, pinned in `tools/build_base.py`, into `build/saadet-smk37[-elite|-mke].fwsc`. None of it has run on a unit.
+
+```sh
+PYTHON="$PWD/build/venv/bin/python" ./build.sh --board smk37 --model elite
+PYTHON="$PWD/build/venv/bin/python" tests/run_smk37_tests.sh
+```
+
 Device packages are `platform/build/saadet-usb.fwsc` and
 `platform/build/saadet.fwsc` (BLE). Both have development identity `FM-1_900`.
 The BLE target needs `AC79_SDK` (default `~/fw-AC79_AIoT_SDK`) and the same

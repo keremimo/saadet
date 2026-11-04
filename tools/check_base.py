@@ -7,8 +7,10 @@ import hashlib
 import json
 import re
 import sys
+import os
 ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/'platform/build'
+OUT=Path(os.environ.get('SAADET_OUT',ROOT/'platform/build'))
+BASE=Path(os.environ.get('SAADET_BASE',ROOT/'build/fm1-base-platform'))
 syms=(OUT/'saadet.symbols').read_text()
 def sym(name):
     m=re.search(r'^([0-9a-f]+) .*\s'+re.escape(name)+r'$',syms,re.M)
@@ -17,14 +19,14 @@ def sym(name):
 assert sym('_start')==0x02000120
 # SRAM placement alone is insufficient: boot itself calls some resident P33
 # helpers. Initialize code and pointer data before the first platform call.
-boot=(ROOT/'build/fm1-base-platform/device/main_fm1.c').read_text().split('void fm1_cstart(void)',1)[1]
+boot=(BASE/'device/main_fm1.c').read_text().split('void fm1_cstart(void)',1)[1]
 first=boot.index('    fm1_time_init();')
 for marker in ('d = _bss_start','d = _pool_start','s = _data_load','s = _rt_load','s=_sd_audio_load'):
     assert boot.index(marker)<first,f'boot uses resident helpers before initialization: {marker}'
 assert boot.index('d = _pool_start')<boot.index('s=_sd_audio_load'),'POOL clear wipes resident code'
 # CPU1 executes mask-ROM before our entry. PC limits may be armed only once
 # app_init's bounded handshake has returned (ready, skipped, or held timeout).
-main=(ROOT/'build/fm1-base-platform/device/main_fm1.c').read_text()
+main=(BASE/'device/main_fm1.c').read_text()
 assert 'fm1_guard_enable(FM1_GUARD_STACK | FM1_GUARD_WRITE | FM1_GUARD_BUS);' in boot
 assert 'FM1_GUARD_PC' not in boot,'PC limits trap CPU1 mask-ROM bootstrap'
 app_init=main.index('    app_init();')
@@ -32,7 +34,7 @@ pc_guard=main.index('    fm1_guard_enable(FM1_GUARD_PC);')
 assert app_init<pc_guard<main.index('    audio_init();',app_init),'PC limits must follow CPU1 handshake and precede audio'
 instrument=(ROOT/'platform/instrument.c').read_text().split('void saadet_init(void)',1)[1].split('void saadet_render',1)[0]
 assert 'fm1_multicore_start();' in instrument,'PC guard ordering assumes CPU1 starts inside app_init'
-irq=(ROOT/'build/fm1-base-platform/bsp/chip/fm1_irq.h').read_text()
+irq=(BASE/'bsp/chip/fm1_irq.h').read_text()
 assert 'FM1_EMU_CON &= ~((1u << 2) | (31u << 16));' in irq,'CPU0 must use Melodee fp32 exception policy'
 power=main.index('        sd_power_init();')
 assert power<main.index('    lcd_init();',power)<app_init,'stock power setup must precede peripherals and CPU1'
