@@ -404,7 +404,8 @@ def load_package(path, force):
         raise InstallError("badpkg", f"{path}: no Melodee update loader in this package; only Melodee's own "
                                      "packages and the unmodified official V15 (FM-1.fwsc) are installed "
                                      "(--force overrides)")
-    loader = STOCK_LOADER if official else MELODEE_LOADER if LOADER_MARK in raw else None
+    # a Melodee package goes to its own model's loader (ota-FM-1_900, ota-SMK-37 Elite_900, ..)
+    loader = STOCK_LOADER if official else "ota-" + product if LOADER_MARK in raw else None
     return product, logical_image(raw), loader
 
 
