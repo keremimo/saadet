@@ -1,0 +1,563 @@
+<title>Saadet SMK-37 Mocks</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75,700;85,600;100,500;100,800&display=swap">
+<style>
+/* Layout: a dark workbench; each scene is the 240 x 240 screen at 2x beside the 16 pads, the button LEDs and a
+   caption, as Melodee's docs/smk37-ux sheet. Colours: Saadet's STAGE palette (tools/gen_ui_palettes.py) for the
+   screen, the pad grammar from SMK37_UX.md, a desk of warm charcoal around them. Single dark look by choice. */
+:root {
+  color-scheme: dark;
+  --desk: #121113; --desk-2: #1a191c; --desk-3: #242227; --rule: #312f36;
+  --ink: #ece9f0; --ink-2: #a9a4b3; --ink-3: #6f6a7a;
+  --bg: #050506; --text: #ffffff; --mid: #a3a3ab; --dim: #7a7a84; --faint: #55555e; --fill: #5c5c66;
+  --lit: #4a4a54; --off: #3a3a42; --line: #222227; --well: #1c1c21;
+  --p5: #ff6b3d; --fm6: #52a8ff; --cz: #f2c94c; --j106: #b996ff;
+  --ember: #4a1f06; --none: #221410; --active: #e8f4ff; --wait: #ff6e00;
+  --ui: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--desk); color: var(--ink); font-family: var(--ui); font-weight: 500;
+  padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main { max-width: 1120px; margin: 0 auto; }
+h1 { font-size: 28px; font-weight: 800; font-stretch: 100%; margin: 0 0 6px; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 15px; font-weight: 600; font-stretch: 85%; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-2); margin: 48px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+p { max-width: 68ch; line-height: 1.5; color: var(--ink-2); margin: 0 0 10px; }
+p strong, li strong { color: var(--ink); font-weight: 600; }
+.lead { font-size: 16px; color: var(--ink-2); }
+a { color: var(--p5); }
+code { font-family: var(--mono); font-size: 0.92em; color: var(--ink); }
+ul { padding-left: 18px; color: var(--ink-2); line-height: 1.5; max-width: 72ch; }
+li { margin-bottom: 4px; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 14px 0 0; padding: 0; list-style: none; }
+.toc a { color: var(--ink-2); text-decoration: none; font-size: 13px; border: 1px solid var(--rule); border-radius: 999px; padding: 4px 10px; }
+.toc a:hover, .toc a:focus-visible { color: var(--ink); border-color: var(--ink-3); outline: none; }
+
+/* a scene */
+.scene { display: grid; grid-template-columns: 480px minmax(0, 1fr); gap: 24px; align-items: start; margin: 0 0 40px;
+  padding: 20px; background: var(--desk-2); border-radius: 14px; scroll-margin-top: 16px; }
+.scene h3 { margin: 0 0 4px; font-size: 20px; font-weight: 700; font-stretch: 85%; }
+.scene .id { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin-bottom: 14px; }
+.scene p { font-size: 14px; }
+.shell { width: 480px; height: 480px; border-radius: 10px; overflow: hidden; background: var(--bg); box-shadow: 0 0 0 1px #000, 0 0 0 5px #2a2830; position: relative; }
+.screen { width: 240px; height: 240px; position: relative; transform: scale(2); transform-origin: 0 0; background: var(--bg);
+  font-family: var(--ui); color: var(--text); overflow: hidden; }
+.screen * { position: absolute; white-space: nowrap; line-height: 1; margin: 0; }
+.hd { font-size: 14px; font-weight: 800; font-stretch: 100%; }
+.tx { font-size: 14px; font-weight: 500; font-stretch: 100%; }
+.lb { font-size: 13px; font-weight: 600; font-stretch: 85%; }
+.rw { font-size: 18px; font-weight: 600; font-stretch: 85%; }
+.vl { font-size: 22px; font-weight: 700; font-stretch: 75%; }
+.nm { font-size: 32px; font-weight: 700; font-stretch: 75%; }
+.hr { font-size: 46px; font-weight: 700; font-stretch: 75%; letter-spacing: -0.01em; }
+.c-text { color: var(--text); } .c-mid { color: var(--mid); } .c-dim { color: var(--dim); } .c-faint { color: var(--faint); }
+.dot { width: 6px; height: 6px; border-radius: 3px; }
+.rect { display: block; }
+
+/* the pads and the panel */
+.side { display: grid; gap: 14px; min-width: 0; }
+.padlab { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin: 0; }
+.padlab b { color: var(--ink-2); font-weight: 600; }
+.pads { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; max-width: 520px; }
+.pad { aspect-ratio: 1; border-radius: 6px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.02em; color: rgba(255,255,255,0.55);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), inset 0 -8px 14px rgba(0,0,0,0.25); }
+.pad.wait { animation: breathe 1.6s ease-in-out infinite; }
+.pad.active { color: #2a3340; }
+.pad.filled { color: rgba(0,0,0,0.6); }
+.pad.none { color: rgba(255,255,255,0.18); }
+@keyframes breathe { 0%, 100% { filter: brightness(0.6); } 50% { filter: brightness(1.15); } }
+@media (prefers-reduced-motion: reduce) { .pad.wait { animation: none; } }
+.leds { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.led { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--ink-3);
+  background: var(--desk-3); border-radius: 999px; padding: 4px 9px 4px 6px; }
+.led i { width: 8px; height: 8px; border-radius: 4px; background: #3a373f; display: inline-block; }
+.led.on { color: var(--ink); } .led.on i { background: var(--wait); box-shadow: 0 0 6px var(--wait); }
+.led.blink i { animation: breathe 1s ease-in-out infinite; }
+.faders { display: flex; gap: 18px; align-items: flex-end; }
+.fader { display: grid; justify-items: center; gap: 4px; font-size: 10px; color: var(--ink-3); font-weight: 600; }
+.fader .track { width: 10px; height: 64px; background: var(--desk-3); border-radius: 5px; position: relative; }
+.fader .cap { position: absolute; left: -6px; width: 22px; height: 8px; border-radius: 3px; background: #c9c4d2; }
+.fader .val { position: absolute; left: 3px; width: 4px; border-radius: 2px; background: var(--ink-3); bottom: 0; }
+
+/* the legend */
+.legend { display: grid; gap: 10px; max-width: 640px; }
+.legend .row { display: grid; grid-template-columns: 112px 1fr; gap: 14px; align-items: center; }
+.legend .sw { display: flex; gap: 4px; }
+.legend .sw i { width: 24px; height: 24px; border-radius: 5px; display: block; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
+.legend .row span { font-size: 14px; color: var(--ink-2); }
+.legend .row span b { color: var(--ink); font-weight: 600; }
+
+/* the control map */
+.panel { background: var(--desk-2); border-radius: 14px; padding: 16px; overflow-x: auto; }
+.panel svg { width: 100%; max-width: 1080px; height: auto; display: block; }
+table { border-collapse: collapse; width: 100%; max-width: 900px; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--ink-2); }
+th { color: var(--ink-3); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; }
+td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.tablewrap { overflow-x: auto; }
+
+@media (max-width: 1000px) {
+  .scene { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .shell { width: 360px; height: 360px; }
+  .screen { transform: scale(1.5); }
+  .pads { gap: 4px; }
+  .pad { font-size: 8px; }
+}
+</style>
+
+<main>
+<h1>Saadet on the SMK-37 Elite / Pro</h1>
+<p class="lead">UX mocks for <code>docs/SMK37_UX.md</code>: each screen on the panel's own 240 × 240 geometry beside the 16 pads as the design lights them, the button LEDs and the faders where they matter. The firmware draws none of this yet; the pixel-exact set comes from the renderer in phase 0 of the port.</p>
+<ul class="toc" id="toc"></ul>
+
+<h2 id="grammar">Pad colour grammar</h2>
+<p>One hue: the engine's colour, the one the screen already takes on (P5 coral, FM6 blue, CZ-1 yellow, J106 lilac). Five states, told apart by colour and level, never by level alone.</p>
+<div class="legend" id="legend"></div>
+
+<h2 id="scene-list">Scenes</h2>
+<div id="scenes"></div>
+
+<h2 id="map">The panel, mapped</h2>
+<p>The printed labels and Saadet's functions. The screen names the place as it always did; the manual gives this map once.</p>
+<div class="panel" id="panel"></div>
+<div class="tablewrap">
+<table>
+<tr><th>SMK-37</th><th>Saadet</th></tr>
+<tr><td>Keys C3..C6</td><td>37 velocity keys. The middle 27 (F3..G5) are the FM-1's; the outer 10 play notes too, through scale, chord, octave and arp. No lights.</td></tr>
+<tr><td>16 pads</td><td>CHORDS or SOUNDS (AUTO follows the place; never a second keyboard); a held button's list; PATCH held the favourites; SCALE held a piano. Velocity and pressure. Lit in the engine's hue.</td></tr>
+<tr><td>K1..K4</td><td>The four values at the foot of the screen, or the knob bank's four.</td></tr>
+<tr><td>K5 / K6 / K7 / K8</td><td>MASTER (a virtual master, kept) / SELECT / ALGORITHM / PRESETS.</td></tr>
+<tr><td>Faders 1..4</td><td>The fader bank's four (default ENV: A D S R), soft pickup, gauges on the screen while they move.</td></tr>
+<tr><td>KNOB BANK / FADER BANK</td><td>Tap: the next bank. Held: the picker on the screen and the pads (top row banks, bottom row pad modes).</td></tr>
+<tr><td>&lt; / &gt;</td><td>One SELECT detent. On HOME: the previous / next sound. With a BANK button held: its bank.</td></tr>
+<tr><td>PATCH / BT</td><td>HOME / SAVE. PATCH held: the favourites on the pads.</td></tr>
+<tr><td>FX, SCALE, CHORD, NOTE REPEAT, PARA, GLOBE</td><td>LIBRARY, SCALE, ENV, LFO, EDIT, GLOBAL.</td></tr>
+<tr><td>ARP / SEQ / SEQ PLAY / SEQ REC</td><td>ARP (held: the pedal) / CHORD / PLAY / the latch.</td></tr>
+<tr><td>OCTAVE- / OCTAVE+</td><td>As printed. Both at power-on: HARDWARE CALIBRATION. OCTAVE- at power-on: update mode.</td></tr>
+<tr><td>Pitch / mod wheel</td><td>The sound's bend / CC1, the matrix's MODW, P5 WHEEL MOD, FM6 WHEEL.</td></tr>
+<tr><td>Sustain pedal jack</td><td>Sustain (as ARP held), CC64 out, polarity learned at power-on.</td></tr>
+<tr><td>TRS jack</td><td>MIDI OUT (what USB MIDI sends). No MIDI IN.</td></tr>
+</table>
+</div>
+</main>
+
+<script>
+(function () {
+  var ENG = { p5: "#ff6b3d", fm6: "#52a8ff", cz: "#f2c94c", j106: "#b996ff" };
+  var TAG = { p5: "P5", fm6: "FM6", cz: "CZ-1", j106: "J106" };
+  var C = { bg: "#050506", text: "#ffffff", mid: "#a3a3ab", dim: "#7a7a84", faint: "#55555e", fill: "#5c5c66",
+            lit: "#4a4a54", off: "#3a3a42", line: "#222227", well: "#1c1c21" };
+  var EMBER = [0x4a, 0x1f, 0x06], ACTIVE = "#e8f4ff", WAIT = "#ff6e00", NONE = "#221410";
+
+  function hex(c) { var m = c.match(/#(..)(..)(..)/); return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)]; }
+  function mix(a, b, pct) { return "rgb(" + a.map(function (x, i) { return Math.round(x + (b[i] - x) * pct / 100); }).join(",") + ")"; }
+  function padColour(state, hue) {
+    var base = hex(ENG[hue] || hue);
+    return { off: mix(EMBER, EMBER, 0), none: NONE, on: mix(EMBER, base, 42), filled: mix(base, base, 0), active: ACTIVE, wait: WAIT }[state];
+  }
+  function mixHex(a, b, pct) { return mix(hex(a), hex(b), pct); }
+
+  /* ------------------------------------------------------------ the screen --- */
+  function el(tag, cls, style, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (style) for (var k in style) e.style[k] = style[k];
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function rect(s, x, y, w, h, c) { s.appendChild(el("i", "rect", { left: x + "px", top: y + "px", width: w + "px", height: h + "px", background: c })); }
+  function text(s, x, y, face, str, c, right) {
+    var e = el("span", face, { left: right ? "" : x + "px", right: right ? (240 - x) + "px" : "", top: y + "px", color: c }, str);
+    s.appendChild(e); return e;
+  }
+  function disc(s, cx, cy, r, c) { s.appendChild(el("i", "rect", { left: (cx - r) + "px", top: (cy - r) + "px", width: 2 * r + "px", height: 2 * r + "px", borderRadius: r + "px", background: c })); }
+
+  /* the header: the place, its object or page, the dots; a tag in the engine's colour; HOME's octave */
+  function header(s, o) {
+    var theme = ENG[o.eng];
+    if (o.toast) { text(s, 10, 8, "tx", o.toast, C.text); return; }
+    var headC = o.homeHead ? theme : C.text;
+    var h = text(s, 10, 8, "hd", o.head, headC);
+    var x = 10 + measure(h) + 8;
+    if (o.sub) { text(s, x, 8, "tx", o.sub, C.mid); }
+    if (o.tag) { text(s, o.tagRight || 230, 9, "lb", o.tag, theme, true); }
+    else if (o.oct) { text(s, 230, 8, "tx", o.oct, C.mid, true); }
+    if (o.dots) for (var i = 0; i < o.dots; i++) disc(s, 227 - 10 * (o.dots - 1 - i), 16, 3, i === o.dot ? C.text : C.off);
+  }
+  var meas = document.createElement("span");
+  function measure(e) {
+    meas.className = e.className; meas.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;font-family:Archivo,Arial,sans-serif;line-height:1";
+    meas.textContent = e.textContent; document.body.appendChild(meas); var w = meas.offsetWidth; document.body.removeChild(meas); return w;
+  }
+  /* the strip: four cards at the foot (labels y 184, values y 199, bars y 231); a card may carry a pickup gauge */
+  function cols(s, o) {
+    var theme = ENG[o.eng];
+    for (var i = 0; i < 4; i++) {
+      var c = o.cols[i]; if (!c) continue;
+      var x = 7 + 59 * i, hot = i === o.hot;
+      var ink = hot ? theme : c.dim ? C.dim : C.text;
+      text(s, x, 184, "lb", c.l, c.dim ? C.dim : C.mid);
+      var v = text(s, x, 199, "vl", c.v, ink);
+      if (c.u) text(s, x + measure(v) + 2, 205, "lb", c.u, C.mid);
+      rect(s, x, 231, 50, 2, C.line);
+      if (c.bar === "tick") rect(s, x + Math.round(c.a * 44), 231, 6, 2, hot ? theme : C.fill);
+      else if (c.bar === "bip") { rect(s, x + 24, 228, 1, 8, C.fill); var a = 25 + Math.round(c.a * 25); rect(s, Math.min(25, a) + x, 231, Math.abs(a - 25), 2, hot ? theme : C.fill); }
+      else if (c.bar === "steps") { var n = c.b, w = Math.floor((50 - 2 * (n - 1)) / n); for (var k = 0; k < n; k++) rect(s, x + k * (w + 2), 231, w, 2, k === c.a ? (hot ? theme : C.fill) : C.line); }
+      else if (c.bar !== "none") rect(s, x, 231, Math.round((c.a || 0) * 50), 2, hot ? theme : C.fill);
+      if (c.pick) {                                   /* the fader's pickup gauge: the value's bar, a tick where the fader is */
+        var gy = 220, lc = c.pick.picked ? (hot ? theme : C.fill) : C.dim;
+        rect(s, x + 4, gy + 2, 42, 2, C.line);
+        rect(s, x + 4, gy + 2, Math.round(42 * c.pick.v), 2, lc);
+        rect(s, x + 4 + Math.round(42 * c.pick.f) - 1, gy, 2, 6, c.pick.picked ? lc : C.text);
+      }
+    }
+  }
+  /* HOME's keyboard as the SMK's keybed C3..C6: 22 white keys; the scale lighter, its root lighter still, the notes sounding in the engine's colour */
+  function keyboard(s, o, y, h) {
+    var theme = ENG[o.eng], lit = o.fade ? mixHex(C.bg, theme, 45) : theme;
+    var whites = [0, 2, 4, 5, 7, 9, 11], w = 0, n;
+    for (n = 48; n <= 84; n++) {                      /* C3 .. C6 */
+      var pc = n % 12, black = whites.indexOf(pc) < 0, rel = (pc + 12 - o.root) % 12;
+      var on = o.sounding.indexOf(n) >= 0, inScale = o.scale ? ((o.scale >> rel) & 1) : 0;
+      var c = on ? lit : (o.scale && !rel) ? C.fill : inScale ? (black ? C.off : C.lit) : black ? C.bg : C.well;
+      if (!black) { rect(s, 9 + 10 * w, y, 9, h, c); w++; }
+    }
+    w = 0;
+    for (n = 48; n <= 84; n++) {
+      var pc2 = n % 12, black2 = whites.indexOf(pc2) < 0;
+      if (!black2) { w++; continue; }
+      var rel2 = (pc2 + 12 - o.root) % 12, on2 = o.sounding.indexOf(n) >= 0;
+      var c2 = on2 ? lit : (o.scale && !rel2) ? C.fill : (o.scale ? ((o.scale >> rel2) & 1) : 0) ? C.off : mixHex(C.bg, C.well, 50);
+      var x = 9 + 10 * w - 3;
+      rect(s, x - 1, y, 8, Math.round(h * 0.62) + 1, C.bg);
+      rect(s, x, y, 6, Math.round(h * 0.6), c2);
+    }
+  }
+  function home(s, o) {
+    var theme = ENG[o.eng];
+    header(s, { eng: o.eng, head: TAG[o.eng], homeHead: true, sub: o.slot, oct: o.oct, tag: o.tag, toast: o.toast });
+    text(s, 10, o.big ? 34 : 42, o.big ? "hr" : "nm", o.name, C.text);
+    if (o.chord) {
+      var r = text(s, 10, 92, "nm", o.chord.root, C.text);
+      var x = 10 + measure(r) + 1;
+      if (o.chord.q) { var q = text(s, x, 101, "vl", o.chord.q, C.text); x += measure(q); }
+      if (o.chord.bass) { var sl = text(s, x + 2, 92, "nm", "/", C.text); text(s, x + 2 + measure(sl), 92, "nm", o.chord.bass, C.text); }
+    } else if (o.key) text(s, 10, 96, "vl", o.key, C.mid);
+    if (o.notes) text(s, 10, 132, "lb", o.notes, theme);
+    if (o.state) text(s, 10, 154, "tx", o.state, C.mid);
+    if (o.strip) { cols(s, { eng: o.eng, cols: o.strip, hot: o.hot }); }
+    else {
+      keyboard(s, o, 180, 32);
+      for (var i = 0; i < 4; i++) { rect(s, 7 + 59 * i, 222, 50, 4, C.line); rect(s, 7 + 59 * i, 222, Math.round(o.macro[i] * 50), 4, theme); }
+    }
+  }
+  /* a held button's list (VM_REVEAL): numbered rows, the current bright; at the foot the pads strip instead of the keys */
+  function reveal(s, o) {
+    var theme = ENG[o.eng];
+    header(s, { eng: o.eng, head: o.head, sub: o.sub });
+    for (var i = 0; i < o.rows.length; i++) {
+      var y = 30 + 24 * i;
+      text(s, 10, y + 3, "hd", String(i + 1), theme);
+      text(s, 34, y, "rw", o.rows[i], i === o.cur ? C.text : C.mid);
+    }
+    padStrip(s, o, 206, 28);
+  }
+  function padStrip(s, o, y, h) {                      /* two rows of eight: the entries ON, the current in the engine's colour */
+    var theme = ENG[o.eng], n = o.count || o.rows.length;
+    for (var i = 0; i < 16; i++) {
+      var r = i < 8 ? 0 : 1, c = i % 8, px = 8 + 28 * c, py = y + r * (h / 2 + 1);
+      rect(s, px, py, 26, h / 2 - 1, i === o.cur ? theme : i < n ? C.lit : C.well);
+    }
+  }
+  /* the library list: five sounds around the chosen one */
+  function list(s, o, y) {
+    var theme = ENG[o.eng], DY = [0, 22, 52, 98, 124];
+    for (var i = 0; i < 5; i++) {
+      var r = o.rows[i]; if (!r) continue;
+      var ry = y + DY[i], mid = i === 2, near = i === 1 || i === 3;
+      text(s, 10, ry + (mid ? 12 : 2), mid ? "hd" : "tx", r.tag, mid || r.now ? theme : C.dim);
+      text(s, 52, ry, mid ? "nm" : near ? "rw" : "tx", r.name, mid ? C.text : near ? C.mid : C.faint);
+      if (r.star) disc(s, 225, ry + (mid ? 16 : near ? 9 : 7), mid ? 4.5 : 3, theme);
+    }
+  }
+  /* pictures: an envelope, a filter, a readout, faders, a scale, a chord */
+  function picEnv(s, o) {
+    var theme = ENG[o.eng], x0 = 10, y0 = 160, w = 220, a = o.a, d = o.d, su = o.su, r = o.r;
+    var pts = [[x0, y0], [x0 + a * 50, 60], [x0 + a * 50 + d * 50, 60 + (1 - su) * 100], [x0 + w - r * 60, 60 + (1 - su) * 100], [x0 + w, y0]];
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "240"); svg.setAttribute("height", "240"); svg.style.left = "0"; svg.style.top = "0";
+    var p = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    p.setAttribute("points", pts.map(function (q) { return q.join(","); }).join(" "));
+    p.setAttribute("fill", "none"); p.setAttribute("stroke", theme); p.setAttribute("stroke-width", "2"); p.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(p); s.appendChild(svg);
+    rect(s, x0, y0, w, 1, C.line);
+  }
+  function picFilter(s, o) {
+    var theme = ENG[o.eng];
+    rect(s, 10, 120, 220, 1, C.line); rect(s, 10 + Math.round(o.cut * 200), 60, 1, 110, C.line);
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "240"); svg.setAttribute("height", "240"); svg.style.left = "0"; svg.style.top = "0";
+    var cx = 10 + o.cut * 200, p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", "M10 120 H" + (cx - 20) + " Q" + cx + " " + (120 - o.res * 40) + " " + (cx + 25) + " 150 L" + (cx + 60) + " 165 H230");
+    p.setAttribute("fill", "none"); p.setAttribute("stroke", theme); p.setAttribute("stroke-width", "2");
+    svg.appendChild(p); s.appendChild(svg);
+  }
+  function picFaders(s, o) {                            /* four vertical faders of the page's values */
+    var theme = ENG[o.eng];
+    for (var i = 0; i < 4; i++) {
+      var c = o.cols[i], x = 7 + 59 * i + 22;
+      rect(s, x, 50, 6, 110, C.well);
+      if (c && c.bar !== "none") { var v = c.a || 0; rect(s, x, 50 + Math.round((1 - v) * 104), 6, 6 + Math.round(v * 104), i === o.hot ? theme : C.fill); }
+    }
+  }
+  function picReadout(s, o) { for (var i = 0; i < o.lines.length; i++) text(s, 10, 44 + 22 * i, "tx", o.lines[i], C.mid); }
+  function picChord(s, o) {
+    var theme = ENG[o.eng];
+    text(s, 10, 44, "tx", o.key, C.mid);
+    for (var i = 0; i < o.degrees.length; i++) {
+      var d = o.degrees[i], x = 10 + 28 * i;
+      text(s, x, 70, "lb", d.n, d.on ? theme : C.dim);
+      text(s, x, 88, "lb", d.c, d.on ? C.text : C.mid);
+    }
+    text(s, 10, 128, "lb", o.line, theme);
+  }
+  function picScale(s, o) {
+    var theme = ENG[o.eng], names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    for (var i = 0; i < 12; i++) {
+      var rel = (i + 12 - o.root) % 12, inS = (o.scale >> rel) & 1, x = 10 + 18 * i;
+      rect(s, x, 60, 15, 60, !rel ? theme : inS ? C.lit : C.well);
+      text(s, x + 2, 126, "lb", names[i], !rel ? theme : inS ? C.mid : C.dim);
+    }
+  }
+  function picker(s, o) {                              /* the bank picker over the picture: the rows, the current marked */
+    var theme = ENG[o.eng];
+    rect(s, 10, 36, 220, 140, C.bg);
+    for (var i = 0; i < o.items.length; i++) {
+      var y = 40 + 20 * i, it = o.items[i];
+      text(s, 14, y + 3, "lb", String(i + 1), it.cur ? theme : C.dim);
+      text(s, 34, y, "rw", it.n, it.cur ? C.text : it.none ? C.faint : C.mid);
+    }
+  }
+
+  function page(s, o) {
+    header(s, o);
+    if (o.pic === "env") picEnv(s, o);
+    if (o.pic === "filter") picFilter(s, o);
+    if (o.pic === "faders") picFaders(s, o);
+    if (o.pic === "readout") picReadout(s, o);
+    if (o.pic === "chord") picChord(s, o);
+    if (o.pic === "scale") picScale(s, o);
+    if (o.picker) picker(s, o.picker);
+    cols(s, o);
+  }
+
+  /* --------------------------------------------------------------- the pads --- */
+  function padsRow(labels, states, hue) { return labels.map(function (l, i) { return { l: l, st: states[i], hue: hue }; }); }
+  /* CHORDS: the top row the eight chord types (the one in use FILLED), the bottom row the scale's degrees (the root
+     degree FILLED, a struck one ACTIVE) */
+  var TYPES = ["OFF", "DIA3", "DIA7", "MAJ", "MIN", "DOM7", "MAJ7", "MIN7"], DEGREES = ["I", "II", "III", "IV", "V", "VI", "VII", "I'"];
+  function chordPads(hue, type, struck) {
+    return [TYPES.map(function (t) { return { l: t, st: t === type ? "filled" : "on", hue: hue }; }),
+            DEGREES.map(function (d, i) { return { l: d, st: i === struck ? "active" : i === 0 ? "filled" : "on", hue: hue }; })];
+  }
+  var MAJ = 0xAB5, MIN = 0x5AD;                        /* bit k = semitone k from the root */
+
+  /* --------------------------------------------------------------- scenes --- */
+  var S = [];
+  S.push({ id: "home_chords", title: "HOME, pads CHORDS", eng: "p5",
+    cap: "The pads' default wherever you play: the chord engine. Top row the eight chord types (DIA7 in use), bottom row the degrees of D minor (the root degree FILLED). Degree I is struck: ACTIVE, and the screen reads Dm7 with its notes, the keyboard (now the keybed C3..C6) lit the same. The pedal is down: SUSTAIN on the status line. The keys keep playing single notes beside it.",
+    screen: function (s) { home(s, { eng: "p5", slot: "FACTORY 001", oct: "OCT 0", name: "It's a Prophet 5", big: true,
+      chord: { root: "D", q: "m7" }, notes: "D3 F3 A3 C4", state: "CHORD DIA7 · SUSTAIN", root: 2, scale: MIN, sounding: [50, 53, 57, 60], macro: [0.4, 0.1, 0.78, 0.5] }); },
+    pads: chordPads("p5", "DIA7", 0), leds: { SEQ: 1, "KNOB BANK": 0, "FADER BANK": 0 } });
+
+  S.push({ id: "home_faders_env", title: "HOME, a fader moves: the ENV bank's cards", eng: "p5",
+    cap: "Fader 3 moved. For 1.5 s the fader bank's four cards (ENV: the amp envelope) stand in for the keyboard, SUSTAIN hot, each with a pickup gauge: the value's bar, a tick where the fader stands. Faders 1 and 2 are away since the sound changed (the bar in grey); 3 and 4 have taken over. The header carries FADERS.",
+    screen: function (s) { home(s, { eng: "p5", slot: "FACTORY 001", tag: "FADERS", name: "It's a Prophet 5", big: true, chord: { root: "D", q: "m7" }, notes: "D3 F3 A3 C4", state: "CHORD DIA7 · SUSTAIN", hot: 2,
+      strip: [{ l: "ATTACK", v: "12", a: 0.12, pick: { v: 0.12, f: 0.6, picked: 0 } }, { l: "DECAY", v: "48", a: 0.48, pick: { v: 0.48, f: 0.2, picked: 0 } },
+              { l: "SUSTAIN", v: "80", a: 0.8, pick: { v: 0.8, f: 0.8, picked: 1 } }, { l: "RELEASE", v: "40", a: 0.4, pick: { v: 0.4, f: 0.4, picked: 1 } }] }); },
+    pads: chordPads("p5", "DIA7", -1), leds: { SEQ: 1, "FADER BANK": 0, "KNOB BANK": 0 },
+    faders: [{ f: 0.6, v: 0.12, l: "ATK" }, { f: 0.2, v: 0.48, l: "DEC" }, { f: 0.8, v: 0.8, l: "SUS", hot: 1 }, { f: 0.4, v: 0.4, l: "REL" }] });
+
+  S.push({ id: "edit_bank_filter", title: "EDIT > OSC A, knob bank FILTER", eng: "p5",
+    cap: "The place is EDIT, its page OSC A (the picture stays its own), but the knobs are pinned to the FILTER bank: the strip shows CUTOFF RES ENV AMT KEYS, K1 turning hot. The header carries the bank's name as a tag; the KNOB BANK LED is lit while the bank is not PAGE.",
+    screen: function (s) { page(s, { eng: "p5", head: "EDIT", sub: "OSC A", dots: 2, dot: 0, tag: "FILTER", tagRight: 208, hot: 0, pic: "faders",
+      cols: [{ l: "CUTOFF", v: "41", a: 0.41 }, { l: "RES", v: "1", a: 0.01 }, { l: "ENV AMT", v: "78", a: 0.78 }, { l: "KEYS", v: "FULL", bar: "steps", a: 2, b: 3 }] }); },
+    pads: chordPads("p5", "DIA7", -1), leds: { "KNOB BANK": 1, SEQ: 1, "FADER BANK": 0 } });
+
+  S.push({ id: "chord_pads", title: "CHORD, pads CHORDS", eng: "p5",
+    cap: "The CHORD place, where the pads' default and the screen meet. Top row: the eight chord types (DIA7 in use, FILLED; a tap sets the type for pads and keys alike). Bottom row: the eight degrees of D minor, each playing its diatonic seventh through the voicing and strum; the root degree FILLED, the IV struck ACTIVE. Leaning on a struck pad strums it faster (pressure is strum speed, never aftertouch). With CHORD OFF the bottom row plays the degrees' single notes.",
+    screen: function (s) { page(s, { eng: "p5", head: "CHORD", sub: "", dots: 0, pic: "chord", key: "D MINOR", line: "IV  Gm7  G3 Bb3 D4 F4",
+      degrees: [{ n: "I", c: "Dm7", on: 0 }, { n: "II", c: "Eo7", on: 0 }, { n: "III", c: "FM7", on: 0 }, { n: "IV", c: "Gm7", on: 1 }, { n: "V", c: "Am7", on: 0 }, { n: "VI", c: "BbM7", on: 0 }, { n: "VII", c: "C7", on: 0 }, { n: "I'", c: "Dm7", on: 0 }],
+      cols: [{ l: "CHORD", v: "DIA7", bar: "tick", a: 0.22 }, { l: "VOICING", v: "OPEN", bar: "tick", a: 0.25 }, { l: "STRUM", v: "1/16", bar: "tick", a: 0.28 }, { l: "STROKE", v: "DOWN", bar: "steps", a: 0, b: 3 }] }); },
+    pads: [padsRow(["OFF", "DIA3", "DIA7", "MAJ", "MIN", "DOM7", "MAJ7", "MIN7"], ["on", "on", "filled", "on", "on", "on", "on", "on"], "p5"),
+           padsRow(["I", "II", "III", "IV", "V", "VI", "VII", "I'"], ["filled", "on", "on", "active", "on", "on", "on", "on"], "p5")],
+    leds: { SEQ: 1, "KNOB BANK": 0 } });
+
+  S.push({ id: "library_sounds", title: "LIBRARY > P5, pads SOUNDS", eng: "p5",
+    cap: "On LIBRARY the pads are 16 sounds of the list on the screen, pad 1 top left, a page of 16 from the first; the sound playing (003) FILLED, the rest ON, slots past the list's end OFF. A tap loads at once. SELECT or < > turn the page of 16 and the screen's chosen sound follows.",
+    screen: function (s) { header(s, { eng: "p5", head: "LIBRARY", sub: "P5", dots: 6, dot: 2 });
+      list(s, { eng: "p5", rows: [{ tag: "001", name: "It's a Prophet 5" }, { tag: "002", name: "After Ringer" }, { tag: "003", name: "Forever Keys", star: 1, now: 1 }, { tag: "004", name: "Funk Bass II" }, { tag: "005", name: "Formant Seraphim" }] }, 34);
+      cols(s, { eng: "p5", cols: [{ l: "SOUND", v: "3", u: "/201", a: 0.015 }, { l: "FAV", v: "ON", bar: "steps", a: 1, b: 2 }, { l: "SEND", v: "+", bar: "none" }] }); },
+    pads: [padsRow(["001", "002", "003", "004", "005", "006", "007", "008"], ["on", "on", "filled", "on", "on", "on", "on", "on"], "p5"),
+           padsRow(["009", "010", "011", "012", "013", "014", "015", "016"], ["on", "on", "on", "on", "on", "on", "on", "on"], "p5")],
+    leds: { FX: 1 } });
+
+  S.push({ id: "patch_held_favs", title: "PATCH held: the favourites on the pads", eng: "p5",
+    cap: "Holding PATCH (HOME) lists the favourites, as the FM-1 lit them on the keys: here on the pads, each in its own engine's hue, the one playing FILLED, empty slots OFF. A tap loads that favourite and PATCH may be let go. The screen's row numbers are the pads', and the keys strip at the foot is a pads strip.",
+    screen: function (s) { reveal(s, { eng: "p5", head: "FAVOURITES", rows: ["Forever Keys", "Glass Marimba", "Brass Section", "Sub Pulse", "Harmonium", "Juno Strings", "Metal Bell"], cur: 0, count: 9 }); },
+    pads: [[{ l: "1", st: "filled", hue: "p5" }, { l: "2", st: "on", hue: "fm6" }, { l: "3", st: "on", hue: "p5" }, { l: "4", st: "on", hue: "j106" }, { l: "5", st: "on", hue: "cz" }, { l: "6", st: "on", hue: "j106" }, { l: "7", st: "on", hue: "fm6" }, { l: "8", st: "on", hue: "cz" }],
+           [{ l: "9", st: "on", hue: "p5" }, { l: "", st: "off", hue: "p5" }, { l: "", st: "off", hue: "p5" }, { l: "", st: "off", hue: "p5" }, { l: "", st: "off", hue: "p5" }, { l: "", st: "off", hue: "p5" }, { l: "", st: "off", hue: "p5" }, { l: "", st: "off", hue: "p5" }]],
+    leds: { PATCH: 1 } });
+
+  S.push({ id: "env_held", title: "ENV held: the envelopes on the pads", eng: "p5",
+    cap: "A place button held lists what is inside: the Prophet's FILTER ENV, AMP ENV and the common MOD ENV. Pads 1..3 ON, the current (AMP ENV) FILLED, the rest of the pads dark. A tap jumps there. Unlike the FM-1, the keys play on under a held button: the pads do the choosing.",
+    screen: function (s) { reveal(s, { eng: "p5", head: "ENV", sub: "P5", rows: ["FILTER ENV", "AMP ENV", "MOD ENV"], cur: 1 }); },
+    pads: [padsRow(["FILT", "AMP", "MOD", "", "", "", "", ""], ["on", "filled", "on", "none", "none", "none", "none", "none"], "p5"),
+           padsRow(["", "", "", "", "", "", "", ""], ["none", "none", "none", "none", "none", "none", "none", "none"], "p5")],
+    leds: { CHORD: 1 } });
+
+  S.push({ id: "scale_held", title: "SCALE held: a piano to pick the root", eng: "cz",
+    cap: "While SCALE is held the pads are a piano: C4..C5 on top, the black keys between them below (the two gaps dark). The root FILLED, the scale's notes ON, the rest OFF; a tap makes that note the root. The CZ-1 is playing, so everything is yellow.",
+    screen: function (s) { page(s, { eng: "cz", head: "SCALE", sub: "", dots: 2, dot: 0, pic: "scale", root: 7, scale: MAJ,
+      cols: [{ l: "SCALE", v: "MAJOR", bar: "tick", a: 0.1 }, { l: "ROOT", v: "G", bar: "tick", a: 0.58 }, { l: "KEYS", v: "ON", bar: "steps", a: 1, b: 2 }, { l: "SHIFT", v: "0", bar: "bip", a: 0 }] }); },
+    pads: [padsRow(["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"], ["on", "on", "on", "off", "filled", "on", "on", "on"], "cz"),
+           padsRow(["C#4", "D#4", "", "F#4", "G#4", "A#4", "", "C#5"], ["off", "off", "none", "on", "off", "off", "none", "off"], "cz")],
+    leds: { SCALE: 1 } });
+
+  S.push({ id: "pick_banks", title: "KNOB BANK held: the picker", eng: "fm6",
+    cap: "Holding KNOB BANK lists the eight banks over the picture, the current (LFO) marked; K1 or < > walk it, letting go keeps what is shown. On the pads the top row is the banks (LFO ACTIVE; FILTER dark: the FM6 has none) and the bottom row the pad modes (AUTO, CHORDS, SOUNDS; AUTO the current). A tap picks.",
+    screen: function (s) { page(s, { eng: "fm6", head: "EDIT", sub: "OP1", dots: 6, dot: 0, tag: "LFO", tagRight: 170,
+      picker: { eng: "fm6", items: [{ n: "PAGE" }, { n: "MACROS" }, { n: "FILTER", none: 1 }, { n: "ENV" }, { n: "LFO", cur: 1 }, { n: "ARP" }, { n: "CHORD" }] },
+      cols: [{ l: "WAVE", v: "TRI", bar: "tick", a: 0.2 }, { l: "SPEED", v: "35", a: 0.35 }, { l: "DELAY", v: "0", a: 0 }, { l: "RESTART", v: "ON", bar: "steps", a: 1, b: 2 }] }); },
+    pads: [padsRow(["PAGE", "MACRO", "FILT", "ENV", "LFO", "ARP", "CHORD", "MIX"], ["on", "on", "off", "on", "active", "on", "on", "on"], "fm6"),
+           padsRow(["AUTO", "CHRDS", "SNDS", "", "", "", "", ""], ["active", "on", "on", "none", "none", "none", "none", "none"], "fm6")],
+    leds: { "KNOB BANK": 2, PARA: 1 } });
+
+  S.push({ id: "j106_env_faders", title: "J106 > ENV, the faders as A D S R", eng: "j106",
+    cap: "The JUNO-106 is a slider synth, and on the ENV place with the fader bank at ENV the four faders are its ADSR. Every fader has taken over (the gauges in lilac), DECAY moving hot. The pads are CHORDS in lilac (MAJ in use): the hue follows the engine, as the screen does.",
+    screen: function (s) { page(s, { eng: "j106", head: "ENV", sub: "ENV", dots: 2, dot: 0, tag: "FADERS", tagRight: 208, hot: 1, pic: "env", a: 0.1, d: 0.5, su: 0.6, r: 0.5,
+      cols: [{ l: "ATTACK", v: "10", a: 0.1, pick: { v: 0.1, f: 0.1, picked: 1 } }, { l: "DECAY", v: "52", a: 0.52, pick: { v: 0.52, f: 0.52, picked: 1 } },
+             { l: "SUSTAIN", v: "60", a: 0.6, pick: { v: 0.6, f: 0.6, picked: 1 } }, { l: "RELEASE", v: "48", a: 0.48, pick: { v: 0.48, f: 0.48, picked: 1 } }] }); },
+    pads: chordPads("j106", "MAJ", -1), leds: { CHORD: 1, SEQ: 1, "FADER BANK": 0 },
+    faders: [{ f: 0.1, v: 0.1, l: "A" }, { f: 0.52, v: 0.52, l: "D", hot: 1 }, { f: 0.6, v: 0.6, l: "S" }, { f: 0.48, v: 0.48, l: "R" }] });
+
+  S.push({ id: "pads_override", title: "A pad mode picked by hand", eng: "cz",
+    cap: "SOUNDS was picked by hand (a BANK button held + its pad) and stays through place changes: here on HOME, where AUTO would show CHORDS, the pads are the FAVOURITES list, a sound launcher under the left hand while the right plays. While the pick differs from AUTO's choice the header carries its name as a tag, left of the engine's tag: state, not a message.",
+    screen: function (s) { home(s, { eng: "cz", slot: "FACTORY 012", tag: "SOUNDS", name: "Glass Marimba", big: true, key: "G MAJOR", state: "ARP UP 1/16", root: 7, scale: MAJ, sounding: [], macro: [0.3, 0.6, 0.2, 0.7] }); },
+    pads: [[{ l: "1", st: "on", hue: "p5" }, { l: "2", st: "on", hue: "fm6" }, { l: "3", st: "on", hue: "p5" }, { l: "4", st: "on", hue: "j106" }, { l: "5", st: "filled", hue: "cz" }, { l: "6", st: "on", hue: "j106" }, { l: "7", st: "on", hue: "fm6" }, { l: "8", st: "on", hue: "cz" }],
+           [{ l: "9", st: "on", hue: "p5" }, { l: "", st: "off", hue: "cz" }, { l: "", st: "off", hue: "cz" }, { l: "", st: "off", hue: "cz" }, { l: "", st: "off", hue: "cz" }, { l: "", st: "off", hue: "cz" }, { l: "", st: "off", hue: "cz" }, { l: "", st: "off", hue: "cz" }]],
+    leds: { ARP: 2, PATCH: 1 } });
+
+  S.push({ id: "global_keys", title: "GLOBAL > KEYS", eng: "j106",
+    cap: "A page the SMK adds: VELOCITY remaps the stock curves for keys and pads, PAD LIGHTS is the pads' level, TRS OUT the jack (MIDI OUT only on this keyboard), PEDAL the jack's polarity (AUTO learns it at power-on).",
+    screen: function (s) { page(s, { eng: "j106", head: "GLOBAL", sub: "KEYS", dots: 10, dot: 7, pic: "readout",
+      lines: ["Keys and pads from the stock curves", "Pads at half brightness", "TRS sends what USB sends", "Pedal rest taken at power-on"],
+      cols: [{ l: "VELOCITY", v: "NORMAL", bar: "steps", a: 0, b: 4 }, { l: "PAD LIGHTS", v: "MID", bar: "tick", a: 0.5 }, { l: "TRS OUT", v: "ON", bar: "steps", a: 1, b: 2 }, { l: "PEDAL", v: "AUTO", bar: "steps", a: 0, b: 3 }] }); },
+    pads: chordPads("j106", "DIA3", -1), leds: { GLOBE: 1, SEQ: 1 } });
+
+  S.push({ id: "save_waiting", title: "A dump waits in SAVE: WAITING", eng: "fm6",
+    cap: "The one use of orange: a SysEx bank came in and waits for a press of BT (SAVE) to be written; every pad breathes orange until it is stored or the import is cancelled, as the BT LED breathes. DELETE and ERASE armed breathe the same way.",
+    screen: function (s) { header(s, { eng: "fm6", head: "IMPORT", sub: "FM6" });
+      text(s, 10, 40, "nm", "32 SOUNDS", C.text);
+      text(s, 10, 82, "tx", "ROM1A BRASS 1", C.mid); text(s, 10, 100, "tx", "ROM1A STRINGS 1", C.mid); text(s, 10, 118, "tx", "ROM1A ORCHESTRA", C.mid);
+      text(s, 10, 138, "tx", "Into user slots 001 to 032", C.text); text(s, 10, 158, "lb", "Press SAVE to import", C.dim);
+      cols(s, { eng: "fm6", cols: [{ l: "FIRST", v: "001", a: 0 }] }); },
+    pads: [padsRow(["", "", "", "", "", "", "", ""], ["wait", "wait", "wait", "wait", "wait", "wait", "wait", "wait"], "fm6"),
+           padsRow(["", "", "", "", "", "", "", ""], ["wait", "wait", "wait", "wait", "wait", "wait", "wait", "wait"], "fm6")],
+    leds: { BT: 2 } });
+
+  /* ------------------------------------------------------------ rendering --- */
+  var scenes = document.getElementById("scenes"), toc = document.getElementById("toc");
+  S.forEach(function (sc) {
+    var art = el("article", "scene"); art.id = sc.id;
+    var shell = el("div", "shell"), scr = el("div", "screen");
+    sc.screen(scr); shell.appendChild(scr); art.appendChild(shell);
+    var side = el("div", "side");
+    var h = el("h3", "", null, sc.title); side.appendChild(h);
+    side.appendChild(el("div", "id", null, sc.id));
+    var pl = el("p", "padlab"); pl.innerHTML = "Pads <b>" + (sc.id === "library_sounds" || sc.id === "pads_override" ? "SOUNDS" : /held|pick|save/.test(sc.id) ? "momentary" : "CHORDS") + "</b>";
+    side.appendChild(pl);
+    var pads = el("div", "pads");
+    sc.pads.forEach(function (row) { row.forEach(function (p) {
+      var d = el("div", "pad " + p.st, { background: padColour(p.st, p.hue) }, p.l); pads.appendChild(d);
+    }); });
+    side.appendChild(pads);
+    var leds = el("div", "leds"), names = ["KNOB BANK", "FADER BANK", "PATCH", "FX", "SCALE", "CHORD", "PARA", "GLOBE", "ARP", "SEQ", "SEQ REC", "BT"];
+    names.forEach(function (n) { var v = sc.leds[n] || 0; var l = el("span", "led" + (v ? " on" : "") + (v === 2 ? " blink" : "")); l.appendChild(el("i")); l.appendChild(document.createTextNode(n)); leds.appendChild(l); });
+    side.appendChild(leds);
+    if (sc.faders) {
+      var fd = el("div", "faders");
+      sc.faders.forEach(function (f) {
+        var w = el("div", "fader"), t = el("div", "track");
+        var val = el("i", "val", { height: Math.round(f.v * 64) + "px", background: f.hot ? ENG[sc.eng] : "" }); t.appendChild(val);
+        t.appendChild(el("i", "cap", { bottom: Math.round(f.f * 56) + "px" })); w.appendChild(t); w.appendChild(el("span", "", null, f.l)); fd.appendChild(w);
+      });
+      side.appendChild(fd);
+    }
+    side.appendChild(el("p", "", null, sc.cap));
+    art.appendChild(side); scenes.appendChild(art);
+    var li = el("li"), a = el("a", "", null, sc.title); a.href = "#" + sc.id; li.appendChild(a); toc.appendChild(li);
+  });
+
+  /* the legend */
+  var L = document.getElementById("legend");
+  [["off", "OFF", "nothing there, or silent: a degree outside the scale, an empty slot, a bank the engine lacks (dark ember)"],
+   ["on", "ON", "something there: a degree in the scale, a sound in the list, an entry that can be pressed (the engine's colour, dim)"],
+   ["filled", "FILLED", "the one picked or holding: the root, the sound playing, the current page, the chord type in use (the engine's colour)"],
+   ["active", "ACTIVE", "happening now: a pad held, a note sounding, a chord struck (white-blue)"],
+   ["wait", "WAITING", "a dump waiting in SAVE, DELETE or ERASE armed (orange, breathing)"]].forEach(function (r) {
+    var row = el("div", "row"), sw = el("div", "sw");
+    ["p5", "fm6", "cz", "j106"].forEach(function (h) { sw.appendChild(el("i", "", { background: padColour(r[0], h) })); });
+    row.appendChild(sw); var sp = el("span"); sp.innerHTML = "<b>" + r[1] + "</b>: " + r[2]; row.appendChild(sp); L.appendChild(row);
+  });
+
+  /* the panel map: the SMK-37's top panel, simplified, each control with its Saadet function */
+  var P = document.getElementById("panel");
+  var ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 1080 420");
+  function sv(tag, attrs, txt) { var e = document.createElementNS(ns, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); if (txt != null) e.textContent = txt; svg.appendChild(e); return e; }
+  function box(x, y, w, h, label, sub, fill) {
+    sv("rect", { x: x, y: y, width: w, height: h, rx: 6, fill: fill || "#242227", stroke: "#312f36" });
+    sv("text", { x: x + w / 2, y: y + h / 2 + (sub ? -4 : 5), "text-anchor": "middle", fill: "#ece9f0", "font-size": "12", "font-weight": "700", "font-family": "Archivo, Arial, sans-serif" }, label);
+    if (sub) sv("text", { x: x + w / 2, y: y + h / 2 + 12, "text-anchor": "middle", fill: "#ff6b3d", "font-size": "10", "font-weight": "600", "font-family": "Archivo, Arial, sans-serif" }, sub);
+  }
+  sv("rect", { x: 0, y: 0, width: 1080, height: 420, rx: 14, fill: "#1a191c" });
+  /* wheels */
+  box(16, 24, 34, 150, "", "", "#2b2930"); sv("text", { x: 33, y: 190, "text-anchor": "middle", fill: "#a9a4b3", "font-size": "10", "font-family": "Archivo, Arial, sans-serif" }, "PITCH");
+  box(58, 24, 34, 150, "", "", "#2b2930"); sv("text", { x: 75, y: 190, "text-anchor": "middle", fill: "#a9a4b3", "font-size": "10", "font-family": "Archivo, Arial, sans-serif" }, "MOD");
+  /* buttons, left block */
+  var bl = [["OCTAVE-", "oct down"], ["OCTAVE+", "oct up"], ["ARP", "ARP · pedal"], ["SEQ", "CHORD"], ["SEQ PLAY", "PLAY"], ["SEQ REC", "LATCH"]];
+  bl.forEach(function (b, i) { box(110 + (i % 2) * 86, 24 + Math.floor(i / 2) * 50, 80, 40, b[0], b[1]); });
+  /* screen */
+  sv("rect", { x: 300, y: 20, width: 150, height: 150, rx: 8, fill: "#050506", stroke: "#312f36" });
+  sv("text", { x: 310, y: 40, fill: "#ff6b3d", "font-size": "11", "font-weight": "800", "font-family": "Archivo, Arial, sans-serif" }, "P5  FACTORY 001");
+  sv("text", { x: 310, y: 72, fill: "#ffffff", "font-size": "20", "font-weight": "700", "font-family": "Archivo, Arial, sans-serif" }, "It's a Prophet 5");
+  sv("text", { x: 310, y: 160, fill: "#a3a3ab", "font-size": "10", "font-family": "Archivo, Arial, sans-serif" }, "240 × 240, the FM-1's screen");
+  /* buttons, right of screen */
+  var br = [["PATCH", "HOME · held: favourites"], ["BT", "SAVE"], ["FX", "LIBRARY"], ["SCALE", "SCALE · held: root"], ["CHORD", "ENV"], ["NOTE REPEAT", "LFO · momentary"], ["PARA", "EDIT"], ["GLOBE", "GLOBAL"]];
+  br.forEach(function (b, i) { box(466 + (i % 2) * 130, 24 + Math.floor(i / 2) * 38, 124, 32, b[0], b[1]); });
+  /* encoders */
+  var en = [["K1", "value 1"], ["K2", "value 2"], ["K3", "value 3"], ["K4", "value 4"], ["K5", "MASTER"], ["K6", "SELECT"], ["K7", "ALGORITHM"], ["K8", "PRESETS"]];
+  en.forEach(function (k, i) { var cx = 760 + (i % 4) * 78, cy = 50 + Math.floor(i / 4) * 80; sv("circle", { cx: cx, cy: cy, r: 22, fill: "#242227", stroke: "#312f36" }); sv("rect", { x: cx - 1, y: cy - 20, width: 2, height: 10, fill: "#c9c4d2" });
+    sv("text", { x: cx, y: cy + 36, "text-anchor": "middle", fill: "#ece9f0", "font-size": "11", "font-weight": "700", "font-family": "Archivo, Arial, sans-serif" }, k[0]);
+    sv("text", { x: cx, y: cy + 48, "text-anchor": "middle", fill: "#ff6b3d", "font-size": "9", "font-weight": "600", "font-family": "Archivo, Arial, sans-serif" }, k[1]); });
+  box(740, 186, 90, 26, "KNOB BANK", ""); box(840, 186, 90, 26, "<", "SELECT -"); box(940, 186, 90, 26, ">", "SELECT +");
+  /* pads */
+  for (var i = 0; i < 16; i++) { var px = 300 + (i % 8) * 52, py = 196 + Math.floor(i / 8) * 52; sv("rect", { x: px, y: py, width: 46, height: 46, rx: 6, fill: padColour(i === 4 ? "filled" : (i % 3 === 0 ? "on" : "off"), "p5") }); }
+  sv("text", { x: 300, y: 312, fill: "#a9a4b3", "font-size": "10", "font-family": "Archivo, Arial, sans-serif" }, "16 pads: CHORDS / SOUNDS, a held button's list, the favourites, the piano, the picker");
+  /* faders */
+  for (var f = 0; f < 4; f++) { var fx = 760 + f * 78; sv("rect", { x: fx - 5, y: 226, width: 10, height: 70, rx: 5, fill: "#242227", stroke: "#312f36" }); sv("rect", { x: fx - 11, y: 240 + f * 8, width: 22, height: 8, rx: 3, fill: "#c9c4d2" });
+    sv("text", { x: fx, y: 312, "text-anchor": "middle", fill: "#ff6b3d", "font-size": "9", "font-weight": "600", "font-family": "Archivo, Arial, sans-serif" }, ["A", "D", "S", "R"][f] + " (ENV)"); }
+  box(740, 320, 90, 26, "FADER BANK", "");
+  /* keys */
+  var kx = 16; for (var k = 0; k < 22; k++) { sv("rect", { x: kx + k * 48, y: 350, width: 46, height: 60, rx: 3, fill: k >= 3 && k < 19 ? "#e9e6ee" : "#bdb8c6" }); }
+  var blk = [1, 1, 0, 1, 1, 1, 0]; var kb = 0; for (var n = 0; n < 37; n++) { var pc = n % 12; if ([0, 2, 4, 5, 7, 9, 11].indexOf(pc) >= 0) { kb++; continue; } sv("rect", { x: 16 + kb * 48 - 14, y: 350, width: 28, height: 36, rx: 2, fill: "#111013" }); }
+  sv("text", { x: 16, y: 342, fill: "#a9a4b3", "font-size": "10", "font-family": "Archivo, Arial, sans-serif" }, "C3 .. C6: the middle 27 (bright) are the FM-1's keys, the outer 10 play too. Sustain pedal and TRS MIDI OUT on the back.");
+  P.appendChild(svg);
+})();
+</script>
