@@ -249,7 +249,8 @@ static int ed_args_ok(uint32_t cmd, const uint8_t *a, uint32_t n)
     }
 }
 
-static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0 and F7 */
+/* minsize: the largest function in flash, main loop only and in no hurry; -O2 cost it 4 KB the FM-1 BLE image does not have */
+static __attribute__((minsize)) void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0 and F7 */
 {
     if (n < 4u)
         return;
