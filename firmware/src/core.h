@@ -278,8 +278,6 @@ typedef struct {                 /* an engine (engines.c ENGINES[]; the eng_*.c 
     /* voices of state beyond the cap: a new note starts in one while a voice it took fades */
     uint8_t spare;
     int (*done)(struct track *t, voice_t *v);
-    /* optional: the POLY voice (0..cap-1) for a new note, the engine's own choice (FM6: Dexed's) */
-    uint32_t (*alloc)(struct track *t, uint32_t note);
     /* optional: MONO / LEGATO / UNISON moved a sounding voice to a new note without a new attack */
     void (*legato)(struct track *t, voice_t *v);
     /* optional: a key went down in MONO / LEGATO / UNISON, whether or not it takes the voice */
@@ -337,7 +335,6 @@ typedef struct track {
     uint8_t xf_on, xf;           /* fading; blocks of the fade still to render */
     int16_t pe_old[8];           /* P_E0..P_E7 of the sounding engine: the fade renders with these */
     uint8_t xp_n, xp_note[4], xp_vel[4];   /* note-ons during the fade, played on the new engine */
-    uint8_t wait_n, wait_note[NVOICE], wait_vel[NVOICE];   /* note-ons waiting for a given-up voice's fade (voice.c voice_wait) */
     /* modulation matrix (mod.c): MIDI performance controllers of the track's channel, 0..127 */
     uint8_t mw, at;              /* CC1 mod wheel, channel aftertouch */
     uint8_t foot, breath, porta; /* CC4 foot, CC2 breath, CC65 portamento on: FM6's DX7 controllers */
@@ -346,6 +343,7 @@ typedef struct track {
     uint8_t m_vel, m_key, m_vi;  /* the latest note-on: velocity, note, voice index (per-block destinations) */
     int16_t m_rnd;               /* .. its RAND */
     int32_t m_env;               /* the amp envelope of voice m_vi, last block (Q15) */
+    uint8_t wait_n, wait_note[NVOICE], wait_vel[NVOICE];   /* note-ons waiting for a given-up voice's fade (voice.c voice_wait) */
 } track_t;
 
 typedef struct {

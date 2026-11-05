@@ -23,6 +23,8 @@
  * Extra UNISON voices only start when there is room. */
 #define VOICE_FADE_BLOCKS 32u                           /* 32 x 32 samples: 23 ms */
 #define VOICE_FADE_HURRY 4u                             /* a note waits: 5.8 ms at most */
+/* Note events only, never per sample: small first. The FM-1's BLE image has almost no flash left, and this unit builds for speed */
+#define VOICE_EVENT __attribute__((noinline,minsize))
 static uint32_t vage;                                   /* voice ages: one clock for every part */
 static int32_t lfo_wave(track_t *t, uint32_t ph)
 {
@@ -133,7 +135,7 @@ static uint32_t voice_p5_parts(void)
     return parts;
 }
 #endif
-static uint32_t voice_units(const track_t *t)
+static VOICE_EVENT uint32_t voice_units(const track_t *t)
 {
     const engine_t *e = ENGINES[t->engine];
     /* GLO > WEIGHTS: the player's points per voice replace the built-in rule; AUTO (0) keeps it. */
@@ -172,14 +174,14 @@ static uint32_t voice_budget(void)
 #endif
 }
 
-static uint32_t part_busy(const track_t *t)             /* what a part claims of its share: its voices that stay and its waiting notes */
+static VOICE_EVENT uint32_t part_busy(const track_t *t)             /* what a part claims of its share: its voices that stay and its waiting notes */
 {
     uint32_t i, n = t->wait_n;
     for (i = 0; i < NVOICE; i++)
         n += t->v[i].active && t->v[i].stage != 4u;
     return n * voice_units(t);
 }
-static uint32_t voices_busy(void)                       /* the budget units rendering now: every voice, a fading one too */
+static VOICE_EVENT uint32_t voices_busy(void)                       /* the budget units rendering now: every voice, a fading one too */
 {
     uint32_t p, i, u = 0;
     for (p = 0; p < NPART; p++) {
@@ -190,7 +192,7 @@ static uint32_t voices_busy(void)                       /* the budget units rend
     }
     return u;
 }
-static uint32_t voices_claimed(void)                    /* the units the parts' notes claim: a fading voice claims none */
+static VOICE_EVENT uint32_t voices_claimed(void)                    /* the units the parts' notes claim: a fading voice claims none */
 {
     uint32_t p, u = 0;
     for (p = 0; p < NPART; p++)
@@ -198,7 +200,7 @@ static uint32_t voices_claimed(void)                    /* the units the parts' 
     return u;
 }
 /* the units the CPU is known to carry at once, fades included: the calibrated budget, or the player's own if higher */
-static uint32_t voice_ceiling(void)
+static VOICE_EVENT uint32_t voice_ceiling(void)
 {
     uint32_t c, b = voice_budget();
 #if MELODEE_RAM_AUDIO && MELODEE_DUAL_CORE
@@ -212,7 +214,7 @@ static uint32_t voice_ceiling(void)
 }
 /* the units notes may claim before a new one takes a voice. Two parts sounding can fill the budget, so they leave one voice's
  * room for its fade; one part's voice cap leaves it already where the CPU has it to spare (Prophet: 8 x 2 of 18) */
-static uint32_t voice_limit(const track_t *t)
+static VOICE_EVENT uint32_t voice_limit(const track_t *t)
 {
     uint32_t p, others = 0, b = voice_budget(), c = voice_ceiling(), u = voice_units(t);
     for (p = 0; p < NPART; p++)
@@ -220,14 +222,14 @@ static uint32_t voice_limit(const track_t *t)
             others += part_busy(&trk[p]);
     return others && b + u > c && c > u ? c - u : b;
 }
-static uint32_t voices_waiting(void)
+static VOICE_EVENT uint32_t voices_waiting(void)
 {
     uint32_t p, n = 0;
     for (p = 0; p < NPART; p++)
         n += trk[p].wait_n;
     return n;
 }
-static uint32_t voices_fading(void)
+static VOICE_EVENT uint32_t voices_fading(void)
 {
     uint32_t p, i;
     for (p = 0; p < NPART; p++)
@@ -237,7 +239,7 @@ static uint32_t voices_fading(void)
     return 0;
 }
 /* the parts a voice for self may come from (bit per part): within its share, those over theirs; over it, its own */
-static uint32_t voice_lenders(const track_t *self)
+static VOICE_EVENT uint32_t voice_lenders(const track_t *self)
 {
     uint32_t p, mask = 0, share = voice_budget() / trk_n();
     if (trk_n() == 1u)
@@ -250,7 +252,7 @@ static uint32_t voice_lenders(const track_t *self)
     return mask;
 }
 
-static uint32_t lowest_held(const track_t *t)           /* index of the lowest held note (the bass), NVOICE = none */
+static VOICE_EVENT uint32_t lowest_held(const track_t *t)           /* index of the lowest held note (the bass), NVOICE = none */
 {
     uint32_t i, low = NVOICE;
     for (i = 0; i < NVOICE; i++)
@@ -262,7 +264,7 @@ static uint32_t lowest_held(const track_t *t)           /* index of the lowest h
 /* the voice to give up for a new one (see the top); soft: only released voices and
  * extra voices of other non-POLY parts (also ones left after a mode change).
  * Returns its index, *pp its part; NVOICE = none */
-static uint32_t voice_victim(const track_t *self, int soft, track_t **pp)
+static VOICE_EVENT uint32_t voice_victim(const track_t *self, int soft, track_t **pp)
 {
     uint32_t p, i, best = NVOICE, cat = 4, lenders = voice_lenders(self);
     for (p = 0; p < NPART; p++) {
@@ -298,12 +300,12 @@ static uint32_t voice_kills;                            /* voices given up (budg
 static uint32_t voice_kills_part[NPART];                /* identify the audible victim, not only total load */
 /* fade out over the next blocks (env_tick stage 4). A held voice stays gated while it does, so the fade is not cut short
  * by a patch's own fast key-up (a CZ-1 end step can take 1.4 ms); everything that asks what is held skips stage 4 */
-static void voice_fade(voice_t *v)
+static VOICE_EVENT void voice_fade(voice_t *v)
 {
     v->stage = 4;
     v->fade = VOICE_FADE_BLOCKS;
 }
-static void voice_kill(voice_t *v)
+static VOICE_EVENT void voice_kill(voice_t *v)
 {
     uint32_t part = ((uintptr_t)v - (uintptr_t)trk) / sizeof(track_t);
     if (v->stage == 4u)
@@ -313,7 +315,7 @@ static void voice_kill(voice_t *v)
     if (part < NPART) voice_kills_part[part]++;
 }
 
-static void voice_capacity_kill(voice_t *v)
+static VOICE_EVENT void voice_capacity_kill(voice_t *v)
 {
     capacity_steals++;
     voice_kill(v); /* preserve the legacy explicit-fade counter */
@@ -327,7 +329,7 @@ static int32_t voice_fade_gain(uint32_t k)
 }
 
 /* a note that has to wait for a fade: voice_wait_block plays it. (Full: the last one is replaced.) */
-static void voice_wait(track_t *t, uint32_t note, uint32_t vel)
+static VOICE_EVENT void voice_wait(track_t *t, uint32_t note, uint32_t vel)
 {
     uint32_t i;
     for (i = 0; i < t->wait_n && t->wait_note[i] != note; i++)
@@ -341,7 +343,7 @@ static void voice_wait(track_t *t, uint32_t note, uint32_t vel)
 
 /* More notes than voices to take: the oldest waiting note gives way now rather than start and be stolen by the next,
  * except the lowest of a part with no bass sounding. The chord that remains is what a steal in place left: bass and last notes */
-static void voice_wait_drop(track_t *t)
+static VOICE_EVENT void voice_wait_drop(track_t *t)
 {
     uint32_t i, low = t->wait_n, drop = t->wait_n;
     if (lowest_held(t) == NVOICE)
@@ -361,14 +363,14 @@ static void voice_wait_drop(track_t *t)
 }
 
 /* may a voice of part t start without taking one? An extra one (soft) only then; a part's last resort regardless */
-static int voice_room(const track_t *t, int soft)
+static VOICE_EVENT int voice_room(const track_t *t, int soft)
 {
     return voices_claimed() + voice_units(t) <= voice_limit(t) || !soft;
 }
 
 /* the part's own voice to give up when its slots are full: the oldest released, else the oldest held but the bass, and
  * the bass only when nothing is going for it already. NVOICE = none */
-static uint32_t voice_own_victim(const track_t *t, uint32_t ns)
+static VOICE_EVENT uint32_t voice_own_victim(const track_t *t, uint32_t ns)
 {
     uint32_t i, low = ns, best = ns;
     for (i = 0; i < ns; i++)                             /* the lowest held note is protected */
@@ -393,13 +395,11 @@ static uint32_t voice_own_victim(const track_t *t, uint32_t ns)
  * voice the shortest way. At the cap or the budget a voice is given up: the oldest released, else the oldest
  * held one, never the lowest held note (the bass), and the note starts beside its fade. Returns 0 when it cannot yet:
  * no slot is free or the CPU has no room, so it waits and the fades hurry. */
-static voice_t *voice_alloc(track_t *t, uint32_t note)
+static VOICE_EVENT voice_t *voice_alloc(track_t *t, uint32_t note)
 {
     const engine_t *e = ENGINES[t->engine];
     uint32_t i, np = trk_nvoice(t), ns = np + e->spare < NVOICE ? np + e->spare : NVOICE, best = ns, nfree = 0, claim = t->wait_n;
     int32_t bd = 0x7FFFFFFF;
-    if (e->alloc)                                       /* an engine's optional allocation policy */
-        return &t->v[e->alloc(t, note) % np];
     for (i = 0; i < ns; i++) {
         if (t->v[i].active && t->v[i].stage != 4u && t->v[i].note == note) {
             if (!e->rings_on)
@@ -453,7 +453,7 @@ static voice_t *voice_alloc(track_t *t, uint32_t note)
 }
 
 /* glide: RATE = a fixed speed, TIME = the same time for any interval */
-static void glide_set(track_t *t, voice_t *v, int glide)
+static VOICE_EVENT void glide_set(track_t *t, voice_t *v, int glide)
 {
     if (!glide || !v->pitch_cur) {
         v->pitch_cur = v->pitch16;
@@ -470,7 +470,7 @@ static void glide_set(track_t *t, voice_t *v, int glide)
 }
 
 /* Keep each sounding voice's pitch after SCL/ROOT/QNT changes, including release tails. */
-static void voice_scale_pitch(const track_t *t, voice_t *v, uint32_t note)
+static VOICE_EVENT void voice_scale_pitch(const track_t *t, voice_t *v, uint32_t note)
 {
     if (micro_active(t)) {
         int32_t pitch = clamp(micro_pitch(t, (int32_t)note), 0, 1270000);
@@ -482,7 +482,7 @@ static void voice_scale_pitch(const track_t *t, voice_t *v, uint32_t note)
     }
 }
 
-static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int glide)
+static VOICE_EVENT void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int glide)
 {
     AP_START(attack_start);
     const engine_t *e = ENGINES[t->engine];
@@ -493,10 +493,6 @@ static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int
     int32_t s6 = v->s[6], s7 = v->s[7];
 #endif
     uint32_t keep = e->keep;
-    /* MIDI replaces a repeated press by releasing its old owner first. A
-     * same-pitch one-shot then retriggers the same circuit regardless of gate;
-     * it has not displaced another note or consumed another budget slot. */
-    capacity_steals+=(uint32_t)(sounding && (v->note!=note || (!v->gate && !e->oneshot)));
     voice_was = (uint8_t)(!v->active ? 0u : v->gate ? 2u : 1u);
     v->note = (uint8_t)note;
     v->vel = (uint8_t)vel;
@@ -541,7 +537,7 @@ static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int
 
 /* the voices of a MONO / LEGATO / UNISON note that are not sounding yet need room, and an engine that restarts its
  * envelopes from nothing (engine_t.restarts) cannot retrigger a sounding one in place. 1: the note has to wait for a fade */
-static int mono_fade(track_t *t, uint32_t nv, int retrig)
+static VOICE_EVENT int mono_fade(track_t *t, uint32_t nv, int retrig)
 {
     uint32_t i, units = voice_units(t), want = 0;
     int wait = 0;
@@ -568,7 +564,7 @@ static int mono_fade(track_t *t, uint32_t nv, int retrig)
 
 /* MONO / LEGATO / UNISON: one note on one voice (NPOLY for UNISON, or the
  * engine's voice cap, spread by DETUNE over the same width) */
-static void mono_play(track_t *t, uint32_t note, uint32_t vel, int retrig, int glide)
+static VOICE_EVENT void mono_play(track_t *t, uint32_t note, uint32_t vel, int retrig, int glide)
 {
     uint32_t mode = (uint32_t)t->p[P_VOICE], nv = mode == V_UNISON ? trk_nvoice(t) : 1u, i;
     if (mono_fade(t, nv, retrig)) {
@@ -608,7 +604,7 @@ static void mono_play(track_t *t, uint32_t note, uint32_t vel, int retrig, int g
 }
 
 /* the note the mono stack asks for (PRIO: LAST / LOW / HIGH), 0 = none */
-static uint32_t mono_pick(const track_t *t)
+static VOICE_EVENT uint32_t mono_pick(const track_t *t)
 {
     uint32_t i, n;
     if (!t->nmono)
@@ -623,7 +619,7 @@ static uint32_t mono_pick(const track_t *t)
     return n;
 }
 
-static void mono_remove(track_t *t, uint32_t note)
+static VOICE_EVENT void mono_remove(track_t *t, uint32_t note)
 {
     uint32_t j, k = 0;
     for (j = 0; j < t->nmono; j++)
@@ -632,7 +628,7 @@ static void mono_remove(track_t *t, uint32_t note)
     t->nmono = (uint8_t)k;
 }
 
-static void mono_push(track_t *t, uint32_t note)       /* the latest key on top (full: the oldest goes) */
+static VOICE_EVENT void mono_push(track_t *t, uint32_t note)       /* the latest key on top (full: the oldest goes) */
 {
     mono_remove(t, note);
     if (t->nmono >= NVOICE)
@@ -642,7 +638,7 @@ static void mono_push(track_t *t, uint32_t note)       /* the latest key on top 
 
 static int trk_chord(const track_t *t) { (void)t; return 0; }
 
-static void trk_note_on_work(track_t *t, uint32_t note, uint32_t vel)
+static VOICE_EVENT void trk_note_on_work(track_t *t, uint32_t note, uint32_t vel)
 {
     uint32_t any = 0, i, mode = trk_vmode(t);
     if (t->p[P_MUTE] || (uint32_t)(t - trk) >= trk_n())   /* (a track not in use: silent) */
@@ -695,7 +691,7 @@ static void trk_note_on_work(track_t *t, uint32_t note, uint32_t vel)
     }
 }
 
-static void trk_note_on_engine(track_t *t,uint32_t note,uint32_t vel)
+static VOICE_EVENT void trk_note_on_engine(track_t *t,uint32_t note,uint32_t vel)
 {
 #if MELODEE_ADMISSION
     const track_t *previous=voice_admitting;uint8_t previous_parts=voice_admitting_p5parts;
@@ -708,7 +704,7 @@ static void trk_note_on_engine(track_t *t,uint32_t note,uint32_t vel)
 #endif
 }
 
-static void trk_note_off_engine(track_t *t, uint32_t note)
+static VOICE_EVENT void trk_note_off_engine(track_t *t, uint32_t note)
 {
     uint32_t i, k = 0, mode = trk_vmode(t), chord = trk_chord(t), held = 0;
     for (i = 0; i < t->xp_n; i++)                       /* not sounding yet (engine switch): forget it */
@@ -751,16 +747,16 @@ static void trk_note_off_engine(track_t *t, uint32_t note)
 }
 
 /* A note to the track's engine: none from a muted track or one not in use; velocity 0 is a note off. */
-static void trk_note_off(track_t *t, uint32_t note)
+static VOICE_EVENT void trk_note_off(track_t *t, uint32_t note)
 { if (note <= 127u) trk_note_off_engine(t, note); }
-static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
+static VOICE_EVENT void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
 {
     if (!vel) { trk_note_off(t, note); return; }
     if (note > 127u || t->p[P_MUTE] || (uint32_t)(t - trk) >= trk_n()) return;
     trk_note_on_engine(t, note, vel);
 }
 
-static void trk_all_off(track_t *t)
+static VOICE_EVENT void trk_all_off(track_t *t)
 {
     uint32_t i;
     for (i = 0; i < NVOICE; i++) {
@@ -776,7 +772,7 @@ static void trk_all_off(track_t *t)
 
 /* at each block start (events_block), before the parts: a voice whose fade reached 0 in the last block is free. It stays
  * active through that block so the engine renders it to its last sample, and only here, with the block's CPU1 work over */
-static void voice_fades_end(void)
+static VOICE_EVENT void voice_fades_end(void)
 {
     uint32_t p, i;
     for (p = 0; p < NPART; p++)
@@ -792,7 +788,7 @@ static void voice_fades_end(void)
 
 /* at each block start (events_block), before any note of the block: the notes whose voices have faded start. A note
  * with no fade left to wait for tries again, and may take another voice */
-static int voice_fits(const track_t *t)
+static VOICE_EVENT int voice_fits(const track_t *t)
 {
     const engine_t *e = ENGINES[t->engine];
     uint32_t i, np = trk_nvoice(t), ns = np + e->spare < NVOICE ? np + e->spare : NVOICE, nfree = 0;
@@ -805,7 +801,7 @@ static int voice_fits(const track_t *t)
     }
     return nfree != 0u;
 }
-static void voice_wait_block(track_t *t)
+static VOICE_EVENT void voice_wait_block(track_t *t)
 {
     uint8_t note[NVOICE], vel[NVOICE];
     uint32_t i, n = t->wait_n;
