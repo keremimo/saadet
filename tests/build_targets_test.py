@@ -57,6 +57,27 @@ class BoardArgumentsTest(unittest.TestCase):
         self.assertEqual(rev, "6c0b47e4bfc5")
 
 
+class SdkCopyTest(unittest.TestCase):
+    def test_the_last_build_used_the_sdks_own_files(self):
+        # The base keeps ble/sdk while its .copied marker exists, and the build receipt ignores it: Saadet 0.1.0 shipped
+        # an experiment's config_le_sm_sub_sc_enable = 1 from there, with the source state reading clean.
+        sdk = Path(os.environ.get("AC79_SDK", Path.home() / "fw-AC79_AIoT_SDK"))
+        copies = [c for c in (ROOT / "platform/build/ble/sdk", *(ROOT / "platform/build").glob("smk37-*/ble/sdk"))
+                  if (c / ".copied").exists()]
+        if not sdk.is_dir() or not copies:
+            self.skipTest("needs the SDK and a Bluetooth target build")
+        for copy in copies:
+            config = ["apps/common/config/" + name for name in ("bt_profile_config.c", "log_config/lib_btctrler_config.c",
+                                                                "log_config/lib_btstack_config.c")]
+            pairs = [(copy / name, sdk / name) for name in config]
+            pairs += [(lib, sdk / "cpu/wl82/liba" / lib.name) for lib in (copy / "lib").glob("*.a")
+                      if lib.name != "libcompiler_rt.a"]
+            self.assertGreater(len(pairs), len(config))
+            for built, original in pairs:
+                with self.subTest(file=str(built.relative_to(ROOT))):
+                    self.assertEqual(built.read_bytes(), original.read_bytes())
+
+
 class OverlayTest(unittest.TestCase):
     def test_a_patch_that_no_longer_matches_fails(self):
         from base_overlay import replace, require, smk37_linker, smk37_toml
