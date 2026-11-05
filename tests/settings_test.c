@@ -29,7 +29,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 #include "../firmware/src/panel.c"
 static void settings_save(void) {}
 #ifdef SAADET_SMK37
-static uint8_t settings_key_vel, settings_trs_off;
+static uint8_t settings_key_vel, settings_trs_off, settings_pad_lights = 2;
 #endif
 static uint8_t settings_boot, settings_drumch = 10, settings_thru;  /* (params.c) */
 #define VOICE_BUDGET_DEFAULT 16u

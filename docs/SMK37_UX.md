@@ -5,9 +5,10 @@ pads, the knob and fader banks, the four faders, the two wheels and the pedal do
 sequencer, so the controls the keyboard adds carry real functionality from the first release. The FM-1 build is
 untouched by any of it.
 
-Status (2026-11-04): a design. Mocks: `docs/smk37-ux/mocks.html` (composed in HTML on the screen's own geometry,
-the pads beside each screen; the firmware draws none of it yet). The pixel-exact mocks come with phase 0 of the port
-plan, drawn by the firmware's renderer as Melodee's were.
+Status (2026-11-05): built (`firmware/src/ui_smk.c`), covered by the host tests, not yet tried on a unit. Keys, buttons and
+knobs are confirmed on an Elite; the pads, faders and BANK buttons still need that. Mocks: `docs/smk37-ux/mocks.html`
+(composed in HTML on the screen's own geometry, the pads beside each screen). Where the build differs from the first
+design, the text below says what was built.
 
 Where Melodee's design (`Felucca/docs/SMK37_UX.md`) had tracks, patterns, steps and drums, Saadet has one sound,
 four engines, a chord engine, an arp, scales and a library. The grammar is kept so a player who owns both learns it
@@ -75,8 +76,8 @@ chord and a right-hand line. With CHORD OFF the bottom row plays the degree's si
 give the scale under the hand without being a keyboard.
 
 **SOUNDS** (`library_sounds`, `patch_held_favs`): 16 sounds of the LIBRARY list on the screen (FAVOURITES, USER,
-P5, FM6, CZ-1, J106), a page of 16 from the first, pad 1 top left to pad 16 bottom right; SELECT or `<` `>` turn the
-list's page of 16 and the screen's chosen sound follows. A tap loads the sound at once (no rest wait: a tap is a
+P5, FM6, CZ-1, J106), a page of 16 from the first, pad 1 top left to pad 16 bottom right; `<` `>` turn the list's page
+of 16 and the screen's chosen sound follows, without loading it. SELECT still turns LIBRARY's lists, as on the FM-1. A tap loads the sound at once (no rest wait: a tap is a
 choice). Lights: a slot with a sound ON (FAVOURITES and USER: in its engine's hue), the sound playing FILLED, a pad
 held ACTIVE, an empty slot OFF. Starred sounds are not told apart on the pads: the screen's disc does that.
 
@@ -91,7 +92,7 @@ These take the pads for as long as they last, whatever the mode, and give them b
 | SCALE held | a piano: top row C4 .. C5, bottom row the black keys between (the two gaps OFF); the root FILLED, the scale's notes ON, the rest OFF; a tap makes that note the root (`scale_held`) | the SCALE place's list as today |
 | ARP held | the pedal (as the FM-1): the pads keep their mode; chords struck are sustained | as today |
 | BT (SAVE) with a dump waiting, DELETE armed, ERASE armed | every pad WAITING until the press confirms or the arming cancels | as today |
-| SAVE's name | pad 1..16: the letter groups (ABC DEF .. spc) as Melodee's NAME: a tap cycles the letter under the cursor; K2 moves the cursor | SAVE as today |
+| SAVE's name | pad 1..16: the letter groups ABC DEF GHI JKL MNO PQR STU VWX YZ 123 456 789 0.# &+/ - and space: a tap sets the letter under the cursor, another within a second cycles it; K2 moves the cursor | SAVE as today |
 | KNOB BANK or FADER BANK held | top row the eight banks (the current ACTIVE, one the engine lacks OFF), bottom row AUTO CHORDS SOUNDS (the current ACTIVE), five pads dark; a tap picks (`pick_banks`) | the bank picker (section 3) |
 
 ### 2.4 AUTO: which mode the place picks
@@ -134,6 +135,8 @@ edits follow with no new path:
 | CHORD | CHORD: CHORD VOICING STRUM STROKE | | | |
 | MIX | GLOBAL > OUTPUT: LEVEL PAN SPREAD, and MASTER as K4 (the virtual master, section 6) | | | |
 
+LIBRARY, SAVE and GLOBAL keep their own four whatever bank is picked, with no tag: what they edit is not the sound.
+
 A bank the engine has nothing for ("-") is skipped when cycling and dark on the picker's pad; its name stays in
 the picker's list, dim. FM6 has no FILTER bank; its ENV bank is the EG of the operator the EDIT place shows, so
 turning EDIT's pages moves the bank with it (decided 2026-11-04).
@@ -172,12 +175,12 @@ fader reaches, through the same field a knob would.
 | --- | --- | --- |
 | KNOB BANK | next knob bank | the bank picker; + pad: pick (top row a bank, bottom row a pad mode); + `<` `>`: previous / next bank |
 | FADER BANK | next fader bank | the same for the faders |
-| `<` `>` | one SELECT detent: the previous / next page of the place; on HOME, where SELECT does nothing today, the previous / next sound of the engine (PRESETS' step, the sound loads at rest); in SOUNDS, the previous / next page of 16 | with a BANK button: its bank |
+| `<` `>` | one SELECT detent: the previous / next page of the place; on HOME, where SELECT does nothing, the previous / next sound of the engine (PRESETS' step, the sound loads at rest); with the pads on SOUNDS, the previous / next 16 | with a BANK button: its bank |
 
 PATCH held lists the favourites (HOME held). LEDs: KNOB BANK lit off PAGE, FADER BANK lit off ENV, both blink while
 held; ARP flashes with the arp's notes; SEQ REC lit while the latch holds; SEQ (CHORD) lit while a chord type is on;
-BT breathes while a dump waits; OCTAVE -/+ lit off 0; SEQ PLAY's green unused (PLAY is the voice page), its red for
-the ERASE countdown.
+BT breathes while a dump waits; OCTAVE -/+ lit off 0; SEQ PLAY green while the PLAY place is open, its red for the
+ERASE countdown.
 
 ## 6. Wheels, pressure, velocity, the pedal, the outer keys, MASTER
 
@@ -213,9 +216,10 @@ All composed from what exists; no new component, no hint rows, no text panels:
 4. **The held list**: row numbers are pad numbers (1..16); the keys strip at its foot is a pads strip (two rows of
    eight, the current FILLED).
 5. **HOME's keyboard**: C3..C6, the keybed, 22 white keys. The chord line, the state line and the macros unchanged.
-6. **GLOBAL > KEYS** (`global_keys`): VELOCITY (NORMAL SOFT HARD FIXED), PAD LIGHTS (OFF LOW MID HIGH FULL; the
-   default MID), TRS OUT (ON OFF), PEDAL (AUTO, NORMAL, INVERTED). The FM-1's LIGHTS row on DISPLAY is the button
-   LEDs' level on the SMK. GLOBAL > TEMPO's CLOCK loses TRS (no MIDI IN jack); MIDI > THRU loses its TRS paths.
+6. **GLOBAL > KEYS** (`global_keys`), just before ERASE: VELOCITY (NORMAL SOFT HARD FIXED), PADS (OFF LOW MID HIGH FULL;
+   the default MID), TRS OUT (ON OFF). The pedal's polarity needs no setting: its rest is learnt at power-on. The FM-1's
+   LIGHTS row on DISPLAY is the button LEDs' level on the SMK. GLOBAL > OUTPUT's fourth value is MASTER. GLOBAL > TEMPO's
+   CLOCK still offers TRS, which has no input here (to remove).
 7. Everything else (LIBRARY, SAVE, IMPORT, ERASE, the pictures) is unchanged: the pads mirror it.
 
 ## 8. Open questions (for Kerem)
@@ -244,6 +248,9 @@ its build); Saadet's app area on the SMK has 40 KiB more than the FM-1's, so fla
 **Phase 0 (this): design and mocks.** `docs/SMK37_UX.md`, `docs/smk37-ux/mocks.html`. Then the firmware-drawn
 mocks: `tests/smk_ux_mocks.c` on `tests/ui_harness.c` (`ui_png` at 240 x 240), the additions drawn with `gfx.c`'s
 primitives over the real pages, composed with the pads and LEDs by `tools/smk_ux_mocks.py`. No firmware change.
+
+Built 2026-11-05: phases 1 to 3 together: the Elite's image 574,908 B to 582,200 B, data RAM 96,020 B of 98,304. The lists below
+are the original plan.
 
 **Phase 1: banks (knobs and faders), ~2.5 KB flash, ~24 B RAM.**
 - `firmware/src/ui_smk.c`: the bank table (a bank is a `ui_stop_t` per engine, built from `ST_*`), the knob bank

@@ -208,8 +208,12 @@ bend and CC1 out, the CZ-1's wheel vibrato, `<` `>`, GLOBAL > KEYS, HOME's keybo
 
 Different on purpose: the encoders keep the FM-1's detent decoder (Melodee uses the stock one; same direction by the tables);
 the owner check clears the store at once, rather than keeping the stock mapping until the first write; Saadet's store layout
-is its own. Not done yet: pads, faders and the two BANK buttons do nothing until the UX phases in `SMK37_UX.md`; CLOCK still
-offers TRS, which has no input here.
+is its own. Keys, buttons and knobs are confirmed on the Elite (2026-11-05). The pads, faders and BANK buttons (`SMK37_UX.md`) are built
+and host-tested, not yet tried on a unit. CLOCK still offers TRS, which has no input here.
+
+Install fm1-base packages with the base's own installer, `build/fm1-base-smk37-platform/tools/fm1_install.py`, not
+`tools/fm1_install.py`. If the running firmware refuses an update, `tools/fm1_recover.py` writes the app area from ROM update
+mode (sysex `F0 22 24 35 7D F7`, needs sudo on macOS; the tool must already be waiting, because macOS bounces the device).
 
 ## 6. Risks and unknowns
 

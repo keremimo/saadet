@@ -112,6 +112,10 @@ static uint32_t kb_map(const track_t *t, uint32_t k)
 {
     const engine_t *e = ENGINES[eng_idx(t->eng_req)];   /* (the engine it switches to) */
     int32_t n;
+#ifdef SAADET_SMK37
+    if (k >= KB_PAD0)                                  /* a degree pad: the scale from the ROOT at C3 and up, the octave */
+        return scale_degree_map(t, (int32_t)k - (int32_t)KB_PAD0, 12 * (input_octave(t) - 1), 0);
+#endif
     if (e->keys && (n = e->keys(t, k)) >= 0)           /* the engine's own key map (GM kit, slices) */
         return (uint32_t)n;
     n = 53 + KB_OFS(k);
@@ -509,7 +513,12 @@ static void chord_strum_tick(uint32_t n)
 {
     for (uint32_t k = 0; kb_strum_pending && k < KB_N; k++) if (kb_strum_pending & KB_BIT(k)) {
         chord_strum_t *s = &kb_strum[k];
+#ifdef SAADET_SMK37
+        /* leaning on a degree pad strums faster, up to twice the rate set */
+        chord_strum_due(s, kb_chn[k], k >= KB_PAD0 ? n + n * sd_kb_press[k - KB_PAD0] / 127u : n);
+#else
         chord_strum_due(s, kb_chn[k], n);
+#endif
         while (kb_chn[k] < s->total && !chord_strum_due(s, kb_chn[k], 0)) key_chord_tone(k, &trk[kb_trk[k]]);
         if (kb_chn[k] == s->total) kb_strum_pending &= ~KB_BIT(k);
     }

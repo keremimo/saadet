@@ -24,6 +24,15 @@ static void ui_say(const char *a, const char *b);
 #include "ui_pics.c"
 #include "ui_lib.c"
 #include "ui_chord.c"
+#ifdef SAADET_SMK37
+#define KB_LIST 16u                                /* a held button's list: the pads */
+static uint8_t smk_place_before;                   /* the place a button's press left */
+static int smk_knob_banked(void);                  /* ui_smk.c */
+static const ui_field_t *smk_knob_field(uint32_t k);
+static int smk_knob_taken(uint32_t k, int32_t s);
+#else
+#define KB_LIST 27u
+#endif
 
 static int persist_erase_all(void);                /* persist.c */
 
@@ -101,6 +110,10 @@ static const ui_field_t *ui_knob_field(uint32_t k)
 {
     static const ui_field_t none = F0;
     ui_place_t pl = place_of(uix.place);
+#ifdef SAADET_SMK37
+    if (smk_knob_banked())
+        return smk_knob_field(k);
+#endif
     if (uix.place == PL_HOME)
         return &HOME_F[eng_tint(TSEL->eng_req)][k];
     return pl.n ? &pl.stop[ui_stop(uix.place)].f[k] : &none;
@@ -152,6 +165,9 @@ static void ui_octave(uint32_t b)
 static void ui_button_down(uint32_t b)
 {
     uint32_t p = place_of_button(b), browsing = uix.br.on;
+#ifdef SAADET_SMK37
+    smk_place_before = uix.place;
+#endif
 #ifdef SAADET_FM1_BASE
     if(b==B_SAVE&&uix.place==PL_GLO&&uix.held==PL_N&&!uix.reveal){
         uint32_t picture=place_of(PL_GLO).stop[ui_stop(PL_GLO)].pic;
@@ -236,18 +252,21 @@ static uint32_t held_entries(uint32_t p, uint8_t *s, uint32_t *cur)
     if (p == PL_HOME) {
         int32_t now = lib_find_now(LIB_FAV);
         n = lib_count(LIB_FAV);
-        *cur = now >= 0 && now < 27 ? (uint32_t)now : 255u;
-        return n < 27u ? n : 27u;
+        *cur = now >= 0 && now < (int32_t)KB_LIST ? (uint32_t)now : 255u;
+        return n < KB_LIST ? n : KB_LIST;
     }
-    n = place_entries(&pl, s, 27u);
+    n = place_entries(&pl, s, KB_LIST);
     for (k = 0; k < n; k++)
         if (s[k] <= ui_stop(p)) *cur = k;
     return n;
 }
 static void ui_keys(uint32_t notes)                    /* a key while a place's button is held: jump there */
 {
-    uint8_t s[27];
+    uint8_t s[KB_LIST];
     uint32_t k, n, cur;
+#ifdef SAADET_SMK37
+    return;                                            /* the keys only play here: the pads choose (ui_smk.c) */
+#endif
     if (uix.held >= PL_N || !notes || uix.erasing)
         return;
     if (uix.held == PL_ARP) {                          /* the keys play under the pedal: no tap */
@@ -273,6 +292,10 @@ static void ui_keys(uint32_t notes)                    /* a key while a place's 
 }
 static void ui_knob(uint32_t k, int32_t s)
 {
+#ifdef SAADET_SMK37
+    if (smk_knob_taken(k, s))
+        return;
+#endif
     const ui_field_t *f = ui_knob_field(k);
     const param_desc_t *d = field_desc(f);
     uint32_t dt = fm1_ms - uix.knob_t[k];
@@ -295,7 +318,11 @@ static void ui_knob(uint32_t k, int32_t s)
     }
     uix.hot = (uint8_t)k;
     uix.hot_t = fm1_ms;
+#ifdef SAADET_SMK37
+    uix.pop = uix.place == PL_HOME && !smk_knob_banked();
+#else
     uix.pop = uix.place == PL_HOME;
+#endif
 }
 static void ui_timers(void)
 {
@@ -341,6 +368,9 @@ static void ui_timers(void)
         uix.toast[0] = 0;
 }
 
+#ifdef SAADET_SMK37
+#include "ui_smk.c"
+#endif
 static void ui_input(void)
 {
     uint32_t released, pressed = fm1_input_edges(&released), notes = fm1_input_note_edges(), k;
@@ -352,9 +382,11 @@ static void ui_input(void)
         return;
     }
     kb_mask = 0;                                 /* a place's button held: the keys choose, they play no notes; */
+#ifndef SAADET_SMK37                             /* (here the pads choose and the keys play on) */
     for (k = 0; k < PL_N; k++)                   /* ARP's is the sustain pedal, they play */
         if (k != PL_ARP)
             kb_mask |= ui_btn_bit(button_of_place(k));
+#endif
     kb_pedal = ui_btn_bit(B_ARP);
     if (scr_input(pressed, notes)) return;
     for (k = 0; k < NB; k++) {
@@ -362,6 +394,9 @@ static void ui_input(void)
         if (released & ui_btn_bit(k)) ui_button_up(k);
     }
     ui_keys(notes);
+#ifdef SAADET_SMK37
+    smk_input();
+#endif
     if ((s = panel_enc(EN_SELECT)) && uix.place != PL_HOME)
         ui_turn_page(uix.place, s);
     if ((s = panel_enc(EN_PRESET)))
@@ -562,6 +597,11 @@ static void vm_build(ui_vm_t *v)
         v->sweep = (uint16_t)(dt < 3000u ? dt * 360u / 3000u : 360u);
         return;
     }
+#ifdef SAADET_SMK37
+    smk_tag(v);
+    if (smk_pick_view(v))
+        return;
+#endif
     if (uix.br.on) {                                   /* browsing: the sounds around the one chosen */
         uint32_t n = vm_list_of(v, uix.br.src);
         v->mode = VM_BROWSE;
@@ -574,7 +614,7 @@ static void vm_build(ui_vm_t *v)
     }
     if (uix.held < PL_N && uix.reveal) {               /* the held button's list, on the keys too */
         ui_place_t hp = place_of(uix.held);
-        uint8_t s[27];
+        uint8_t s[KB_LIST];
         uint32_t cur, n = held_entries(uix.held, s, &cur), c = cur < n ? cur : 0u;
         v->mode = VM_REVEAL;
         str_cpy(v->head, uix.held == PL_HOME ? "FAVOURITES" : hp.name, sizeof v->head);
@@ -632,6 +672,9 @@ static void vm_build(ui_vm_t *v)
             if (d && d->max > d->min)
                 v->macro[i] = (uint8_t)((field_get(f) - d->min) * 50 / (d->max - d->min));
         }
+#ifdef SAADET_SMK37
+        smk_strip_view(v, 1);
+#endif
         return;
     }
     str_cpy(v->head, pl.name, sizeof v->head);
@@ -656,6 +699,9 @@ static void vm_build(ui_vm_t *v)
             if (lib.erase) str_cpy(v->warn, "HOLD GLO 3 S TO ERASE ALL", sizeof v->warn);
         }
         else pic_build(v, &pl.stop[s]);
+#ifdef SAADET_SMK37
+        smk_strip_view(v, 0);
+#endif
     }
 }
 
@@ -742,13 +788,17 @@ static void ui_leds(void)
     led_put(nl, panel.btn[B_REC], TSEL->p[P_AHOLD] != 0);   /* REC: the latch */
     led_put(nl, panel.btn[B_OCTDN], song.octave < 0);
     led_put(nl, panel.btn[B_OCTUP], song.octave > 0);
+#ifdef SAADET_SMK37
+    led_put(nl, panel.btn[B_SEQ], TSEL->p[P_CHRD] != 0);     /* SEQ: a chord type is on */
+    smk_lights();
+#endif
     led_put(nw, panel.btn[B_SAVE], sx_staged());             /* a dump waits in SAVE */
     if (lib.deleting) {
         led_put(nw, panel.btn[B_FX], 1);
         nl[led_pos[panel.btn[B_FX]] >> 3] &= (uint8_t)~(1u << (led_pos[panel.btn[B_FX]] & 7u));
     }
     if (uix.held < PL_N && uix.reveal) {                     /* the held button's entries, the current one bright */
-        uint8_t s[27];
+        uint8_t s[KB_LIST];
         uint32_t cur, n = held_entries(uix.held, s, &cur);
         dimkeys = n >= 27u ? 0x7FFFFFFu : (1u << n) - 1u;
         keys = cur < 27u ? 1u << cur : 0u;

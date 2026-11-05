@@ -104,6 +104,10 @@ static int ota_wire_send(const uint8_t *p,uint32_t n){return sd_sysex_send(p,n);
 #include "../firmware/src/seq.c"
 #include "../firmware/src/panel.c"
 #include "../firmware/src/sound.c"
+#ifdef SAADET_SMK37
+#define SMK_MASTER_GET() sd_master()
+#define SMK_MASTER_SET(v) sd_master_set(v)
+#endif
 #include "../firmware/src/ui.c"
 static uint8_t flash_ok;
 static int st_read(uint32_t off,void *p,uint32_t n){return sd_read(off,p,n);}
@@ -134,15 +138,14 @@ static uint32_t sd_render_max_us;
 #ifdef SAADET_SMK37
 /* The SMK-37's own controls. Keys by keybed position go to seq.c's numbering (mix.c KB_OFS); the wheels play the sound as
  * a controller's would, and go out as one, only when they move, so MIDI IN's bend and CC1 keep working. The mod wheel
- * on the CZ-1, which has no wheel of its own, is a vibrato unless the matrix routes it; < and > are one detent of SELECT,
- * on HOME of PRESETS. Pads, faders and the two BANK buttons: docs/SMK37_UX.md */
+ * on the CZ-1, which has no wheel of its own, is a vibrato unless the matrix routes it. The pads, faders and the four
+ * buttons of its own: firmware/src/ui_smk.c */
 static void sd_smk_poll(void)
 {
     static sd_smk_t s;
     static int32_t sent_bend,sent_mod=-1;
-    static uint32_t extra_was;
     track_t *t=TSEL;
-    uint32_t ch=trk_midi_ch(trk_index(t)),hit,token;
+    uint32_t ch=trk_midi_ch(trk_index(t)),token;
     kb_word_t keys=0,retrig=0;
     sd_smk_read(&s);
     for(uint32_t i=0;i<37u;i++){
@@ -153,6 +156,9 @@ static void sd_smk_poll(void)
     }
     token=sd_lock();sd_kb_keys=keys;sd_kb_retrig|=retrig;sd_unlock(token);
     sd_jack_pedal=s.pedal;
+    smk_in.extra=s.extra;smk_in.pads=s.pads;smk_in.pads_hit|=s.pads_hit;
+    memcpy(smk_in.vel,s.pad_vel,16);memcpy(smk_in.press,s.pad_press,16);memcpy(smk_in.fader,s.fader,4);
+    smk_pads_poll();
     if(s.bend!=sent_bend){
         uint32_t v=(uint32_t)(s.bend+8192);
         sent_bend=s.bend;t->bend_raw=(int16_t)s.bend;
@@ -177,11 +183,6 @@ static void sd_smk_poll(void)
             }
         }
         sd_vib_q8=(int16_t)vib;
-    }
-    hit=s.extra&~extra_was;extra_was=s.extra;
-    if(hit&12u){
-        int32_t d=(int32_t)((hit>>3)&1u)-(int32_t)((hit>>2)&1u);
-        sd_enc[panel.enc[uix.place==PL_HOME?EN_PRESET:EN_SELECT]%7u]+=d;
     }
     sd_smk_config(settings_key_vel,settings_trs_off);
 }
@@ -246,7 +247,11 @@ void saadet_input_only(void){sd_poll();ui_input();}
 void saadet_frame(void)
 {
     sd_poll();song.batt_raw=(int16_t)sd_battery();
-    ui_input();ui_leds();ui_draw();sd_lights(fm1_led,&fm1_led_dim[0][0],fm1_led_dim_mask);
+    ui_input();ui_leds();ui_draw();
+#ifdef SAADET_SMK37
+    sd_smk_lights(smk_led_extra,smk_pad_out);
+#endif
+    sd_lights(fm1_led,&fm1_led_dim[0][0],fm1_led_dim_mask);
     settings_poll();panel_moved=0;cz_service();fm6_service();cz_bank_poll();ed_sync();
 }
 void saadet_panic(void){panic_req|=(1u<<NTRK)-1u;}

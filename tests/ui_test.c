@@ -164,11 +164,20 @@ int main(void)
     bad |= check("held: its entries on the keys", ui_led_lv[14] == 3u && ui_led_lv[15] == 1u && ui_led_lv[16] == 1u &&
                  ui_led_lv[17] == 0u);
     ui_png("list");
+#ifdef SAADET_SMK37
+    /* (here a pad jumps, and the keys play on: below) */
+    smk_in.pads = 4u; smk_in.pads_hit = 4u; smk_pads_poll();
+    smk_in.pads = 0u; smk_pads_poll();
+    frame();
+    bad |= check("a pad jumps", uix.stop[PL_LFO] == stop_named(PL_LFO, "MATRIX", 0));
+    hold_up(B_LFO);
+#else
     key_down(2);
     frame();
     bad |= check("a key jumps", uix.stop[PL_LFO] == stop_named(PL_LFO, "MATRIX", 0) && gates() == 0u);
     key_up(2);
     hold_up(B_LFO);
+#endif
     bad |= check("letting go stays there", uix.place == PL_LFO && ui_stop(PL_LFO) == stop_named(PL_LFO, "MATRIX", 0) &&
                  !uix.reveal);
     key_down(1);
@@ -333,9 +342,15 @@ int main(void)
         frames(600);
         bad |= check("HOME held: the favourites", uix.reveal && lint_has("FAVOURITES") && ui_led_lv[14] == 1u);
         ui_png("home_favourites");
+#ifdef SAADET_SMK37
+        smk_in.pads = 1u; smk_in.pads_hit = 1u; smk_pads_poll();
+        smk_in.pads = 0u; smk_pads_poll();
+        frame();
+#else
         key_down(0);
         frame();
         key_up(0);
+#endif
         hold_up(B_HOME);
         frames(100);
         bad |= check(".. a key plays one", TSEL->eng_req == ENGI_PROPHET && TSEL->preset == p0 + 2u && uix.place == PL_HOME);
@@ -592,6 +607,268 @@ int main(void)
         bad |= check("SMK-37: a key struck again restarts, still held", HELD(48u) != 0u && !sd_kb_retrig);
         key_up(32);
         bad |= check(".. and ends with the key", HELD(48u) == 0u);
+        {   /* the pads, the banks, the faders (docs/SMK37_UX.md) */
+#define PAD_HIT(p, v) do { smk_in.pads |= 1u << (p); smk_in.pads_hit |= 1u << (p); smk_in.vel[p] = (uint8_t)(v); smk_pads_poll(); keyboard_block(); } while (0)
+#define PAD_UP(p) do { smk_in.pads &= ~(1u << (p)); smk_pads_poll(); keyboard_block(); } while (0)
+#define X_DOWN(x) do { smk_in.extra |= (x); frame(); } while (0)
+#define X_UP(x) do { smk_in.extra &= ~(uint32_t)(x); frame(); } while (0)
+#define FADER(i, v) do { smk_in.fader[i] = (uint8_t)(v); frame(); } while (0)
+            static const ui_field_t CUT = FP(P5_CUTOFF, "CUTOFF"), ATK = FP(P5_ATTACK_AMP, "ATTACK");
+            uint32_t root = 2u, p;
+            int32_t was;
+            power_on();
+            memset(uix.stop, 0, sizeof uix.stop);
+            memset(&smk_in, 0, sizeof smk_in);
+            smk.kbank = BK_PAGE; smk.fbank = BK_ENV; smk.mode = PM_AUTO; smk.pick = 0;
+            song.octave = 0;
+            TSEL->p[P_AHOLD] = TSEL->p[P_AMODE] = TSEL->p[P_QUANT] = 0;
+            TSEL->p[P_STRUM] = 0;
+            TSEL->p[P_CHRD] = 0;
+            TSEL->p[P_ROOT] = (int16_t)root;
+            engine_load_of(TSEL, ENGI_PROPHET, 1);
+            frames(1200);
+
+            /* CHORDS: the pads' default wherever you play */
+            bad |= check("SMK pads: chords on HOME, sounds on LIBRARY by AUTO", smk_map() == PMAP_CHORDS);
+            PAD_HIT(8, 90);
+            bad |= check("SMK pads: degree I, the root at C3, its velocity", HELD(50u) != 0u && sd_kb_vel[KB_PAD0] == 90u);
+            PAD_UP(8);
+            bad |= check(".. let go", HELD(50u) == 0u);
+            for (i = 0; i < 8u; i++) {                  /* each degree, ascending, a note of the scale */
+                uint32_t n = kb_map(TSEL, KB_PAD0 + i), rel = (n + 120u - root) % 12u;
+                all &= (scale_mask(TSEL) >> rel) & 1u;
+                if (i) all &= n > kb_map(TSEL, KB_PAD0 + i - 1u);
+            }
+            bad |= check("SMK pads: eight degrees of the scale", all);
+            PAD_HIT(2, 100); PAD_UP(2);
+            bad |= check("SMK pads: the top row sets the chord type", TSEL->p[P_CHRD] == CH_DIA7);
+            PAD_HIT(8, 100);
+            bad |= check(".. and a degree plays it", kb_chn[KB_PAD0] == 4u);
+            frame();
+            bad |= check(".. the struck pad ACTIVE, the type FILLED", smk_pad_out[8] == smk_rgb(PS_ACTIVE, 0) && smk_pad_out[2] == smk_rgb(PS_FILLED, 0));
+            PAD_UP(8);
+            PAD_HIT(0, 100); PAD_UP(0);
+            bad |= check(".. the first top pad, OFF", TSEL->p[P_CHRD] == CH_OFF);
+            PAD_HIT(8, 100);
+            bad |= check(".. a degree its single note", kb_chn[KB_PAD0] == 1u);
+            PAD_UP(8);
+            key_down(32);                               /* a pad and a key at once, the keys not disturbed */
+            PAD_HIT(12, 100);
+            bad |= check("SMK pads: a pad chord under a key's line", HELD(48u) != 0u && kb_chn[KB_PAD0 + 4u] == 1u);
+            PAD_UP(12);
+            bad |= check(".. the key plays on", HELD(48u) != 0u);
+            key_up(32);
+            smk_in.press[8] = 127u;                     /* pressure: the strum at up to twice its rate */
+            TSEL->p[P_CHRD] = CH_DIA3;
+            TSEL->p[P_STRUM] = 1;
+            PAD_HIT(8, 100);
+            {
+                uint32_t beat = seq_beat_samples(), lean, plain;
+                chord_strum_tick(beat / 7u);
+                lean = kb_chn[KB_PAD0];
+                PAD_UP(8);
+                smk_in.press[8] = 0u;
+                PAD_HIT(8, 100);
+                chord_strum_tick(beat / 7u);
+                plain = kb_chn[KB_PAD0];
+                PAD_UP(8);
+                bad |= check("SMK pads: leaning strums faster", lean > plain);
+            }
+            TSEL->p[P_CHRD] = CH_OFF;
+            TSEL->p[P_STRUM] = 0;
+
+            /* the knob banks: a bank's four in the strip, a tag, the page's picture stays */
+            X_DOWN(SMK_X_KBANK); X_UP(SMK_X_KBANK);
+            bad |= check("SMK banks: tap, the next bank", smk.kbank == BK_MACROS);
+            press(B_EDIT);
+            smk.kbank = BK_FILTER;
+            frames(2000);
+            frame();
+            bad |= check("SMK banks: FILTER on EDIT, tag and cards", lint_has("FILTER") && lint_has("CUTOFF") && lint_has("RES") && lint_check("bank filter") == 0u);
+            ui_png("smk_bank_filter");
+            was = field_get(&CUT);
+            turn(EN_K1, 3);
+            bad |= check(".. K1 edits the bank's first", field_get(&CUT) != was);
+            press(B_HOME);
+            frames(2000);
+            frame();
+            bad |= check("SMK banks: on HOME the keyboard stays at rest", !lint_has("CUTOFF") && lint_check("bank home rest") == 0u);
+            turn(EN_K1, -1);
+            frame();
+            bad |= check(".. a turn drops the cards in, no readout over the screen", lint_has("CUTOFF") && !uix.pop && lint_check("bank home") == 0u);
+            ui_png("smk_bank_home");
+            press(B_FX);
+            frames(2000);
+            frame();
+            bad |= check("SMK banks: the library keeps its own knobs", lint_has("SOUND") && !lint_has("CUTOFF") && !smk_knob_banked());
+            bad |= check(".. and AUTO makes the pads its sounds", smk_map() == PMAP_SOUNDS);
+            smk.kbank = BK_PAGE;
+            press(B_HOME);
+            engine_load_of(TSEL, ENGI_FM6, 0);
+            frame();
+            bad |= check("SMK banks: FM6 has no FILTER", !smk_bank_has(BK_FILTER) && smk_bank_next(BK_MACROS, 1) == BK_ENV);
+            uix.stop[PL_EDIT] = 1u + 6u * 2u;           /* OP3 on EDIT */
+            bad |= check(".. its ENV follows EDIT's operator", smk_bank_field(BK_ENV, 0)->kind == FK_FM6OP && smk_bank_field(BK_ENV, 0)->sub == 2u);
+            uix.stop[PL_EDIT] = 0;
+            engine_load_of(TSEL, ENGI_PROPHET, 1);
+            frame();
+
+            /* the picker: held, K1 and the pads walk it, letting go keeps it */
+            X_DOWN(SMK_X_KBANK);
+            frames(600);
+            frame();
+            bad |= check("SMK picker: held, on the screen and the pads", smk.pick == 1u && smk_map() == PMAP_PICK && lint_has("KNOB BANK") && lint_has("MACROS") && lint_check("picker") == 0u);
+            ui_png("smk_picker");
+            turn(EN_K1, 1);
+            bad |= check(".. K1 walks it", smk.pick_sel == BK_MACROS && smk.kbank == BK_MACROS);
+            PAD_HIT(3, 100); PAD_UP(3);
+            bad |= check(".. a top pad picks a bank", smk.kbank == BK_ENV);
+            PAD_HIT(10, 100); PAD_UP(10);
+            bad |= check(".. a bottom pad picks a pad mode", smk.mode == PM_SOUNDS);
+            X_UP(SMK_X_KBANK);
+            bad |= check(".. letting go keeps them", !smk.pick && smk.kbank == BK_ENV);
+            frames(1600);
+            smk.kbank = BK_PAGE;
+            frame();
+            bad |= check("SMK tag: a pad mode by hand, on HOME", smk_map() == PMAP_SOUNDS && lint_has("SOUNDS") && lint_check("tag") == 0u);
+            ui_png("smk_tag_sounds");
+            smk.mode = PM_AUTO;
+            frame();
+            X_DOWN(SMK_X_FBANK);
+            X_DOWN(SMK_X_RIGHT);
+            bad |= check("SMK picker: an arrow with a BANK button walks its bank", smk.fbank == BK_LFO && smk.pick == 2u);
+            X_UP(SMK_X_RIGHT);
+            X_UP(SMK_X_FBANK);
+            X_DOWN(SMK_X_FBANK); X_UP(SMK_X_FBANK);
+            bad |= check(".. a tap, the next", smk.fbank == BK_ARP);
+            smk.fbank = BK_ENV;
+            frames(1600);
+
+            /* the faders: ENV by default, away until they cross, never a jump */
+            {
+                const param_desc_t *d = field_desc(&ATK);
+                int32_t cur;
+                smk_field_to(&ATK, d->min + (d->max - d->min) * 64 / 127);
+                cur = field_get(&ATK);
+                frame();                                /* (away: the value moved under it, the fader low) */
+                bad |= check("SMK faders: ENV is the Prophet's amp envelope", smk_fader_field(0)->kind == FK_P5 && smk_fader_field(0)->id == P5_ATTACK_AMP);
+                FADER(0, 20);
+                frame();
+                bad |= check(".. away: a move does not jump", field_get(&ATK) == cur && !(smk.picked & 1u));
+                bad |= check(".. the cards and FADERS, a moment", lint_has("FADERS") && lint_has("ATTACK") && lint_check("fader home") == 0u);
+                ui_png("smk_fader_home");
+                FADER(0, 100);
+                bad |= check(".. crossing, it takes over", (smk.picked & 1u) != 0u && field_get(&ATK) != cur);
+                FADER(0, 40);
+                bad |= check(".. and follows", field_get(&ATK) == d->min + (d->max - d->min) * 40 / 127);
+                turn(EN_K1, 0);
+                {
+                    static const ui_field_t A = FP(P5_ATTACK_AMP, "ATTACK");
+                    field_step(&A, 5);
+                }
+                frame();
+                bad |= check(".. moved under it, away again", !(smk.picked & 1u));
+                frames(2000);
+                frame();
+                bad |= check(".. the cards go", !lint_has("FADERS") && !lint_has("ATTACK"));
+                /* NOTE REPEAT held: the edit lasts as long as the button */
+                was = field_get(&ATK);
+                FADER(0, (was - d->min) * 127 / (d->max - d->min));
+                hold_down(B_LFO);
+                {
+                    int32_t at = (field_get(&ATK) - d->min) * 127 / (d->max - d->min);
+                    FADER(0, at > 60 ? at - 40 : at + 40);
+                }
+                bad |= check("SMK faders: NOTE REPEAT, momentary", field_get(&ATK) != was);
+                hold_up(B_LFO);
+                frame();
+                bad |= check(".. let go, the value before, the place before", field_get(&ATK) == was && uix.place == PL_HOME);
+            }
+
+            /* a held button lends the pads what it lists; the keys play on */
+            press(B_HOME);
+            hold_down(B_ENV);
+            frames(700);
+            frame();
+            bad |= check("SMK held: ENV's list on the pads", smk_map() == PMAP_LIST && lint_check("held") == 0u);
+            ui_png("smk_held_env");
+            key_down(10);
+            bad |= check(".. the keys play on under it", (uint32_t)kb_note[10] != KB_SILENT);
+            key_up(10);
+            PAD_HIT(1, 100); PAD_UP(1);
+            bad |= check(".. a pad jumps", ui_stop(PL_ENV) != 0u && uix.jumped);
+            hold_up(B_ENV);
+            frame();
+            bad |= check(".. no page turned by the release", uix.place == PL_ENV);
+            uix.stop[PL_ENV] = 0;
+            press(B_HOME);
+            hold_down(B_SCL);
+            frames(700);
+            bad |= check("SMK held: SCALE, a piano", smk_map() == PMAP_PIANO);
+            PAD_HIT(4, 100); PAD_UP(4);
+            bad |= check(".. a pad sets the root", TSEL->p[P_ROOT] == 7);
+            PAD_HIT(10, 100); PAD_UP(10);
+            bad |= check(".. the gaps do nothing", TSEL->p[P_ROOT] == 7);
+            hold_up(B_SCL);
+            TSEL->p[P_ROOT] = (int16_t)root;
+            press(B_HOME);
+            frame();
+
+            /* SOUNDS: 16 of the list, a tap loads at once */
+            press(B_FX);
+            uix.stop[PL_LIB] = LIB_P5;
+            ui_open(PL_LIB);
+            frames(200);
+            PAD_HIT(5, 100); PAD_UP(5);
+            {
+                lib_item_t it;
+                lib_item(LIB_P5, 5u, &it);
+                bad |= check("SMK sounds: a tap loads at once", lib_item_now(&it) && !lib.pending);
+            }
+            frames(200);
+            bad |= check(".. FILLED, in its engine's hue", smk_pad_out[5] == smk_rgb(PS_FILLED, 0) && smk_pad_out[6] == smk_rgb(PS_ON, 0));
+            X_DOWN(SMK_X_RIGHT); X_UP(SMK_X_RIGHT);
+            bad |= check(".. an arrow, the next 16, nothing loads", lib.at[LIB_P5] == 16u && !lib.pending);
+            uix.stop[PL_LIB] = 0;
+            press(B_HOME);
+            frame();
+
+            /* SAVE's letters */
+            press(B_SAVE);
+            frame();
+            bad |= check("SMK save: the pads are letters", smk_map() == PMAP_NAME);
+            {
+                uint32_t c = lib.cursor;
+                PAD_HIT(1, 100); PAD_UP(1);
+                bad |= check(".. a tap, the group's first", lib.name[c] == 'D');
+                PAD_HIT(1, 100); PAD_UP(1);
+                bad |= check(".. again, the next", lib.name[c] == 'E');
+            }
+            press(B_HOME);
+            frame();
+
+            /* a question waits: the pads breathe and answer nothing; the settings save */
+            lib.erase = 1;
+            frame();
+            p = smk_pad_out[0];
+            bad |= check("SMK wait: armed, every pad waits", smk_map() == PMAP_WAIT && p == smk_rgb(PS_WAIT, 0));
+            PAD_HIT(8, 100); PAD_UP(8);
+            bad |= check(".. a tap plays nothing", kb_chn[KB_PAD0] == 0u);
+            lib.erase = 0;
+            settings_pad_lights = 0;
+            frame();
+            bad |= check("SMK lights: PAD LIGHTS OFF is dark", smk_pad_out[8] == 0u && smk_pad_out[0] == 0u);
+            settings_pad_lights = 2;
+            smk.kbank = BK_MIX;
+            frame();
+            bad |= check("SMK LEDs: KNOB BANK lit off PAGE, FADER BANK off ENV", (smk_led_extra & SMK_X_KBANK) && !(smk_led_extra & SMK_X_FBANK));
+            smk.kbank = BK_PAGE;
+#undef PAD_HIT
+#undef PAD_UP
+#undef X_DOWN
+#undef X_UP
+#undef FADER
+        }
 #undef HELD
     }
 #endif

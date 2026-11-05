@@ -102,6 +102,7 @@ static int settings_import(persist_t *p, int length)
 #ifdef SAADET_SMK37
     settings_key_vel = (p->favorites.factory[15][29] & 0xFCu) == 0xA4u ? p->favorites.factory[15][29] & 3u : 0u;
     settings_trs_off = p->favorites.factory[15][30] == 0xA9u;
+    settings_pad_lights = (p->favorites.factory[15][31] & 0xF8u) == 0xB0u && (p->favorites.factory[15][31] & 7u) <= 4u ? p->favorites.factory[15][31] & 7u : 2u;
 #endif
     const uint8_t *costs = p->favorites.factory[8] + 8;
     int cost_tag = costs[0] == 'W' && costs[1] == 1;
@@ -153,6 +154,11 @@ static void settings_export(persist_t *p)
         else if ((*vel & 0xFCu) == 0xA4u && (*vel & 3u)) *vel = 0u;
         if (settings_trs_off) *trs = 0xA9u;
         else if (*trs == 0xA9u) *trs = 0u;
+        {
+            uint8_t *pads = &p->favorites.factory[15][31];
+            if (settings_pad_lights != 2u) *pads = (uint8_t)(0xB0u | (settings_pad_lights & 7u));
+            else if ((*pads & 0xF8u) == 0xB0u && (*pads & 7u) <= 4u && (*pads & 7u) != 2u) *pads = 0u;
+        }
     }
 #endif
     uint8_t *thru = &p->favorites.factory[15][24];

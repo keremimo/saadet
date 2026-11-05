@@ -52,6 +52,11 @@ typedef struct {
     uint8_t pic, parg;                              /* PAGE: its picture (ui_pics.c), which one, the picture's data */
     int16_t pv[24];
     char ps[4][24];
+#ifdef SAADET_SMK37
+    char tag[8];                                    /* the header's state: a bank, FADERS, a pad mode picked by hand */
+    uint8_t strip;                                  /* the strip is a bank's cards: on HOME, for the keyboard */
+    struct { uint8_t on, picked, val, pos; } gauge[4];   /* a fader's card: its value's bar, where the fader stands */
+#endif
 } ui_vm_t;
 static void pic_draw(const ui_vm_t *v);             /* ui_pics.c */
 
@@ -69,6 +74,14 @@ static void vm_header(const ui_vm_t *v)
     }
     if (v->head[0]) {
         int32_t x = cv_text(10, 8, TY_HD, v->head, v->mode == VM_HOME || v->mode == VM_BROWSE ? T_THEME : T_TEXT);
+#ifdef SAADET_SMK37
+        if (v->tag[0] && v->mode != VM_HOME) {           /* (HOME's stands where its octave does) */
+            int32_t right = v->ndots > 1u ? 216 - 10 * (int32_t)v->ndots : 230, w = text_w(TY_LB, v->tag);
+            cv_text_r(right, 9, TY_LB, v->tag, T_THEME, T_BG);
+            if (v->sub[0])
+                cv_text_fit(x + 8, 8, TY_TX, v->sub, T_MID, T_BG, right - w - 6 - x - 8);
+        } else
+#endif
         if (v->sub[0])
             cv_text_fit(x + 8, 8, TY_TX, v->sub, T_MID, T_BG, (v->ndots > 1u ? 216 - 10 * (int32_t)v->ndots : 220) - x);
     }
@@ -109,6 +122,15 @@ static void vm_cols(const ui_vm_t *v)
         w = cv_text_fit(x, 199 + TY_VL->asc - f->asc, f, c->val, ink, T_BG, 54) - x;
         if (c->unit[0] && w + 2 + text_w(TY_LB, c->unit) <= 54)
             cv_text(x + w + 2, 199 + TY_VL->asc - TY_LB->asc, TY_LB, c->unit, T_MID);
+#ifdef SAADET_SMK37
+        if (v->gauge[i].on) {                       /* a fader: away, its bar waits grey and the tick stands out */
+            uint16_t lc = v->gauge[i].picked ? (i == v->hot ? T_THEME : T_FILL) : T_DIM;
+            cv_rect(x, 231, 50, 2, T_LINE);
+            cv_rect(x, 231, v->gauge[i].val, 2, lc);
+            cv_rect(x + v->gauge[i].pos - (v->gauge[i].pos ? 1 : 0), 228, 2, 8, v->gauge[i].picked ? lc : T_TEXT);
+            continue;
+        }
+#endif
         vm_bar(x, c, i == v->hot ? T_THEME : c->dim ? T_LINE : T_FILL);
     }
 }
@@ -133,6 +155,17 @@ static void vm_keys(int32_t y, int32_t h, uint32_t keys, uint32_t cur)
         }
     }
 }
+#ifdef SAADET_SMK37
+/* the pads as a strip at y: two rows of eight, the list's entries lit, the current one in the engine's colour */
+static void vm_pads(int32_t y, int32_t h, uint32_t keys, uint32_t cur)
+{
+    uint32_t k;
+    for (k = 0; k < 16u; k++) {
+        uint16_t c = k == cur ? T_THEME : (keys >> k) & 1u ? T_MID : T_WELL;
+        cv_rect(8 + 28 * (int32_t)(k % 8u), y + (int32_t)(k / 8u) * (h / 2), 26, h / 2 - 1, c);
+    }
+}
+#endif
 /* five sounds from y: the one chosen large in the middle (its tag in the engine's colour), the others smaller and
  * fainter; a star (a disc) on the right of a favourite, the tag lit for the sound playing now */
 static void vm_list(const ui_vm_t *v, int32_t y)
@@ -219,12 +252,23 @@ static void vm_draw_home(const ui_vm_t *v)
     const aafont_t *f = text_has(TY_HR, v->name) && text_w(TY_HR, v->name) <= 220 ? TY_HR : TY_NM;
     int32_t i;
     vm_header(v);
+#ifdef SAADET_SMK37
+    if (!v->toast[0] && v->tag[0]) {
+        cv_text_r(230, 9, TY_LB, v->tag, T_THEME, T_BG);
+    } else
+#endif
     if (!v->toast[0]) {
         cv_text_r(230, 8, TY_TX, v->oct, T_MID, T_BG);
     }
     cv_text_fit(10, f == TY_HR ? 34 : 42, f, v->name, T_TEXT, T_BG, 220);   /* (long: the smaller face, cut) */
     vm_chord(v);
     cv_text_fit(10, 154, TY_TX, v->state, T_MID, T_BG, 220);
+#ifdef SAADET_SMK37
+    if (v->strip) {
+        vm_cols(v);
+        return;
+    }
+#endif
     vm_keyboard(v);
     for (i = 0; i < 4; i++) {
         cv_rect(UI_COL_X(i), 222, 50, 4, T_LINE);
@@ -251,7 +295,11 @@ static void vm_draw_reveal(const ui_vm_t *v)
         cv_text(10, y + 3, TY_HD, n, T_THEME);
         cv_text_fit(34, y, TY_RW, v->row[i], v->first + i == v->cur ? T_TEXT : T_MID, T_BG, 190);
     }
+#ifdef SAADET_SMK37
+    vm_pads(206, 28, v->keys, v->cur);
+#else
     vm_keys(206, 28, v->keys, v->cur);
+#endif
 }
 static void vm_draw_browse(const ui_vm_t *v)
 {

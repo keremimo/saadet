@@ -8,14 +8,16 @@ static int32_t *part_buf=part_storage;
 #ifdef SAADET_SMK37
 /* The SMK-37's 37 keys through the same note path as the FM-1's 27: key k 0..26 as the FM-1's (F3..G5), 27..31 the five
  * above (G#5..C6), 32..36 the five below (C3..E3). sd_poll (platform/instrument.c) publishes them */
-#define KB_N 37u
+#define KB_N 45u                                   /* .. and 37..44, the eight degrees on the CHORDS pads (ui_smk.c) */
+#define KB_PAD0 37u
 typedef uint64_t kb_word_t;
 #define KB_OFS(k) ((k) >= 32u ? (int32_t)(k) - 37 : (int32_t)(k))   /* semitones from F3 */
-static volatile kb_word_t sd_kb_keys, sd_kb_retrig;
+static volatile kb_word_t sd_kb_keys, sd_kb_pads, sd_kb_retrig;
+static volatile uint8_t sd_kb_press[8];            /* the degrees' pressure: strum speed */
 static uint8_t sd_kb_vel[KB_N];
 static volatile uint8_t sd_jack_pedal;                  /* the sustain pedal jack */
 #define KB_VEL(k) ((uint32_t)sd_kb_vel[k])
-#define KB_KEYS() sd_kb_keys
+#define KB_KEYS() (sd_kb_keys | sd_kb_pads)
 static volatile uint32_t kb_mask, kb_pedal;        /* kb_pedal: the button that is the sustain pedal (ARP) */
 static volatile kb_word_t kb_layer;
 #else

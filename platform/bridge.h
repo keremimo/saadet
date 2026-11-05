@@ -79,8 +79,11 @@ void sd_usb_state(uint32_t *values);
 #ifdef SAADET_SMK37
 /* the SMK-37's own controls, from the main loop: the 37 keys by keybed position (0 = C3), their last velocities, the
  * wheels, the pedal, and KNOB BANK, FADER BANK, <, > as bits 0..3 of extra */
-typedef struct { uint64_t keys, retrig; uint8_t vel[37]; int32_t bend, mod; uint8_t pedal; uint32_t extra; } sd_smk_t;
+typedef struct { uint64_t keys, retrig; uint8_t vel[37]; int32_t bend, mod; uint8_t pedal; uint32_t extra;
+                 uint32_t pads, pads_hit; uint8_t pad_vel[16], pad_press[16], fader[4]; } sd_smk_t;
 void sd_smk_read(sd_smk_t *s);
+void sd_smk_lights(uint32_t extra, const uint32_t *pad_rgb);
+void sd_master_set(uint32_t q12);
 void sd_smk_config(uint32_t vel, uint32_t trs_off);
 #endif
 

@@ -73,15 +73,22 @@ void sd_smk_read(sd_smk_t *s){
     for(int i=0;i<37;i++)s->vel[i]=(uint8_t)plat_key_vel(i);
     s->bend=plat_wheel(PLAT_WHEEL_PITCH);s->mod=plat_wheel(PLAT_WHEEL_MOD);s->pedal=(uint8_t)plat_pedal();
     s->extra=plat_buttons()>>B_KBANK;
+    s->pads=plat_pads();s->pads_hit=plat_pads_pressed();
+    for(int i=0;i<16;i++){s->pad_vel[i]=(uint8_t)plat_pad_vel(i);s->pad_press[i]=(uint8_t)plat_pad_press(i);}
+    for(int i=0;i<4;i++)s->fader[i]=(uint8_t)plat_fader(i);
 }
+void sd_master_set(uint32_t q12){plat_master_set(q12);}
 void sd_smk_config(uint32_t vel,uint32_t trs_off){
     static uint32_t was_vel=255u,was_off=255u;
     if(vel!=was_vel){was_vel=vel;plat_vel_curve((int)vel);}
     if(trs_off!=was_off){was_off=trs_off;plat_trs_out(!trs_off);}
 }
-/* SAADET_SMK37 stub: the LEDs the UI has nothing to say on yet, in plat_lights' bits (B_KBANK, B_FBANK, B_LEFT, B_RIGHT,
- * LED_PLAY_GREEN). With the 14 functions below, all 19 LEDs go through sd_lights */
-static const uint32_t sd_smk_lit=0;
+/* the LEDs of the SMK's own buttons, and PLAY's red, in plat_lights' bits (ui_smk.c smk_led_extra) */
+static uint32_t sd_smk_lit;
+void sd_smk_lights(uint32_t extra,const uint32_t *pad_rgb){
+    sd_smk_lit=(extra&15u)<<B_KBANK|((extra>>4)&1u)<<B_PLAY;
+    for(int i=0;i<16;i++)plat_pad_rgb(i,pad_rgb[i]);
+}
 #ifndef PLAT_HOST
 /* The UI draws the FM-1's LED cells (instrument.c FM1_KEYMAP): where each function's is, (column << 3) | row, in plat.h's
  * button order. tests/build_targets_test.py checks this against FM1_KEYMAP */
@@ -94,7 +101,7 @@ _Static_assert(SD_SMK_DATA_LO==FL_DATA_LO&&SD_SMK_DATA_HI==FL_DATA_HI&&SD_SMK_GL
 void sd_lights(const uint8_t *bright,const uint8_t *dim,const uint8_t *masks){
 #if defined(SAADET_SMK37)&&!defined(PLAT_HOST)
     /* the UI's three dim planes, at the board's levels: a plane at full duty lit, 1/2 and 1/4 mid, 1/8 the glow */
-    uint32_t lit=sd_smk_lit,mid=0,glow=0;
+    uint32_t lit=0,mid=0,glow=0;
     for(uint32_t i=0;i<14u;i++){
         uint32_t c=sd_btn_cell[i]>>3,bit=1u<<(sd_btn_cell[i]&7u);
         if(bright[c]&bit)lit|=1u<<i;
@@ -109,6 +116,7 @@ void sd_lights(const uint8_t *bright,const uint8_t *dim,const uint8_t *masks){
      if(lit&play)lit=(lit&~play)|LED_PLAY_GREEN;
      if(mid&play)mid=(mid&~play)|LED_PLAY_GREEN;
      if(glow&play)glow=(glow&~play)|LED_PLAY_GREEN;}
+    lit|=sd_smk_lit;
     plat_lights(lit,0,glow,0,2);plat_lights_mid(mid,0);
 #elif !defined(PLAT_HOST)
     for(uint32_t i=0;i<11u;i++)fm1_led[i]=bright[i];

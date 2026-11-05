@@ -47,6 +47,7 @@ static int16_t drumch_cell;
 static uint8_t settings_thru;
 #ifdef SAADET_SMK37
 static uint8_t settings_key_vel, settings_trs_off;   /* GLOBAL > KEYS: 0 NORMAL .. 3 FIXED; the TRS jack silent */
+static uint8_t settings_pad_lights = 2;              /* .. the pads' level, as LIGHTS_NAME: MID */
 #endif
 #define PROJ_TMPL 5                                      /* SLOT 5: the template (project.c tmpl) */
 /* SAVE > PROJECT KNOB 2, BOOT: the project power-on loads (OFF, A..D; OFF or an empty slot: the template, if one is

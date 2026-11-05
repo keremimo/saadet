@@ -399,7 +399,7 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
     leds: { SEQ: 1, "KNOB BANK": 0 } });
 
   S.push({ id: "library_sounds", title: "LIBRARY > P5, pads SOUNDS", eng: "p5",
-    cap: "On LIBRARY the pads are 16 sounds of the list on the screen, pad 1 top left, a page of 16 from the first; the sound playing (003) FILLED, the rest ON, slots past the list's end OFF. A tap loads at once. SELECT or < > turn the page of 16 and the screen's chosen sound follows.",
+    cap: "On LIBRARY the pads are 16 sounds of the list on the screen, pad 1 top left, a page of 16 from the first; the sound playing (003) FILLED, the rest ON, slots past the list's end OFF. A tap loads at once. < > turn the page of 16 and the screen's chosen sound follows, without loading it.",
     screen: function (s) { header(s, { eng: "p5", head: "LIBRARY", sub: "P5", dots: 6, dot: 2 });
       list(s, { eng: "p5", rows: [{ tag: "001", name: "It's a Prophet 5" }, { tag: "002", name: "After Ringer" }, { tag: "003", name: "Forever Keys", star: 1, now: 1 }, { tag: "004", name: "Funk Bass II" }, { tag: "005", name: "Formant Seraphim" }] }, 34);
       cols(s, { eng: "p5", cols: [{ l: "SOUND", v: "3", u: "/201", a: 0.015 }, { l: "FAV", v: "ON", bar: "steps", a: 1, b: 2 }, { l: "SEND", v: "+", bar: "none" }] }); },
@@ -454,10 +454,10 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
     leds: { ARP: 2, PATCH: 1 } });
 
   S.push({ id: "global_keys", title: "GLOBAL > KEYS", eng: "j106",
-    cap: "A page the SMK adds: VELOCITY remaps the stock curves for keys and pads, PAD LIGHTS is the pads' level, TRS OUT the jack (MIDI OUT only on this keyboard), PEDAL the jack's polarity (AUTO learns it at power-on).",
-    screen: function (s) { page(s, { eng: "j106", head: "GLOBAL", sub: "KEYS", dots: 10, dot: 7, pic: "readout",
-      lines: ["Keys and pads from the stock curves", "Pads at half brightness", "TRS sends what USB sends", "Pedal rest taken at power-on"],
-      cols: [{ l: "VELOCITY", v: "NORMAL", bar: "steps", a: 0, b: 4 }, { l: "PAD LIGHTS", v: "MID", bar: "tick", a: 0.5 }, { l: "TRS OUT", v: "ON", bar: "steps", a: 1, b: 2 }, { l: "PEDAL", v: "AUTO", bar: "steps", a: 0, b: 3 }] }); },
+    cap: "A page the SMK adds, just before ERASE: VELOCITY remaps the stock curves for keys and pads, PADS is their brightness, TRS OUT the jack (MIDI OUT only on this keyboard). The pedal needs no setting: its rest is learnt at power-on.",
+    screen: function (s) { page(s, { eng: "j106", head: "GLOBAL", sub: "KEYS", dots: 10, dot: 8, pic: "readout",
+      lines: ["Keys and pads from the stock curves", "Pads at half brightness", "TRS sends what USB sends"],
+      cols: [{ l: "VELOCITY", v: "NORMAL", bar: "steps", a: 0, b: 4 }, { l: "PADS", v: "MID", bar: "tick", a: 0.5 }, { l: "TRS OUT", v: "ON", bar: "steps", a: 1, b: 2 }] }); },
     pads: chordPads("j106", "DIA3", -1), leds: { GLOBE: 1, SEQ: 1 } });
 
   S.push({ id: "save_waiting", title: "A dump waits in SAVE: WAITING", eng: "fm6",

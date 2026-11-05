@@ -195,7 +195,11 @@ static const ui_stop_t ST_EDIT_CZ[] = {
 
 static const ui_stop_t ST_GLO[] = {
     {"", "TEMPO", PIC_READOUT, {FG(G_BPM, "TEMPO"), FG(G_CLOCK, "CLOCK"), FG(G_SWING, "SWING"), F0}},
+#ifdef SAADET_SMK37
+    {"", "OUTPUT", PIC_READOUT, {FT(P_LEVEL, "LEVEL"), FT(P_PAN, "PAN"), FT(P_SPRD, "SPREAD"), FD(DEV_MASTER, "MASTER")}},
+#else
     {"", "OUTPUT", PIC_READOUT, {FT(P_LEVEL, "LEVEL"), FT(P_PAN, "PAN"), FT(P_SPRD, "SPREAD"), F0}},
+#endif
     {"", "TUNING", PIC_READOUT, {FG(G_A4, "A4"), FG(G_TUNE, "FINE"), F0, F0}},
 #ifdef SAADET_FM1_BASE
     {"", "MIDI", PIC_READOUT, {FG(G_ROUTE, "IN CH"), FG(G_DRUMCH, "OUT CH"), FD(DEV_THRU, "THRU"), F0}},
@@ -211,7 +215,7 @@ static const ui_stop_t ST_GLO[] = {
     {"", "VOICES", PIC_VOICES, {FD(DEV_BUDGET, "BUDGET"), F0, F0, F0}},
     {"", "DISPLAY", PIC_READOUT, {FD(DEV_SLEEP, "SLEEP"), FD(DEV_LIGHTS, "LIGHTS"), F0, F0}},
 #ifdef SAADET_SMK37
-    {"", "KEYS", PIC_READOUT, {FD(DEV_VEL, "VELOCITY"), FD(DEV_TRS, "TRS OUT"), F0, F0}},
+    {"", "KEYS", PIC_READOUT, {FD(DEV_VEL, "VELOCITY"), FD(DEV_PADS, "PADS"), FD(DEV_TRS, "TRS OUT"), F0}},
 #endif
     {"", "ERASE", PIC_ERASE, {FL(LF_ERASE, "ERASE ALL"), F0, F0, F0}},
 };

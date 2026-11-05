@@ -11,7 +11,12 @@ typedef struct { uint8_t kind, id; const char *label; uint8_t sub; } ui_field_t;
 /* the device's settings (kept with the settings, not the sound): screen sleep, the LEDs' level, the voice budget,
  * MIDI THRU */
 #ifdef SAADET_SMK37
-enum { DEV_SLEEP, DEV_LIGHTS, DEV_BUDGET, DEV_THRU, DEV_VEL, DEV_TRS, DEV_N };
+enum { DEV_SLEEP, DEV_LIGHTS, DEV_BUDGET, DEV_THRU, DEV_VEL, DEV_TRS, DEV_PADS, DEV_MASTER, DEV_N };
+#ifndef SMK_MASTER_GET                             /* (the host tests'; the firmware: platform/instrument.c) */
+static uint32_t smk_master_q12 = 2896u;
+#define SMK_MASTER_GET() smk_master_q12
+#define SMK_MASTER_SET(v) (smk_master_q12 = (v))
+#endif
 static const char *const N_KEYVEL[] = {"NORMAL", "SOFT", "HARD", "FIXED"};
 #else
 enum { DEV_SLEEP, DEV_LIGHTS, DEV_BUDGET, DEV_THRU, DEV_N };
@@ -26,6 +31,8 @@ static const param_desc_t DEV_D[DEV_N] = {
 #ifdef SAADET_SMK37
     {"VELOCITY", F_ENUM, 0, 3, 0, N_KEYVEL, 0},
     {"TRS OUT", F_ENUM, 0, 1, 1, N_ONOFF, 0},
+    {"PAD LIGHTS", F_ENUM, 0, LIGHTS_N - 1, LIGHTS_MID, LIGHTS_NAME, 0},
+    {"MASTER", F_INT, 0, 100, 71, 0, "%"},
 #endif
 };
 static const param_desc_t *lib_desc(uint32_t id);        /* ui_lib.c: FK_LIB */
@@ -94,6 +101,8 @@ static int32_t field_get(const ui_field_t *f)
 #ifdef SAADET_SMK37
         if (f->id == DEV_VEL) return settings_key_vel;
         if (f->id == DEV_TRS) return !settings_trs_off;
+        if (f->id == DEV_PADS) return settings_pad_lights;
+        if (f->id == DEV_MASTER) return (int32_t)((SMK_MASTER_GET() * 100u + 2048u) / 4096u);
 #endif
         return f->id == DEV_SLEEP ? (int32_t)scr_get() : f->id == DEV_LIGHTS ? settings_lights :
                f->id == DEV_THRU ? settings_thru : settings_budget;
@@ -204,6 +213,8 @@ static int field_step(const ui_field_t *f, int32_t steps)
 #ifdef SAADET_SMK37
         else if (f->id == DEV_VEL) settings_key_vel = (uint8_t)v;
         else if (f->id == DEV_TRS) settings_trs_off = (uint8_t)!v;
+        else if (f->id == DEV_PADS) settings_pad_lights = (uint8_t)v;
+        else if (f->id == DEV_MASTER) { SMK_MASTER_SET((uint32_t)v * 4096u / 100u); break; }   /* (kept by the base) */
 #endif
         else settings_budget = (int16_t)v;
         settings_save();
