@@ -58,6 +58,9 @@ packed=(OUT/'audio.bin').read_bytes()
 at=sym('_sd_audio_load')-sym('_start')
 assert len(packed)==hi-lo and image[at:at+len(packed)]==packed
 assert sym('_bss_end')<=0x1c20000
+# The USB recording's ring: the deep one (app.h FM1B_UAC_DEEP), 1024 native frames, in POOL and not in low RAM.
+ring=re.search(r'^[0-9a-f]+ l\s+\.pool\s+([0-9a-f]+) ua_ring$',syms,re.M)
+assert ring and int(ring[1],16)==1024*8,'USB recording ring must be the deep one, in POOL'
 for retired in ('fm1_stub_start','crstub_main'):
     assert not re.search(r'\s'+retired+r'$',syms,re.M),f'legacy boot/update linked: {retired}'
 package=Path(sys.argv[1]) if len(sys.argv)>1 else OUT/'saadet.fwsc'

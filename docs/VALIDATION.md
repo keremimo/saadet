@@ -1,5 +1,38 @@
 # Saadet validation — 23 October 2026
 
+## USB recording holds, `FM1B_UAC_DEEP` (measured on an SMK-37 Elite, 5 November 2026)
+
+The recording's ring is written when a render ends, so a long render ran it dry and its packets repeated the last frame.
+`FM1B_UAC_DEEP` (`platform/app.h`) keeps a half more in hand: 128 frames, +2.9 ms of recording latency. The ring stays in
+POOL and grows from 4 to 8 KB. On all five targets flash and low RAM do not change; the engine arena gives up 4 KB.
+
+One Elite, a chord held on Prophet's Unicorn Dreams, recorded with sox. The packages differ by the flag alone: `d9f952fd` was
+built from a clone that first reproduced `303684bd` byte for byte. Both predate `eb5358b`, whose Prophet code differs slightly.
+
+| Package | Flag | Voices | Length | Average load | Longest render | Holds | Flat runs before the corner test |
+|---|---|---|---|---|---|---|---|
+| `303684bd` | off | 8 | 26 s | 62 % | 2151 us | 390 | 490 |
+| `303684bd` | off | 4 | 26 s | 46 % | 2154 us | 129 | 153 |
+| `d9f952fd` | on | 8 | 26 s | 61 % | 2149 us | 0 | 107 |
+| `d9f952fd` | on | 4 | 26 s | 46 % | 2148 us | 0 | 34 |
+| `303684bd` again | off | 8 | 10 s | 61 % | 2195 us | 157 | 181 |
+
+macOS opens the capture at 16 bits even with `-b 24`, and the PCM16 path re-dithers each sample it writes, so a hold arrives
+as the same value +-1 or 2 LSB, not as an exact repeat. A hold is counted as 2 or more steps flat in both channels, with a
+channel moving over 8 LSB a step in the same direction on both sides, and reaching that speed at once (the step next to the
+run at least 0.6 of the step beyond it). That last test was chosen after seeing these takes. A limit of 0.8 also gives 0 with
+the flag on. Against it: 300 holds injected into each 26 s take are found at 88 to 93 %, the takes with the flag on included.
+
+The flat runs left with the flag on have soft shoulders (0.37 to 0.46 where holds measure about 1), so they read as the
+signal's own flat spots. Runs of 4 or more steps with the flag off fall at whole packets from each other (phase
+concentration 1.00), as a hold's end must.
+
+In the host simulation of the ring (`tests/base_port_test.py`) the old ring underruns once a render passes 60 to 70 % of its
+half, and the deep one holds through a whole half.
+
+Not measured: an FM-1, a package built from `eb5358b`, a played performance, and the firmware's own underrun counter, which
+no USB command reads.
+
 ## Limiter level, CZ-1 level and dither (host only, not installed)
 
 Melodee's `a93dd50f` (the limiter from -5.2 to -2 dBFS, CZ-1 down 6 dB) and `94fe79a8` (TPDF dither on the cuts to whole

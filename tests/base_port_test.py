@@ -30,7 +30,6 @@ prefix='''#include <stdint.h>
 #define FELUCCA_UAC 1
 #define FELUCCA_UAC_OUT 1
 #define FELUCCA_UAC_48K 0
-#define FELUCCA_UAC_DEEP 0
 #define FELUCCA_CDC 0
 #define FELUCCA_USB_LAYOUT 0
 #define FELUCCA_USB_PID 1
@@ -48,6 +47,21 @@ static uint8_t volume_reply[2];
 static void e0_send(const uint8_t *p,uint16_t n,uint16_t max){(void)max;memcpy(volume_reply,p,n);}
 '''
 main=r'''
+/* The recording's ring against a render's length: a render every half at the I2S clock, its tap when it ends, a packet
+ * every 1 ms. 20 s; the count starts after the fill has settled into its band. */
+#define HALF_US 2901u
+static uint32_t render_underruns(uint32_t render_us){
+    static int32_t block[2u*HALF_FRAMES];
+    uint32_t next_half=0,tap=0xFFFFFFFFu,next_packet=500u;
+    uac.alt=2;uac.flowing=1;uac.go=0;ua_r=ua_w=0;uac.underruns=0;
+    for(uint32_t t=0;t<20000000u;t++){
+        if(t==1000000u)uac.underruns=0;
+        if(t==next_half){uac_render_start();tap=t+render_us;next_half+=HALF_US;}
+        if(t==tap)uac_tap(block,HALF_FRAMES);
+        if(t==next_packet){uac_packet(ep4tx);next_packet+=1000u;}
+    }
+    return uac.underruns;
+}
 int main(void){
     const int32_t values[]={-8388608,-8388607,-65537,-257,-1,0,1,255,256,65537,8388607};
     for(uint32_t i=0;i<sizeof values/sizeof *values;i++){
@@ -67,7 +81,7 @@ int main(void){
     uac.alt=2;uac.flowing=1;uac_render_start();assert(uac.go);
     uac_tap(samples,128);assert(ua_ring[(ua_w-1)&(UA_N-1)].l==65537);
     /* Skip startup silence; native low bits reach the actual packet. */
-    ua_r=ua_w-128;uac.fill_min=104;
+    ua_r=ua_w-128;uac.fill_min=UA_LO+24u;
     uint32_t count=uac_packet(ep4tx);assert(count==44);
     assert(sd_pcm_read((uint8_t *)ep4tx,3)==65537);
     assert(sd_pcm_read((uint8_t *)ep4tx+3,3)==-65537);
@@ -94,6 +108,13 @@ int main(void){
     ua_host_gain_q15=0;uo_r=0;uo_w=UO_TGT+2;uo.go=0;
     memset(samples,0,sizeof samples);uac_play(samples,32,4096);assert(samples[0]==0&&samples[1]==0);
     ua_host_volume_reset();assert(!ua_host_mute&&ua_host_gain_q15==32768);
+    /* A short render holds in both rings; only the deep ring (FM1B_UAC_DEEP, app.h) lasts through a whole half. */
+    assert(render_underruns(HALF_US/2u)==0);
+#if FELUCCA_UAC_DEEP
+    assert(render_underruns(HALF_US-1u)==0);
+#else
+    assert(render_underruns(HALF_US-1u)>0);
+#endif
     puts("base USB: native PCM16/24 duplex, descriptors and packet paths passed");
 }
 '''
@@ -103,8 +124,9 @@ code=prefix+ring+desc+helper+mock+volume+'\n'.join(function(x) for x in (
     'uint32_t uac_packet(', 'void uo_service(', 'void uac_play('))+main
 with tempfile.TemporaryDirectory() as d:
     path=Path(d);(path/'test.c').write_text(code)
-    subprocess.run([os.getenv('CC','cc'),'-O1','-g','-fsanitize=address,undefined','-fno-sanitize=shift','-o',str(path/'test'),str(path/'test.c')],check=True)
-    subprocess.run([str(path/'test')],check=True)
+    for deep in (0,1):   # both rings: the shipping one, and the one that shows what the test can catch
+        subprocess.run([os.getenv('CC','cc'),f'-DFELUCCA_UAC_DEEP={deep}','-O1','-g','-fsanitize=address,undefined','-fno-sanitize=shift','-o',str(path/'test'),str(path/'test.c')],check=True)
+        subprocess.run([str(path/'test')],check=True)
 # Evaluate the actual object enum/map, excluding retired object identities.
 st=(ROOT/'firmware/src/storage.c').read_text()
 enum=st[st.index('enum { OBJ_SETTINGS'):st.index('\n',st.index('enum { OBJ_SETTINGS'))]

@@ -14,6 +14,10 @@
 #endif
 #define APP_DATA_FAMILY "SAADET"                  /* the SMK-37 store's owner (the base's plat_smk37.c) */
 #define APP_BLOCK 128u
+/* The USB recording's ring is written when a render ends, so a render past about 60 % of its half runs it dry: repeated
+ * frames in the recording, never on the speaker or headphones. A half more in hand: 128 frames, +2.9 ms of recording
+ * latency. tools/base_overlay.py keeps the ring in POOL, where the base's FELUCCA_UAC_RING_ATTR would put it. */
+#define FM1B_UAC_DEEP 1
 #define APP_SPLASH_RGB 0xFBA0u
 #define APP_CANVAS_PX (240u*24u)
 #define APP_SYSEX

@@ -31,6 +31,9 @@ This is an experimental release; the outstanding hardware checks are listed belo
   before the VCA, so a voice that stops quickly takes its DC with it.
 - CZ-1 and FM6: striking a key in its own tail no longer clicks; the tail rings on under the new note. MONO's next note on
   these two engines fades the last one first, 5.8 ms, in place of a jump to silence.
+- USB recordings hold through long renders. Under a heavy voice load they used to repeat a few frames, hundreds of times in
+  half a minute; the recording now keeps one more render in hand, 2.9 ms of added recording latency. The speaker and
+  headphones never had this and do not change.
 - Hold ARP as a sustain pedal that latches, for a drone. The notes you play or let go of while ARP is down keep
   sounding after you let go of it, and the keys play over them, until you press ARP again. Striking a kept note
   again restarts it, and with the arp on, the arp keeps playing the kept notes. Their MIDI note-offs wait for
@@ -100,6 +103,8 @@ Final acceptance of this exact 0.2.0 package on an FM-1 remains to be recorded:
    Record the longest render against the 2902 us deadline and missed renders. Overload cuts no voice now, so this is the only
    proof the budget is safe. Also: tap HOME, the PARTS pads on an SMK-37, a performance saved, power-cycled and loaded, and
    a saved state from 0.1.x coming back as one part.
+9. Record eight Prophet voices over USB on an FM-1 and count the repeated frames. So far measured only on an SMK-37 Elite
+   (docs/VALIDATION.md).
 
 The preparation tools do not install or publish anything. BUILD_INFO.json and SHA256SUMS identify the exact
 package and corresponding source; VERIFICATION.json records the completed automated preparation checks.
