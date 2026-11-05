@@ -695,6 +695,7 @@ static void events_block(uint32_t n)
         RING_PUBLISH();
         midi_in_overflow = 0;
     }
+    voice_fades_end();                                 /* (voice.c) before any part looks for room */
     for (i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
         if ((pr >> i) & 1u) {
@@ -721,6 +722,7 @@ static void events_block(uint32_t n)
         if (i >= trk_n())
             continue;
         engine_block(t);                              /* engine switch: fade, then switch (voice.c) */
+        voice_wait_block(t);                          /* notes whose stolen voices have faded (voice.c) */
         /* ARP turned off, or HOLD released with no key down: drop the latched chord */
         if ((t->armp && !t->p[P_AMODE]) || (t->aholdp && !t->p[P_AHOLD] && !t->arp_phys)) {
             t->nheld = 0;

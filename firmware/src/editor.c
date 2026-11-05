@@ -304,7 +304,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
             for (uint32_t p = 0; p < NPART; p++) {
                 for (uint32_t v = 0; v < NVOICE; v++) {
                     snapshot[20] += trk[p].v[v].active && trk[p].v[v].stage != 4u;
-                    snapshot[21] += trk[p].v[v].active && trk[p].v[v].gate;
+                    snapshot[21] += trk[p].v[v].active && trk[p].v[v].gate && trk[p].v[v].stage != 4u;
                 }
 
             }

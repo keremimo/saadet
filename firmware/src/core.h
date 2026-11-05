@@ -197,7 +197,8 @@ enum { Q_OFF, Q_SNAP, Q_WHITE, Q_ALL, Q_MPC };  /* P_QUANT (seq.c kb_map, midi_m
 typedef struct {
     uint8_t side; /* stereo spread side, retained while sounding */
     uint8_t note, vel, gate, active;
-    uint8_t stage;               /* env: 0 off, 1 attack, 2 decay/sustain, 3 release */
+    uint8_t stage;               /* env: 0 off, 1 attack, 2 decay/sustain, 3 release, 4 given up: fading out */
+    uint8_t fade;                /* stage 4: blocks of the fade still to render (voice.c voice_kill) */
     int32_t env;                 /* Q24 */
     int32_t env_out;             /* last control-rate amplitude, Q15 */
     int32_t pitch16, pitch_cur;  /* 1/16 semitone, with glide */
@@ -268,6 +269,14 @@ typedef struct {                 /* an engine (engines.c ENGINES[]; the eng_*.c 
      * velocity; LFO -> AMP, the matrix's AMP and the fades still apply; ENV is 0) and the voice ends when
      * done() says so (once per control tick, before the render), not at the end of the ADSR's release */
     uint8_t ownenv;
+    /* 1 = note_on restarts the voice's envelopes from nothing (CZ-1, FM6): a sounding voice cannot restart in place, its
+     * level would drop to 0 in one sample. A key struck again in its own tail takes another voice; the tail rings on */
+    uint8_t restarts;
+    /* 1 = a POLY key struck again in its own tail takes another voice and the tail rings on. Without it the voice restarts
+     * in place, for an engine with nothing to jump there (JUNO-106: no velocity, the envelope rises from where it is) */
+    uint8_t rings_on;
+    /* voices of state beyond the cap: a new note starts in one while a voice it took fades */
+    uint8_t spare;
     int (*done)(struct track *t, voice_t *v);
     /* optional: the POLY voice (0..cap-1) for a new note, the engine's own choice (FM6: Dexed's) */
     uint32_t (*alloc)(struct track *t, uint32_t note);
@@ -328,6 +337,7 @@ typedef struct track {
     uint8_t xf_on, xf;           /* fading; blocks of the fade still to render */
     int16_t pe_old[8];           /* P_E0..P_E7 of the sounding engine: the fade renders with these */
     uint8_t xp_n, xp_note[4], xp_vel[4];   /* note-ons during the fade, played on the new engine */
+    uint8_t wait_n, wait_note[NVOICE], wait_vel[NVOICE];   /* note-ons waiting for a given-up voice's fade (voice.c voice_wait) */
     /* modulation matrix (mod.c): MIDI performance controllers of the track's channel, 0..127 */
     uint8_t mw, at;              /* CC1 mod wheel, channel aftertouch */
     uint8_t foot, breath, porta; /* CC4 foot, CC2 breath, CC65 portamento on: FM6's DX7 controllers */

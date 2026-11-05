@@ -110,7 +110,7 @@ static void mode_messages(void)                      /* 4.7 */
     assert(voices());
     cc(0, 120, 0);                                    /* All Sound Off: ignores the pedal, voices gone */
     assert(!held() && !midi_held_count(0) && TSEL->nheld == 0);
-    for (uint32_t i = 0; i < 3u; i++) tick();
+    for (uint32_t i = 0; i < VOICE_FADE_BLOCKS + 2u; i++) tick();
     assert(!voices());
     msg(0x91, 60, 100); msg(0x80, 60, 0); cc(0, 64, 0); assert(held() == 1);   /* old owners are gone */
     msg(0x81, 60, 0); assert(!held());

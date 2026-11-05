@@ -27,6 +27,8 @@ typedef struct {
     int32_t drift, filter_drift, amp_drift, env_drift;
     float filter_prev, amp_prev;
     int32_t glide_pitch, last_pcm;
+    float coupling;                      /* the output coupling's low-pass state (p5_samples) */
+    int32_t vel_amp;                     /* the velocity's gain now, Q15: it moves over P5_VEL_SLEW (p5_render) */
     float coeff_cut, coeff_k, coeff_g[4], coeff_inv;
     uint32_t coeff_valid;
     p5_env_t filter, amp;
@@ -37,7 +39,8 @@ typedef struct {
     uint32_t ia,ib;
     const float *wheel,*wheel_pitch;
 } p5_render_params_t;
-typedef struct { p5_voice_t voice[P5_POLY]; uint32_t lfo; int32_t lfo_value, last_pitch, mod_noise, dc_x1; audio_dc_t dc_y1; float wheel[CTL * P5_OVERSAMPLE], wheel_pitch[CTL * P5_OVERSAMPLE]; uint8_t value[56],input_key[56],base_valid; int16_t base_e[8]; int32_t coarse_a,coarse_b,fixed_b,fine_b; p5_render_params_t base; } p5_part_t;
+#define P5_SLOTS (P5_POLY + 1u)                  /* the cap and engine_t.spare */
+typedef struct { p5_voice_t voice[P5_SLOTS]; uint32_t lfo; int32_t lfo_value, last_pitch, mod_noise; float wheel[CTL * P5_OVERSAMPLE], wheel_pitch[CTL * P5_OVERSAMPLE]; uint8_t value[56],input_key[56],base_valid; int16_t base_e[8]; int32_t coarse_a,coarse_b,fixed_b,fine_b; p5_render_params_t base; } p5_part_t;
 static p5_part_t *p5_part(uint32_t part);
 static p5_patch_t p5_patch[NPART] __attribute__((section(".pool")));
 static uint8_t p5_ready[NPART];
@@ -50,7 +53,7 @@ static p5_patch_t *p5_patch_of(const track_t *t)
 static inline __attribute__((always_inline)) p5_voice_t *p5_voice(track_t *t, voice_t *v)
 {
     p5_part_t *part = p5_part((uint32_t)(t - trk));
-    return part ? &part->voice[(uint32_t)(v - t->v) % P5_POLY] : 0;
+    return part ? &part->voice[(uint32_t)(v - t->v) % P5_SLOTS] : 0;
 }
 /* Integer phase counters retain low-frequency tuning precision. Everything
  * after phase conversion is normalized fp32, including BLEP and saturation. */
@@ -127,6 +130,7 @@ static void p5_note_on(track_t *t, voice_t *v)
             s->z[0]=0.5f;s->z[2]=-0.5f;
         }
         s->noise = (int32_t)(0x5A1793u + v->age * 17u + (uint32_t)(v-t->v) * 101u);
+        s->vel_amp = p[P5_VEL_AMP] ? v->mvel*258 : 32767;    /* a new voice rises from nothing at its own velocity */
     }
     if (!voice_was) {
         p5_part_t *part=p5_part((uint32_t)(t-trk));
@@ -350,9 +354,16 @@ static inline __attribute__((always_inline)) uint32_t p5_wheel_inc(uint32_t base
     if(ratio==1.0f)return base;
     return (uint32_t)fm_minf((float)base*ratio,1932735232.0f);
 }
+/* The output's coupling capacitor, about 5 Hz. The oscillators are unipolar, as the CEM3340's, so the mixer's DC rides
+ * through the filter; without the capacitor it reached the sends, DIST and the USB stems. It sits on each voice, before
+ * the VCA, as on the JUNO-106: on the part's sum, a voice that left quickly left its DC on the capacitor as a thump, and
+ * as a step when the part fell silent (Unicorn Dreams: 19 % of the voice's peak). */
+#define P5_COUPLE 0.0007121256f                  /* 1 - exp(-2 pi 5 / FS) */
+_Static_assert(FS == 44100, "P5_COUPLE: the sample rate");
 static __attribute__((section(".dsp_text"))) void p5_samples(p5_voice_t *restrict s,const uint8_t *restrict p,int32_t *restrict out,uint32_t n,const vmod_t *m,const p5_render_params_t *c)
 {
     int32_t last=0;
+    float coupling=s->coupling;
     uint32_t fixed_pw_b=p5_pw(c->pwm_b);
     const float *dither=dith_row((uint32_t)m->amp1);
     for(uint32_t i=0;i<n;i++){
@@ -388,11 +399,14 @@ static __attribute__((section(".dsp_text"))) void p5_samples(p5_voice_t *restric
             sum+=p5_filter_core(s,p5_fast_softclip(x),fc,c->k,c->filter_gain,!!p[P5_FILTER_REV]);
         }
         sum*=1.0f/P5_OVERSAMPLE;
+        coupling+=(sum-coupling)*P5_COUPLE;
+        sum-=coupling;
         float gain=ae*c->amp_velocity*(1.0f+(float)s->amp_drift/32768.0f);
         float amp=((float)m->amp0+(float)(m->amp1-m->amp0)*time)*(1.0f/32768.0f);
         last=dith_cutf_d(sum*gain*amp*(2.0f*VOICE_FS*AUDIO_ONE),dither[i]);out[i]+=last;
     }
     s->last_pcm=last;
+    s->coupling=fm_flush(coupling);
 }
 
 typedef struct {
@@ -435,35 +449,16 @@ static void p5_join(void)
     for(uint32_t i=0;i<p5_job.n;i++)p5_pending_out[i]+=p5_job.pcm[i];
 }
 #endif
-/* the part after its voices: the output's coupling capacitor, about 5 Hz (y = x - x' + (1 - 2 pi 5 / FS) y'). The
- * oscillators are unipolar, as the CEM3340's, so the mixer's DC rides through the filter and the VCA as it does in the
- * instrument up to its output stage; without the capacitor it reached the sends, DIST and the USB stems. With no
- * voice it starts afresh */
-#define P5_DC_K 1072976913                       /* (1 - 2 pi 5 / FS) << 30 */
-_Static_assert(FS == 44100, "P5_DC_K: the sample rate");
-static __attribute__((noinline,section(".dsp_text"))) void p5_dc_samples(p5_part_t *P,int32_t *out,uint32_t n)
-{
-    int32_t x1=P->dc_x1;audio_dc_t y=P->dc_y1;
-    for(uint32_t i=0;i<n;i++){
-        int32_t x=out[i];
-        y=(audio_dc_t)((int64_t)(x-x1)*256+audio_dc_decay(y,P5_DC_K));
-        x1=x;
-        out[i]=(y+128)>>8;
-    }
-    P->dc_x1=x1;P->dc_y1=y;
-}
+/* the part after its voices: the voice on CPU1 joins */
 static void p5_post(track_t *t,int32_t *out,uint32_t n,uint32_t nr)
 {
+    (void)t;(void)out;(void)n;(void)nr;
 #if MELODEE_DUAL_CORE
     p5_join();
 #endif
-    p5_part_t *P=p5_part((uint32_t)(t-trk)%NPART);
-    if(!P)return;
-    if(!nr){P->dc_x1=P->dc_y1=0;return;}
-    void (*volatile run)(p5_part_t *,int32_t *,uint32_t)=p5_dc_samples;
-    run(P,out,n);
 }
 
+#define P5_VEL_SLEW (32767 / 8)                  /* of the velocity's gain a block: all of it in 5.8 ms */
 /* XIP stalls dominated the first hardware run. This bounded hot path uses
  * the existing RAMTEXT region; startup copies it before audio starts. */
 static void p5_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
@@ -472,11 +467,10 @@ static void p5_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vm
     p5_part_t *part=p5_part((uint32_t)(t-trk)%NPART);
     const uint8_t *p=p5_patch_of(t)->raw;
     if (!s || !part) return;
-    /* A budget victim is already inactive when the common renderer delivers
-     * its final fade block. Fade its last PCM sample to zero instead of running
-     * an extra complete Prophet voice alongside the replacement track. This
-     * keeps the first sample continuous and ends exactly at zero. Engine-switch
-     * fades and active native releases continue through the full synth. */
+    /* A voice that has ended (its release, a panic) has one block left: fade its
+     * last PCM sample, by then far below the voice, to zero rather than run the
+     * synth for nothing. A stolen voice's fade and engine-switch fades are
+     * still active and go through the full synth to their last sample. */
     if(!v->active && !m->amp1){
 #if MELODEE_DUAL_CORE
         p5_join();
@@ -512,7 +506,11 @@ static void p5_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vm
      * 173 Hz) moves its filter at the demo's 1.35 Hz (ten octaves: 0.17 Hz). */
     if (p[P5_LOW_B]) ib >>= 7;
     int32_t filter_velocity=p[P5_VEL_FILTER] ? v->mvel*258 : 32767;
-    int32_t amp_velocity=p[P5_VEL_AMP] ? v->mvel*258 : 32767;
+    /* The velocity's gain moves over 5.8 ms: a sounding voice given a new note in place (MONO, LEGATO, UNISON) keeps
+     * its level, and a lighter or harder note must not step the output in one sample. It rides the amp envelope's ramp. */
+    float velocity_was=(float)s->vel_amp*(1.0f/32768.0f);
+    s->vel_amp+=clamp((p[P5_VEL_AMP] ? v->mvel*258 : 32767)-s->vel_amp,-P5_VEL_SLEW,P5_VEL_SLEW);
+    float velocity_now=(float)s->vel_amp*(1.0f/32768.0f);
     /* Cutoff in Q8 steps of the coefficient table (14.02 per octave, 30 Hz
      * at 0). Fitted to Rev-4 recordings: the Curtis knob puts the lowest C
      * (MIDI 36) near 870 Hz * 2^((raw-67)/15.2); SSI sits ~0.7 octave higher
@@ -522,8 +520,8 @@ static void p5_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vm
     if(p[P5_PRESS_FILTER])cut+=t->at*96;
     const p5_render_params_t *base=&part->base;
     float width_mod=(float)(m->shape-(64<<8))/32768.0f;
-    const p5_render_params_t c={f0,a0,f1,a1,base->cut+(float)cut/256.0f,base->k,base->filter_gain,
-        (float)filter_velocity/32768.0f,(float)amp_velocity/32768.0f,base->env_amount,
+    const p5_render_params_t c={f0,a0*velocity_was,f1,a1*velocity_now,base->cut+(float)cut/256.0f,base->k,base->filter_gain,
+        (float)filter_velocity/32768.0f,1.0f,base->env_amount,
         base->pa_env,base->pa_b,base->pf_env,base->pf_b,base->pw_env,base->pw_b,
         base->pwm_a+width_mod,base->pwm_b+width_mod,base->la,base->lb,base->ln,
         ia,ib,part->wheel,part->wheel_pitch};
@@ -593,7 +591,7 @@ static const engine_t ENG_P5_TEST = {
            {"TUNA",F_SEMI,-24,24,0,0,0},{"TUNB",F_SEMI,-24,24,0,0,0},
            {"PWA",F_INT,-63,63,0,0,0},{"PWB",F_INT,-63,63,0,0,0},
            {"MIXA",F_INT,-63,63,0,0,0},{"MIXB",F_INT,-63,63,0,0,0}},
-    .preset_make=p5_preset_make,.npresets=P5_FACTORY_N+1u,.poly=P5_POLY,.ownenv=1,
+    .preset_make=p5_preset_make,.npresets=P5_FACTORY_N+1u,.poly=P5_POLY,.spare=1,.rings_on=1,.ownenv=1,
     .note_on=p5_note_on,.render=p5_render,.done=p5_done,.block=p5_block,.units=p5_units,.cap=p5_cap,.legato=p5_legato,
     .post=p5_post,
     .knob={P_E0,P_E1,P_RESERVED34,P_RESERVED36}

@@ -41,7 +41,7 @@ typedef struct {
     uint8_t gate;                        /* VCA by gate */
 } j106_render_t;
 typedef struct {
-    j106_voice_t voice[J106_POLY];
+    j106_voice_t voice[J106_POLY + 1u];   /* the cap and engine_t.spare */
     j106_render_t r;
     uint32_t lfo, delay_n;               /* LFO phase; samples since the first key */
     float lfo_out;
@@ -63,7 +63,7 @@ static j106_patch_t *j106_patch_of(const track_t *t)
 static inline __attribute__((always_inline)) j106_voice_t *j106_voice(track_t *t, voice_t *v)
 {
     j106_part_t *part = j106_part((uint32_t)(t - trk));
-    return part ? &part->voice[(uint32_t)(v - t->v) % J106_POLY] : 0;
+    return part ? &part->voice[(uint32_t)(v - t->v) % (J106_POLY + 1u)] : 0;
 }
 static int32_t j106_value(const track_t *t, uint32_t k, uint32_t e)   /* a slider plus the track's offset P_E0+e */
 {
@@ -212,8 +212,8 @@ static void j106_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     j106_voice_t *s = j106_voice(t, v);
     j106_part_t *part = j106_part((uint32_t)(t - trk) % NPART);
     if (!s || !part) return;
-    /* A budget victim is already inactive when its final faded block comes:
-     * fade the last sample to zero rather than rendering another voice. */
+    /* A voice that has ended has one block left: fade its last sample, by then
+     * far below the voice, to zero rather than run the synth for nothing. */
     if (!v->active && !m->amp1) {
         if (n > 1u) {
             int32_t step = s->last_pcm / (int32_t)(n - 1u);
@@ -441,7 +441,7 @@ static const engine_t ENG_J106 = {
              {"TUNE", F_SEMI, -24, 24, 0, 0, 0}, {"ENV", F_INT, -63, 63, 0, 0, 0},
              {"LFO", F_INT, -63, 63, 0, 0, 0}, {"PWM", F_INT, -63, 63, 0, 0, 0},
              {"SUB", F_INT, -63, 63, 0, 0, 0}, {"NOISE", F_INT, -63, 63, 0, 0, 0}},
-    .preset_make = j106_preset_make, .npresets = J106_FACTORY_N + 1u, .poly = J106_POLY, .ownenv = 1,
+    .preset_make = j106_preset_make, .npresets = J106_FACTORY_N + 1u, .poly = J106_POLY, .spare = 1, .ownenv = 1,
     .note_on = j106_note_on, .render = j106_render, .done = j106_done, .block = j106_block,
     .units = j106_units, .cap = j106_cap, .post = j106_post, .stereo = j106_stereo,
     .knob = {P_E0, P_E1, P_E3, P_REL}

@@ -164,7 +164,7 @@ static void chord(uint32_t ch, uint32_t root, uint32_t n)
     static const uint8_t IV[8] = {0, 2, 4, 5, 7, 9, 11, 12};
     for (uint32_t i = 0; i < n; i++)
         msg(0x90, ch, root + IV[i], 100);
-    tick();
+    ticks(VOICE_FADE_BLOCKS + 2u);                   /* the notes that took a voice start when it has faded */
 }
 static void fair(void)
 {

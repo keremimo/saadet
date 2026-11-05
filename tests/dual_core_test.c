@@ -184,6 +184,11 @@ static uint32_t active_voices(const track_t *t)
     for(uint32_t i=0;i<NVOICE;i++)count+=t->v[i].active && t->v[i].stage!=4u;
     return count;
 }
+static void voices_settle(void)   /* the notes that took a voice start when it has faded */
+{
+    int32_t out[2*CTL];
+    for(uint32_t i=0;i<VOICE_FADE_BLOCKS+2u;i++)mix_block(out,CTL);
+}
 static void prophet_allocation(void)
 {
     setup_case(0,0,0);
@@ -191,6 +196,7 @@ static void prophet_allocation(void)
     host_preset(&trk[0],ENGI_PROPHET,0);
     audio_worker_online=0;
     for(uint32_t i=0;i<8;i++)trk_note_on(&trk[0],48+i,100);
+    voices_settle();
     assert(active_voices(&trk[0])==5 && voices_busy()==15);
     setup_case(0,0,0);
     memset(p5_ready,0,sizeof p5_ready);
@@ -200,8 +206,27 @@ static void prophet_allocation(void)
     assert(active_voices(&trk[0])==8 && voices_busy()==VBUDGET);
     /* part B within its share: the part over its own gives up a voice, within the budget */
     for(uint32_t i=1;i<NTRK;i++)trk_note_on(&trk[i],60+i,100);
+    voices_settle();
     assert(active_voices(&trk[0])==7 && voices_busy()<=VBUDGET);
     for(uint32_t i=1;i<NTRK;i++)assert(active_voices(&trk[i])==1);
+    /* The device's budget: a ninth note starts at once in the spare slot, its voice fades on the worker, and the
+     * units never pass the budget the CPU is known to carry */
+    {
+        setup_case(0,0,0);memset(p5_ready,0,sizeof p5_ready);
+        host_preset(&trk[0],ENGI_PROPHET,0);
+        audio_worker_online=1;
+        int16_t budget=settings_budget;settings_budget=18;
+        int32_t out[2*CTL];
+        for(uint32_t i=0;i<8;i++)trk_note_on(&trk[0],48+i,100);
+        for(uint32_t i=0;i<16;i++)mix_block(out,CTL);
+        assert(active_voices(&trk[0])==8 && voices_busy()==16);
+        trk_note_on(&trk[0],70,100);
+        assert(active_voices(&trk[0])==8 && voices_busy()==18 && !trk[0].wait_n);
+        for(uint32_t i=0;i<VOICE_FADE_BLOCKS;i++){mix_block(out,CTL);assert(voices_busy()==18);}
+        mix_block(out,CTL);
+        assert(active_voices(&trk[0])==8 && voices_busy()==16);
+        settings_budget=budget;
+    }
     /* Native factory unison stays at its requested five; an explicit count
      * of eight is allowed only with an online worker. */
     setup_case(0,0,0);memset(p5_ready,0,sizeof p5_ready);
@@ -242,6 +267,7 @@ static void prophet_retire(void)
     assert(p5_cap(&trk[0])==5 && p5_units(&trk[0])==3);
     panic_req=1;events_block(CTL);
     for(uint32_t i=0;i<8;i++)trk_note_on(&trk[0],60+i,100);
+    while(trk[0].wait_n)voices_settle();          /* the eight tails over the smaller budget go first */
     uint32_t held=0;
     for(uint32_t i=0;i<NVOICE;i++)held+=trk[0].v[i].active && trk[0].v[i].gate;
     assert(held==5);

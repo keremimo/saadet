@@ -78,7 +78,7 @@ static const engine_t ENG_CZ = {
         {"-", F_INT, 0, 0, 0, 0, 0}, {"TONE", F_INT, CZ_NATIVE, CZ_NATIVE, CZ_NATIVE, 0, 0},
     },
     .preset_make = cz_preset_make, .npresets = CZ_FACTORY_N + 1u,
-    .ownenv = 1, .done = cz_native_done, .keep = 0x0fu,
+    .ownenv = 1, .restarts = 1, .rings_on = 1, .spare = 1, .done = cz_native_done, .keep = 0x0fu,
     .note_on = cz_native_note_on, .render = cz_native_render, .block = cz_native_block,
     .knob = {P_E0, P_E1, P_E7, P_E7},
 };

@@ -21,6 +21,16 @@ This is an experimental release; the outstanding hardware checks are listed belo
 - The cuts to whole samples on the way out (each engine's output, the part's level, MASTER and the output ceiling) are
   dithered, so a fading note's rounding error no longer follows it. That error sits at the last of the 24 bits, about
   -138 dBFS, so no audible change is expected.
+- A note that takes a voice no longer cuts it. The old voice fades over 23 ms under the new note, which starts at once, on
+  Prophet, JUNO-106 and CZ-1. When several notes take voices at the same moment, or on FM6 with all 16 playing, a note may
+  wait until a fade has hurried out, 5.8 ms at most. Two parts now keep one voice's room for the fade: 8 Prophet voices
+  between them, not 9.
+- Prophet: pressing a key again in its own tail, softer or harder, no longer clicks or drops the tail to the new level in one
+  sample. The tail rings on under a fresh voice. In MONO, LEGATO and UNISON the new velocity's level arrives over 5.8 ms.
+- Prophet voices no longer leave a thump or a click behind them. The output's coupling capacitor now sits on each voice,
+  before the VCA, so a voice that stops quickly takes its DC with it.
+- CZ-1 and FM6: striking a key in its own tail no longer clicks; the tail rings on under the new note. MONO's next note on
+  these two engines fades the last one first, 5.8 ms, in place of a jump to silence.
 - Hold ARP as a sustain pedal that latches, for a drone. The notes you play or let go of while ARP is down keep
   sounding after you let go of it, and the keys play over them, until you press ARP again. Striking a kept note
   again restarts it, and with the arp on, the arp keeps playing the kept notes. Their MIDI note-offs wait for

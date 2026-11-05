@@ -90,6 +90,8 @@ static void voice_tests(void)
 {
     setup();track_t *t=&trk[0];
     for(uint32_t k=0;k<8;k++)trk_note_on(t,60+k,100);
+    for(uint32_t k=0;k<VOICE_FADE_BLOCKS+2u;k++)tick();
+    voice_wait_block(t);
     check("eight notes cap at five sounding Prophet voices",active(t)==5u);
     check("five Prophet voices use fifteen of sixteen shared units",voices_busy()==15u);
     setup();t=&trk[0];p5_patch_t *p=p5_patch_of(t);
@@ -219,7 +221,7 @@ static void stolen_tail_test(void)
     if(!v){failures++;return;}
     p5_voice_t *s=p5_voice(t,v);s->last_pcm=24000;
     uint32_t phase[2]={s->phase[0],s->phase[1]};
-    voice_kill(v);env_tick(t,v);
+    voice_kill(v);while(v->active)env_tick(t,v);
     vmod_t m={0};m.amp0=32767;m.amp1=0;
     int32_t out[CTL]={0};p5_render(t,v,out,CTL,&m);
     int smooth=out[0]==24000&&out[CTL-1]==0;

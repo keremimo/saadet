@@ -276,7 +276,7 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t v)
             midi_chan[ch].cents = (uint8_t)(v > 99u ? 99u : v);
         midi_bend_all(ch);                              /* the new range at once */
         break;
-    case 120:                                           /* the pedal ignored, every voice faded in a block */
+    case 120:                                           /* the pedal ignored, every voice faded out at once */
         mask = midi_targets(ch);
         for (tr = 0; tr < NTRK; tr++)
             if ((mask >> tr) & 1u) {

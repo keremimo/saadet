@@ -14,7 +14,7 @@ typedef struct {
 } cz_voice_t;
 typedef struct { float rate[8], level[8]; uint8_t sustain, end; } cz_native_def_t;
 typedef struct {
-    cz_voice_t v[NPOLY];
+    cz_voice_t v[NPOLY + 1u];   /* the cap and engine_t.spare */
     cz_native_def_t native_def[2][3];
     uint8_t native_raw[128], native_valid;
 } cz_part_t;
@@ -26,5 +26,5 @@ static void cz_init(void)
 static cz_part_t *cz_part(uint32_t part);
 static cz_voice_t *cz_voice(track_t *t, voice_t *v)
 {
-    return &cz_part((uint32_t)(t - trk) % NPART)->v[(uint32_t)(v - t->v) % NPOLY];
+    return &cz_part((uint32_t)(t - trk) % NPART)->v[(uint32_t)(v - t->v) % (NPOLY + 1u)];
 }
