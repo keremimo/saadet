@@ -3,7 +3,8 @@
 /* The interface. Every button is one place (ui_pages.c) and the screen names it; the four knobs edit the four values at
  * the foot of the screen; pressing the place's button again or turning SELECT turns its page; holding the button lists
  * what is inside on the screen and on the keys (a key jumps there, the keys play no notes while it is held), but ARP
- * held is the sustain pedal (seq.c) and opens its place on a tap only. On HOME the four knobs are the sound's macros
+ * held is the sustain pedal (seq.c), which keeps its notes until ARP is pressed again, and opens its place on a tap only
+ * when it keeps none. On HOME the four knobs are the sound's macros
  * and a turn shows its value over the whole screen; holding HOME lists the favourites on the keys. PRESETS browses the sounds and ALGORITHM the engines (the sound loads when they rest); FX opens the
  * library, SAVE stores the sound (pressed again) or a dump that came in. REC latches the notes held, OCT- / OCT+ shift
  * the octave (both: back to 0; both for 5 s: UPDATE MODE, main.c). Startup maintenance (ui_boot.c), the update
@@ -221,6 +222,10 @@ static void ui_button_down(uint32_t b)
     uix.jumped = uix.reveal = 0;
     if (p == PL_ARP) {                                 /* held, ARP is the sustain pedal (seq.c): it opens on a tap. */
         uix.jumped = fm1_in.notes != 0u;               /* Keys already down: the pedal */
+        if (sustain_on()) {                            /* Notes kept: this press ends them, no tap */
+            kb_sustain_end = 1;
+            uix.jumped = 1;
+        }
         return;
     }
     if (uix.held_new)
@@ -236,7 +241,7 @@ static void ui_button_up(uint32_t b)
         lib.erase = uix.erasing = 0;
         uix.jumped = 1;
     }
-    if (p == PL_ARP) {                                 /* a tap: ARP opens, or turns its page (else it was the pedal) */
+    if (p == PL_ARP) {                                 /* a tap: ARP opens, or turns its page (else: the pedal) */
         if (!uix.jumped && fm1_ms - uix.held_t < HOLD_MS[settings_hold % 4u]) {
             if (uix.held_new) ui_open(p);
             else ui_turn_page(p, 1);
@@ -476,9 +481,9 @@ static void vm_state(char *b, uint32_t n)        /* what changes the notes now: 
     if (t->p[P_AHOLD])
         ADD("LATCH");
 #ifdef SAADET_SMK37
-    if ((fm1_in.buttons & kb_pedal) || sd_jack_pedal)
+    if ((fm1_in.buttons & kb_pedal) || sd_jack_pedal || sustain_on())
 #else
-    if (fm1_in.buttons & kb_pedal)
+    if ((fm1_in.buttons & kb_pedal) || sustain_on())
 #endif
         ADD("SUSTAIN");
 #undef ADD
@@ -793,6 +798,8 @@ static void ui_leds(void)
     led_put(nl, panel.btn[place], 1);
     if ((k = arp_led()) != 2u)
         led_put(nl, panel.btn[B_ARP], place == B_ARP ? !k : (int)k);   /* (on ARP's page: dark flashes) */
+    else if (sustain_on())
+        led_put(nl, panel.btn[B_ARP], 1);                    /* the pedal keeps notes */
     led_put(nl, panel.btn[B_REC], TSEL->p[P_AHOLD] != 0);   /* REC: the latch */
     led_put(nl, panel.btn[B_OCTDN], song.octave < 0);
     led_put(nl, panel.btn[B_OCTUP], song.octave > 0);

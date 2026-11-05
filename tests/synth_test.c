@@ -52,6 +52,12 @@ static void persistence(void){
         synth_state_t expected,actual;state_capture(&expected);assert(state_autosave());uint32_t before=erases;assert(state_autosave() && before==erases);
         power_on();syn_saved=0;state_boot();state_capture(&actual);assert(!memcmp(&expected,&actual,sizeof actual));
     }
+    {   /* REC's latch starts off, even from a state an earlier build saved with it on, and is never worth a flash write */
+        synth_state_t old;power_on();state_capture(&old);old.p[P_AHOLD]=1;old.sum=syn_hash(&old,sizeof old-4u);
+        assert(st_save(OBJ_SYNTH,&old,sizeof old)==0);
+        power_on();syn_saved=0;state_boot();assert(!TSEL->p[P_AHOLD]);
+        uint32_t before=erases;TSEL->p[P_AHOLD]=1;assert(state_autosave() && before==erases);TSEL->p[P_AHOLD]=0;
+    }
     TSEL->p[P_SPRD]=63;erase_error=1;assert(!state_autosave() && syn_retry);erase_error=0;assert(state_autosave() && !syn_retry);
     uint32_t saved=syn_saved;TSEL->p[P_SPRD]=71;fail_after=1;assert(!state_autosave());fail_after=-1;
     power_on();state_boot();assert(TSEL->p[P_SPRD]==63 && syn_saved==saved);

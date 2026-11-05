@@ -29,7 +29,7 @@ typedef uint32_t kb_word_t;
 static volatile uint32_t kb_mask, kb_layer, kb_pedal;   /* kb_pedal: the button that is the sustain pedal (ARP) */
 #endif
 #define KB_BIT(k) ((kb_word_t)1 << (k))
-static volatile uint8_t kb_lock;
+static volatile uint8_t kb_lock, kb_sustain_end;        /* kb_sustain_end: ARP pressed again, what it kept ends (seq.c) */
 #define LIM_T AUDIO_Q15(18000)
 #define LIM_HOLD 2048u                   /* 46 ms: longer than a chord's repeat (30.6 ms for C major) */
 static int32_t lim_env = LIM_T;

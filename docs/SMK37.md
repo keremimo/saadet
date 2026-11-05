@@ -14,14 +14,14 @@ The panel guide, [UI.md](UI.md), still applies. This page is what the keyboard a
 | K5 / K6 / K7 / K8 | MASTER / SELECT / ALGORITHM / PRESETS |
 | FX, SCALE, CHORD, NOTE REPEAT, PARA, GLOBE | LIBRARY, SCALE, ENV, LFO, EDIT, GLOBAL |
 | PATCH / BT | HOME / SAVE |
-| ARP / SEQ / SEQ PLAY / SEQ REC | ARP (held: sustain) / CHORD / PLAY / latch |
+| ARP / SEQ / SEQ PLAY / SEQ REC | ARP (held: sustain, kept as a drone until pressed again) / CHORD / PLAY / latch |
 | OCTAVE- / OCTAVE+ | As printed. Both at power-on: hardware calibration |
 | `<` `>` | The previous or next page. On HOME, the previous or next sound. With the pads on SOUNDS or FAVS, the previous or next 16 |
 | KNOB BANK / FADER BANK | Tap: the next bank. Held: the picker, on the screen and the pads |
 | KNOB BANK + FADER BANK together | The pad bank: what the pads are. Tap: the next. Held: the picker |
 | Faders 1..4 | The fader bank's four: at power-on the envelope, ATTACK DECAY SUSTAIN RELEASE on most engines |
 | Pitch and mod wheels | Bend (two semitones; the Prophet and FM6 use their own range) and the mod wheel. On the CZ-1 the mod wheel is a vibrato unless the matrix uses it |
-| Sustain pedal | As ARP held. Plug it in before power-on, or hold it down for a minute once |
+| Sustain pedal | A plain foot pedal: the notes you let go of while it is down sound on until you lift it. ARP's drone is apart from it. Plug it in before power-on, or hold it down for a minute once |
 | TRS jack | MIDI OUT: what USB MIDI sends, without SysEx. There is no MIDI IN on this jack |
 
 ## Banks

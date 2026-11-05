@@ -6,12 +6,15 @@ This is an experimental release; the outstanding hardware checks are listed belo
 
 ## New in 0.2.0
 
-- Hold ARP as a sustain pedal. The notes you let go of keep sounding and new notes join them until you let go
-  of ARP; with REC on, the latch then keeps them. Striking a sustained note again restarts it, and with the arp
-  on, the arp keeps playing the notes you let go of. Their MIDI note-offs wait for ARP too.
-- Tap ARP to open it or turn its page. Holding ARP no longer lists its pages on the keys; the keys play while
-  it is held. HOME's status line shows SUSTAIN while ARP is down.
+- Hold ARP as a sustain pedal that latches, for a drone. The notes you play or let go of while ARP is down keep
+  sounding after you let go of it, and the keys play over them, until you press ARP again. Striking a kept note
+  again restarts it, and with the arp on, the arp keeps playing the kept notes. Their MIDI note-offs wait for
+  ARP too.
+- Tap ARP to open it or turn its page; while notes are kept, that press ends them instead. Holding ARP no longer
+  lists its pages on the keys; the keys play while it is held. HOME's status line shows SUSTAIN while ARP is down
+  or notes are kept, and ARP's LED stays lit while they are kept.
 - The pedal applies to the panel keys. External MIDI notes still follow their own CC64 sustain.
+- REC's latch now starts off at power-on; it no longer returns with the last sound.
 
 ## Fixed in 0.1.1
 
@@ -57,8 +60,9 @@ successful displayed-code iPhone pairing and a MIDI subscription on an earlier b
 
 Final acceptance of this exact 0.2.0 package on an FM-1 remains to be recorded:
 
-1. Hold ARP and play: released notes sustain and stack, letting go ends them (REC on: they latch), with the
-   arp on and off; a quick ARP tap still opens and pages ARP; MIDI out sends the waiting note-offs.
+1. Hold ARP and play: the notes stay after letting go of ARP, other keys play over them and pressing ARP again
+   ends them, with the arp on and off; with nothing kept, a quick ARP tap still opens and pages ARP; MIDI out
+   sends the waiting note-offs. Latch REC, wait for the autosave and power-cycle: REC starts off.
 2. Verify sustained USB/TRS/BLE clock sync under MIDI input load and check ARP swing and gates.
 3. Install and confirm the release identity FM-1_9000200 and the on-screen version.
 4. Play and receive BLE notes, sustain and pitch bend; check that disconnect leaves no stuck notes.

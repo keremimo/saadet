@@ -304,17 +304,21 @@ static void input_off(track_t *t, uint32_t note)
 /* REC (P_AHOLD) with the arp off: the notes the keys let go of keep sounding (and their MIDI note-offs wait) until
  * the next keys go down from none, or REC lets go (seq_block). The arp latches its own (arp_add) */
 static uint32_t kb_latched[NTRK][4];
-/* ARP held (kb_pedal, ui.c) is the sustain pedal: while it is down the notes the keys let go of keep sounding (and
- * their MIDI note-offs wait), the next keys joining them, the arp's too (they stay in its notes); letting it go ends
- * them (seq_block), or REC latches them. A key striking one again ends it first, then starts it anew */
+/* ARP (kb_pedal, ui.c) is the sustain pedal and it latches, a drone: the notes the keys strike or let go of while it
+ * is down keep sounding (and their MIDI note-offs wait) after it lets go, the arp's too (they stay in its notes), and
+ * the keys play over them, until ARP is pressed again (kb_sustain_end, ui.c). A key striking one again restarts it, and
+ * it stays */
 static uint32_t kb_sustained[NTRK][4];
-static int latch_plain(const track_t *t) { return t->p[P_AHOLD] && !t->p[P_AMODE]; }
 #ifdef SAADET_SMK37
-static int pedal_down(void) { return (fm1_in.buttons & kb_pedal) != 0u || sd_jack_pedal; }
-#else
-static int pedal_down(void) { return (fm1_in.buttons & kb_pedal) != 0u; }
+/* the SMK-37's jack is a plain foot pedal, apart from ARP's drone: the notes the keys let go of while it is down sound
+ * on (the arp's too) until it lifts, or REC latches them; a key down when it lifts plays on until it lets go. A key
+ * striking one again ends it first, then starts it anew */
+static uint32_t kb_footed[NTRK][4];
 #endif
+static int latch_plain(const track_t *t) { return t->p[P_AHOLD] && !t->p[P_AMODE]; }
+static int pedal_down(void) { return (fm1_in.buttons & kb_pedal) != 0u; }
 static void note_bit(uint32_t *set, uint32_t x) { set[x >> 5] |= 1u << (x & 31u); }
+static int note_in(const uint32_t *set, uint32_t x) { return (set[x >> 5] >> (x & 31u)) & 1u; }
 static void key_note_off(track_t *t, uint32_t x)
 {
     input_off(t, x);
@@ -327,7 +331,7 @@ static void kept_release(track_t *t, uint32_t *set, int latch)
     if (!(set[0] | set[1] | set[2] | set[3]))
         return;
     for (x = 0; x < 128u; x++)
-        if ((set[x >> 5] >> (x & 31u)) & 1u && !midi_local_held(t, x)) {
+        if (note_in(set, x) && !midi_local_held(t, x)) {
             if (latch)
                 note_bit(kb_latched[trk_index(t)], x);
             else
@@ -336,19 +340,46 @@ static void kept_release(track_t *t, uint32_t *set, int latch)
     memset(set, 0, 4u * sizeof *set);
 }
 static void latch_release(track_t *t) { kept_release(t, kb_latched[trk_index(t)], 0); }
-static void pedal_release(track_t *t) { kept_release(t, kb_sustained[trk_index(t)], latch_plain(t)); }
+static void pedal_release(track_t *t) { kept_release(t, kb_sustained[trk_index(t)], 0); }
+#ifdef SAADET_SMK37
+static void foot_release(track_t *t) { kept_release(t, kb_footed[trk_index(t)], latch_plain(t)); }
+#endif
+/* the pedal keeps x; the latch no longer does, or the next keys would end it */
+static void pedal_keep(track_t *t, uint32_t x)
+{
+    uint32_t tr = trk_index(t);
+    note_bit(kb_sustained[tr], x);
+    kb_latched[tr][x >> 5] &= ~(1u << (x & 31u));
+}
+/* ui.c: the pedal keeps notes: the status line and ARP's LED show it, and ARP's next press ends them */
+static int sustain_on(void)
+{
+    uint32_t i, k;
+    for (i = 0; i < NTRK; i++)
+        for (k = 0; k < 4u; k++)
+            if (kb_sustained[i][k])
+                return 1;
+    return 0;
+}
 
 /* the effect of key k in the FX layer (PF_N none): the first PF_M1 white keys (F3 .. A4) in order, black keys
  * 1..4 (F#3 G#3 A#3 C#4) the track mutes */
 static void key_chord_tone(uint32_t k, track_t *t)
 {
-    uint32_t x = kb_chord[k][kb_chn[k]], held = midi_local_held(t, x), *sus = kb_sustained[trk_index(t)];
-    kb_chn[k]++;
-    if (held) return;
-    if ((sus[x >> 5] >> (x & 31u)) & 1u) {          /* the pedal keeps it: struck again, it ends first */
-        sus[x >> 5] &= ~(1u << (x & 31u));
-        key_note_off(t, x);
+    uint32_t x = kb_chord[k][kb_chn[k]], held = midi_local_held(t, x);
+    int kept = note_in(kb_sustained[trk_index(t)], x);
+#ifdef SAADET_SMK37
+    if (note_in(kb_footed[trk_index(t)], x)) {      /* the foot pedal's: a key has it now */
+        kb_footed[trk_index(t)][x >> 5] &= ~(1u << (x & 31u));
+        kept = 1;
     }
+#endif
+    kb_chn[k]++;
+    if (pedal_down())
+        pedal_keep(t, x);
+    if (held) return;
+    if (kept)                                       /* the pedal keeps it: struck again, it ends first */
+        key_note_off(t, x);
     input_on(t, x, KB_VEL(k));
     midi_out_event(0x09u | (0x90u | trk_midi_ch(trk_index(t))) << 8 | x << 16 | KB_VEL(k) << 24);
 }
@@ -378,8 +409,16 @@ static void key_off(uint32_t k, track_t *t)
         uint32_t x = kb_chord[k][i];
         if (midi_local_held(t, x)) continue;
         if (pedal_down())
-            note_bit(kb_sustained[trk_index(t)], x);
-        else if (latch_plain(t))
+            pedal_keep(t, x);
+        if (note_in(kb_sustained[trk_index(t)], x))
+            continue;
+#ifdef SAADET_SMK37
+        if (sd_jack_pedal) {
+            note_bit(kb_footed[trk_index(t)], x);
+            continue;
+        }
+#endif
+        if (latch_plain(t))
             note_bit(kb_latched[trk_index(t)], x);
         else
             key_note_off(t, x);
@@ -568,6 +607,8 @@ static void events_block(uint32_t n)
     uint32_t clock_mode = midi_clock.mode;
     pr = panic_req;
     panic_req = 0;
+    uint32_t sustain_end = kb_sustain_end;
+    kb_sustain_end = 0;
     if (midi_in_overflow) {                            /* a lost note-off must never leave a held note */
         mi_r = mi_w;
         midi_input_reset();
@@ -583,6 +624,9 @@ static void events_block(uint32_t n)
             trk_all_off(t);
             memset(kb_latched[i], 0, sizeof kb_latched[i]);
             memset(kb_sustained[i], 0, sizeof kb_sustained[i]);
+#ifdef SAADET_SMK37
+            memset(kb_footed[i], 0, sizeof kb_footed[i]);
+#endif
             t->nheld = 0;
             t->arp_phys = 0;
             t->arp_note = 0;
@@ -598,8 +642,12 @@ static void events_block(uint32_t n)
                 t->arp_note = 0;
             }
         }
-        if (!pedal_down())                            /* ARP let go: what the pedal kept ends, or REC latches it */
+        if (sustain_end)                              /* ARP pressed again: what the pedal kept ends */
             pedal_release(t);
+#ifdef SAADET_SMK37
+        if (!sd_jack_pedal)                           /* the foot pedal lifted: what it kept ends, or REC latches it */
+            foot_release(t);
+#endif
         if (!latch_plain(t))                          /* REC let go (or the arp took over): what it latched ends */
             latch_release(t);
         t->armp = t->p[P_AMODE];

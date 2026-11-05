@@ -30,14 +30,15 @@ installer again, press **Find FM-1**, then **Resume installation**.
 | **OCT− / OCT+** | Shift the keyboard an octave. Press both together to return to 0. |
 
 Every button opens a place; tap it again (or turn **SELECT**) to turn its page. Hold a button to list what's
-inside on the keys, then press a key to jump there. Holding **ARP** is the exception: it is a sustain pedal.
+inside on the keys, then press a key to jump there. Holding **ARP** is the exception: it is a sustain pedal that
+latches. Press **ARP** again to let go of what it keeps.
 
 ## 3. Shape the sound
 
 - **EDIT**: the engine's own panel (oscillators, operators, filter and so on). **ENV** and **LFO**: envelopes,
   modulation and the four-route matrix.
 - **SEL** (SCALE): scale and root. **SEQ** (CHORD): one-finger chords, voicing and strum. **ARP**: arpeggiator; hold it
-  to sustain the notes you play, like a pedal.
+  and play to keep those notes as a drone you can play over, until you press it again.
 - **REC** latches the notes you let go of until you play the next chord. **PLAY**: voice mode, glide and unison.
 
 ## 4. Save and find sounds

@@ -90,6 +90,7 @@ static void state_capture(synth_state_t *s)
     s->user_native = t->user_native;
     for (i = 0; i < P_COUNT; i++)
         s->p[i] = t->p[i];
+    s->p[P_AHOLD] = 0;                                  /* REC's latch is a gesture, not the sound: never kept */
     fm6_pack(fm6_patch[0], s->fm6);
     memcpy(s->fm6_fn, fm6_fn[0], FM6_NFN);
     s->cz = cz_patch[0];
@@ -149,6 +150,7 @@ static void state_boot(void)
         const param_desc_t *d = param_desc_of(e, i);
         t->p[i] = (int16_t)clamp(s->p[i], d->min, d->max);
     }
+    t->p[P_AHOLD] = 0;                                  /* (an earlier build's state may hold it on) */
     t->preset = (uint8_t)(ENGINES[e]->npresets ? s->preset % ENGINES[e]->npresets : s->preset);
     t->user = s->user;
     t->mpc_octave=(int8_t)clamp(s->mpc_octave,-3,3);

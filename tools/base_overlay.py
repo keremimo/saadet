@@ -195,6 +195,14 @@ def apply(work, board="fm1", model=None, product="Saadet"):
     p=work/'ble/shim/systimer.c';s=p.read_text()
     s=replace(s,'            tm[i].task = task;', '''            tm[i].task = !SHIM_WIFI && task && !strcmp(task, "sys_timer") ? 0 : task;''')
     p.write_text('/* Saadet timer routing Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
+    if smk:
+        # The main loop starts after the jack's settling window (the boot's own delays are most of it), so the rest level
+        # was never read: it stayed 0, any reading above the step read as the pedal down, sustain on for the first minute.
+        # The first look after settling, as the pitch wheel's centre.
+        p=work/'device/plat_smk37.c';s=p.read_text()
+        s=replace(s,'    if (fm1_in.frames < SMK_SETTLE_FRAMES) {\n        smk_pedal_rest = r;\n        return;\n    }\n    if (!smk_pc) {\n',
+            '    if (fm1_in.frames < SMK_SETTLE_FRAMES)\n        return;\n    if (!smk_pc) {\n        smk_pedal_rest = r;\n')
+        p.write_text('/* Saadet pedal rest fix Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
     p=work/'tools/build.py';s=p.read_text()
     s=replace(s,'("data.bin", "_data_load")):', '("data.bin", "_data_load"), ("audio.bin", "_sd_audio_load")):')
     s=replace(s,'    img = bytearray((OUT / "text.bin").read_bytes())', '    tc("common/bin/objcopy", "-O", "binary", "-j", ".audio_text", elf, OUT / "audio.bin")\n    img = bytearray((OUT / "text.bin").read_bytes())')
