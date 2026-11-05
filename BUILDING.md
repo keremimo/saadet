@@ -57,6 +57,7 @@ revisions in `tools/build_base.py` (fm1-base `6c0b47e4bfc5`, BSP `0f08fcaa6610`)
 `./build.sh` runs that wrapper; it can also run directly. The wrapper fetches
 those revisions if absent, verifies a clean dependency checkout, regenerates
 Saadet's assets through `tools/generate_assets.py` and applies the checked overlay to a disposable build copy.
+A target build also recopies the SDK files it uses, so an old copy in the ignored build folder cannot reach a package.
 
 ```sh
 PYTHON="$PWD/build/venv/bin/python" ./build.sh --no-ble

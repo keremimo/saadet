@@ -579,6 +579,19 @@ and has been removed. Inspection of the pinned SDK's `btstack.a` `sm.c.o`
 table and has no SC public-key/DH-key implementation. Merely enabling the
 runtime configuration flag is insufficient. The SDK checkout was unchanged.
 
+Correction (5 November 2026): only the experiment's source was removed. Its
+`config_le_sm_sub_sc_enable = 1` stayed in the ignored
+`platform/build/ble/sdk` copy, which fm1-base refreshes only while `.copied`
+is absent, so later builds from that checkout used it. They include the
+read-fallback and displayed-passkey installs below and the published Saadet
+0.1.0 (`1fb8e6f59e682d02…`). Saadet 0.1.1 came from a fresh worktree and uses
+the SDK's `0`. Same-commit builds with each value differ only in the boot line
+`fail select SC!!!,need config_le_sm_sub_sc_enable = 1`, printed at `0`, and
+in code addresses; no other code in the BT libraries reads the flag. That line
+is expected, not a fault. Displayed-passkey pairing has not yet been recorded
+on hardware at `0`. `tools/build_base.py` now recopies the SDK files on every
+target build.
+
 Host and target builds pass. The sanitizer protocol fixture and full base
 suite pass (`ALL BASE PORT TESTS PASSED`). Logs:
 `build/base-ble-ios-read-fallback-{host-build,unit-tests,build,tests}.log`.

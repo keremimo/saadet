@@ -80,11 +80,16 @@ generate()
 env=os.environ.copy()
 env.setdefault("JIELI_TOOLCHAIN",str(Path.home()/".jieli/toolchain"))
 env.setdefault("AC79_SDK",str(Path.home()/"fw-AC79_AIoT_SDK"))
+out=ROOT/"platform/build"/f"smk37-{model}" if smk else ROOT/"platform/build"
+target="--host" not in build_args and "--web" not in build_args
+# The base copies its SDK files only while ble/sdk/.copied is absent, and the build receipt ignores them, so an old or
+# edited copy would silently outlive a pin or SDK change. Like the overlay above, the copy is disposable.
+if target and (out/"ble/sdk").exists():
+    shutil.rmtree(out/"ble/sdk")
 before = source_state(ROOT)
 run([sys.executable,work/"tools/build.py",ROOT/"platform",*build_args],env=env,cwd=ROOT)
 
-if "--host" not in build_args and "--web" not in build_args:
-    out=ROOT/"platform/build"/f"smk37-{model}" if smk else ROOT/"platform/build"
+if target:
     stem="saadet-smk37"+SMK_MODELS[model][1] if smk else "saadet"
     if "--no-ble" in build_args:
         stem+="-usb"
