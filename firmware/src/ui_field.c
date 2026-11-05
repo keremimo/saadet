@@ -11,7 +11,7 @@ typedef struct { uint8_t kind, id; const char *label; uint8_t sub; } ui_field_t;
 /* the device's settings (kept with the settings, not the sound): screen sleep, the LEDs' level, the voice budget,
  * MIDI THRU */
 #ifdef SAADET_SMK37
-enum { DEV_SLEEP, DEV_LIGHTS, DEV_BUDGET, DEV_THRU, DEV_VEL, DEV_TRS, DEV_PADS, DEV_MASTER, DEV_N };
+enum { DEV_SLEEP, DEV_LIGHTS, DEV_BUDGET, DEV_THRU, DEV_PART, DEV_VEL, DEV_TRS, DEV_PADS, DEV_MASTER, DEV_N };
 #ifndef SMK_MASTER_GET                             /* (the host tests'; the firmware: platform/instrument.c) */
 static uint32_t smk_master_q12 = 2896u;
 #define SMK_MASTER_GET() smk_master_q12
@@ -19,15 +19,17 @@ static uint32_t smk_master_q12 = 2896u;
 #endif
 static const char *const N_KEYVEL[] = {"NORMAL", "SOFT", "HARD", "FIXED"};
 #else
-enum { DEV_SLEEP, DEV_LIGHTS, DEV_BUDGET, DEV_THRU, DEV_N };
+enum { DEV_SLEEP, DEV_LIGHTS, DEV_BUDGET, DEV_THRU, DEV_PART, DEV_N };
 #endif
 enum { BL_RADIO, BL_RETRY, BL_PICK, BL_DROP, BL_FORGET, BL_ACTION };
 static const char *const N_SLEEP[] = {"NEVER", "5 MIN", "15 MIN", "30 MIN", "60 MIN"};
+static const char *const N_PART[NPART] = {"A", "B"};
 static const param_desc_t DEV_D[DEV_N] = {
     {"SLEEP", F_ENUM, 0, 4, 0, N_SLEEP, 0},
     {"LIGHTS", F_ENUM, 0, LIGHTS_N - 1, LIGHTS_MID, LIGHTS_NAME, 0},
     {"BUDGET", F_INT, 8, 32, VOICE_BUDGET_DEFAULT, 0, "pts"},
     {"THRU", F_ENUM, 0, 1, 0, N_ONOFF, 0},
+    {"PART", F_ENUM, 0, NPART - 1, 0, N_PART, 0},
 #ifdef SAADET_SMK37
     {"VELOCITY", F_ENUM, 0, 3, 0, N_KEYVEL, 0},
     {"TRS OUT", F_ENUM, 0, 1, 1, N_ONOFF, 0},
@@ -62,7 +64,7 @@ static const param_desc_t *field_desc(const ui_field_t *f)
     case FK_FM6FN: if (e == ENGI_FM6 && f->id < FM6_NFN) d = &FM6_FD[f->id]; break;
     case FK_CZ: if (e == ENGI_CZ && f->id < LCZ_NP && CZ_PD[f->id].label) d = &CZ_PD[f->id]; break;
     case FK_J106: if (e == ENGI_J106 && f->id < J106_FIELDS) d = &J106_PANEL[f->id]; break;
-    case FK_DEV: d = f->id < DEV_N ? &DEV_D[f->id] : 0; break;
+    case FK_DEV: d = f->id < DEV_N && (f->id != DEV_PART || trk_n() > 1u) ? &DEV_D[f->id] : 0; break;
     case FK_LIB: d = lib_desc(f->id); break;
 #ifdef SAADET_FM1_BASE
     case FK_BLE: {
@@ -98,6 +100,7 @@ static int32_t field_get(const ui_field_t *f)
     }
     case FK_J106: return j106_get(TSEL, f->id);
     case FK_DEV:
+        if (f->id == DEV_PART) return song.sel;
 #ifdef SAADET_SMK37
         if (f->id == DEV_VEL) return settings_key_vel;
         if (f->id == DEV_TRS) return !settings_trs_off;
@@ -123,6 +126,8 @@ static int field_active(const ui_field_t *f)
     case FK_CZ: return cz_ed_active(cz_patch[ui_tr()].raw, f->id);
     case FK_J106: return j106_ed_active(TSEL, f->id);
     case FK_FM6OP: return f->id == FP_OP || ((fm6_on[ui_tr()] >> (5u - f->sub % 6u)) & 1u);
+    case FK_GLOBAL:                                   /* (the parts' settings that do nothing in this mode) */
+        return f->id == G_PSPLIT ? parts_mode() == PT_SPLIT : f->id == G_PCH2 ? parts_mode() != PT_ONE : 1;
     }
     return 1;
 }
@@ -211,6 +216,7 @@ static int field_step(const ui_field_t *f, int32_t steps)
         break;
     }
     case FK_DEV:                                      /* (as the editor's preferences: saved with the settings) */
+        if (f->id == DEV_PART) { track_select((uint32_t)v); break; }   /* (the state's, not a setting) */
         if (f->id == DEV_SLEEP) scr_put((uint32_t)v);
         else if (f->id == DEV_LIGHTS) settings_lights = (uint8_t)v;
         else if (f->id == DEV_THRU) settings_thru = (uint8_t)v;

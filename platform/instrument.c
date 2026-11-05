@@ -144,8 +144,7 @@ static void sd_smk_poll(void)
 {
     static sd_smk_t s;
     static int32_t sent_bend,sent_mod=-1;
-    track_t *t=TSEL;
-    uint32_t ch=trk_midi_ch(trk_index(t)),token;
+    uint32_t parts=keyboard_parts(),token;
     kb_word_t keys=0,retrig=0;
     sd_smk_read(&s);
     for(uint32_t i=0;i<37u;i++){
@@ -161,18 +160,26 @@ static void sd_smk_poll(void)
     smk_pads_poll();
     if(s.bend!=sent_bend){
         uint32_t v=(uint32_t)(s.bend+8192);
-        sent_bend=s.bend;t->bend_raw=(int16_t)s.bend;
-        if(t->eng_req==ENGI_PROPHET)p5_update_bend(t);
-        else midi_bend_target[trk_index(t)]=midi_bend_scale(s.bend,2*256);
-        sd_midi_out(0x0Eu|(0xE0u|ch)<<8|(v&127u)<<16|(v>>7)<<24);
+        sent_bend=s.bend;
+        for(uint32_t p=0;p<NPART;p++)if((parts>>p)&1u){
+            track_t *t=&trk[p];
+            t->bend_raw=(int16_t)s.bend;
+            if(t->eng_req==ENGI_PROPHET)p5_update_bend(t);
+            else midi_bend_target[p]=midi_bend_scale(s.bend,2*256);
+            sd_midi_out(0x0Eu|(0xE0u|trk_midi_ch(p))<<8|(v&127u)<<16|(v>>7)<<24);
+        }
     }
     if(s.mod!=sent_mod){
-        sent_mod=s.mod;t->mw=(uint8_t)s.mod;
-        sd_midi_out(0x0Bu|(0xB0u|ch)<<8|1u<<16|(uint32_t)s.mod<<24);
+        sent_mod=s.mod;
+        for(uint32_t p=0;p<NPART;p++)if((parts>>p)&1u){
+            trk[p].mw=(uint8_t)s.mod;
+            sd_midi_out(0x0Bu|(0xB0u|trk_midi_ch(p))<<8|1u<<16|(uint32_t)s.mod<<24);
+        }
     }
-    {
+    for(uint32_t p=0;p<NPART;p++){
+        const track_t *t=&trk[p];
         int32_t vib=0;
-        if(s.mod&&t->eng_req==ENGI_CZ){
+        if(((parts>>p)&1u)&&s.mod&&t->eng_req==ENGI_CZ){
             uint32_t routed=0;
             for(uint32_t i=0;i<4u;i++)routed|=t->p[P_M1SRC+3u*i]==MS_MODW;
             if(!routed){
@@ -182,7 +189,7 @@ static void sd_smk_poll(void)
                 vib=(tri*s.mod)>>14;                               /* up to a semitone, Q8 */
             }
         }
-        sd_vib_q8=(int16_t)vib;
+        sd_vib_q8[p]=(int16_t)vib;
     }
     sd_smk_config(settings_key_vel,settings_trs_off);
 }
@@ -220,8 +227,12 @@ void saadet_init(void)
 #endif
     fm6_init();cz_init();
     for(uint32_t i=0;i<G_COUNT;i++)song.g[i]=GP[i].def;
-    track_defaults(TSEL);set_engine_of(TSEL,TRK_DEF[0][0]);apply_preset_to(TSEL,TRK_DEF[0][1]);
-    TSEL->engine=TSEL->eng_req;song.master_q12=2048;
+    for(uint32_t p=0;p<NPART;p++){
+        track_t *t=&trk[p];
+        track_defaults(t);set_engine_of(t,TRK_DEF[p][0]);apply_preset_to(t,TRK_DEF[p][1]);
+        t->engine=t->eng_req;
+    }
+    song.master_q12=2048;
 #ifdef SAADET_SMK37
     /* The engine's guard is .noinit and only firmware/src/main.c sets it, which is not built here: it reads what RAM
      * held, and the last sound is skipped. The base's guard is the real one */

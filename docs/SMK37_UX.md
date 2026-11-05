@@ -21,7 +21,7 @@ Four things are in play at any moment, each with a default that follows the page
 | Axis | Values | Default | Picked by |
 | --- | --- | --- | --- |
 | Place | as the FM-1 (HOME and the ten places, their pages) | - | the place buttons, SELECT, `<` `>` |
-| Pad bank | CHORDS, SOUNDS, FAVS | HOME: CHORDS until chosen, then what was chosen; a page: its own (section 2.4) | KNOB BANK + FADER BANK together: tap (next), held (picker) |
+| Pad bank | CHORDS, SOUNDS, FAVS, PARTS | HOME: CHORDS until chosen, then what was chosen; a page: its own (section 2.4) | KNOB BANK + FADER BANK together: tap (next), held (picker) |
 | Knob bank (K1..K4) | PAGE, MACROS, FILTER, ENV, LFO, ARP, CHORD, MIX | PAGE | KNOB BANK tap (next), held (picker) |
 | Fader bank (faders 1..4) | the same eight | ENV | FADER BANK tap (next), held (picker) |
 
@@ -75,6 +75,10 @@ send no aftertouch. The keys keep playing single notes (or the chord, as CHORD i
 chord and a right-hand line. With CHORD OFF the bottom row plays the degree's single root note, so the pads still
 give the scale under the hand without being a keyboard.
 
+**PARTS** (built after the mocks): pads 1 and 2 pick part A or B, in their engines' colours, the one you are on FILLED; pads 5..8 the
+modes ONE, MULTI, SPLIT and LAYER, the current FILLED; the bottom row the first eight performances, in part A's engine colour, the
+one loaded FILLED. An empty slot, or part B with one part, is dark and does nothing.
+
 **SOUNDS** and **FAVS** (`library_sounds`, `patch_held_favs`): 16 sounds. In LIBRARY, of the list on the screen (FAVOURITES,
 USER, P5, FM6, CZ-1, J106). Elsewhere SOUNDS is the engine playing's own list and FAVS the favourites, opening on the page of
 the sound playing. A page of 16, pad 1 top left to pad 16 bottom right; `<` `>` turn the list's page
@@ -95,12 +99,12 @@ These take the pads for as long as they last, whatever the mode, and give them b
 | BT (SAVE) with a dump waiting, DELETE armed, ERASE armed | every pad WAITING until the press confirms or the arming cancels | as today |
 | SAVE's name | pad 1..16: the letter groups ABC DEF GHI JKL MNO PQR STU VWX YZ 123 456 789 0.# &+/ - and space: a tap sets the letter under the cursor, another within a second cycles it; K2 moves the cursor | SAVE as today |
 | KNOB BANK or FADER BANK held | top row the eight banks (the current ACTIVE, one the engine lacks OFF), the bottom row dark; a tap picks (`pick_banks`) | the bank picker (section 3) |
-| KNOB BANK + FADER BANK held | the first three pads CHORDS SOUNDS FAVS (the current ACTIVE), the rest dark; a tap picks (`pick_pads`) | the pad bank, as a list (section 2.4) |
+| KNOB BANK + FADER BANK held | the first four pads CHORDS SOUNDS FAVS PARTS (the current ACTIVE), the rest dark; a tap picks (`pick_pads`) | the pad bank, as a list (section 2.4) |
 
 ### 2.4 The pad bank: what the pads are
 
 KNOB BANK and FADER BANK pressed together are the pad bank, whichever came first and whatever it had begun. Held: the list on the
-screen and on the first three pads, opening at once; a pad, K1 or `<` `>` picks. Tapped: the next. Until both are up neither is a
+screen and on the first four pads, opening at once; a pad, K1 or `<` `>` picks. Tapped: the next. Until both are up neither is a
 BANK button, so neither bank moves. Letting go keeps what is shown (`pick_pads`).
 
 | Place | The pads |
@@ -185,7 +189,7 @@ fader reaches, through the same field a knob would.
 | --- | --- | --- |
 | KNOB BANK | next knob bank | the bank picker; + a top-row pad: pick; + `<` `>`: previous / next bank |
 | FADER BANK | next fader bank | the same for the faders |
-| KNOB BANK + FADER BANK | next pad bank | the pad bank; + one of the first three pads: pick; + `<` `>`: previous / next |
+| KNOB BANK + FADER BANK | next pad bank | the pad bank; + one of the first four pads: pick; + `<` `>`: previous / next |
 | `<` `>` | one SELECT detent: the previous / next page of the place; on HOME, where SELECT does nothing, the previous / next sound of the engine (PRESETS' step, the sound loads at rest); with the pads on SOUNDS or FAVS, the previous / next 16 | with a BANK button: its bank; with both: the pad bank |
 
 PATCH held lists the favourites (HOME held). LEDs: KNOB BANK lit off PAGE, FADER BANK lit off ENV, both blink while

@@ -50,7 +50,7 @@ SECTIONS
     _pool_end = ALIGN(., 32);
     _resource_start = _pool_end;
     _resource_end = 0x01C74000;
-    ASSERT(_resource_end - _resource_start >= 16384, "Saadet engine bank below 16 KiB")
+    ASSERT(_resource_end - _resource_start >= 32768, "Saadet engine bank below 16 KiB a part")
     _resource_low_start = 0; _resource_low_end = 0;
     _resource_data_start = 0; _resource_data_end = 0;
     _resource_retained_start = 0; _resource_retained_end = 0;

@@ -1,6 +1,6 @@
 # Saadet
 
-A single-part synthesizer fork of Melodee for the **M-VAVE FM-1**, with Bluetooth MIDI.
+A two-part synthesizer fork of Melodee for the **M-VAVE FM-1**, with Bluetooth MIDI.
 
 [Install Saadet](https://keremimo.github.io/saadet/install/) ·
 [Web editor](https://keremimo.github.io/saadet/editor.html) ·
@@ -30,7 +30,8 @@ panel or in the browser, with factory libraries and native SysEx import/export.
 
 Open either graphic for a closer look. The common audio path renders at native
 24-bit precision, independently of the selected USB format. Saadet is a dedicated
-single-part synth; sequencing, multitrack recording and shared insert effects are
+synth of up to two parts, played by MIDI channel, split or layered, with named
+performances; sequencing, multitrack recording and shared insert effects are
 outside its scope.
 
 ## Quick-start cheat sheet

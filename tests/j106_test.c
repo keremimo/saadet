@@ -384,13 +384,21 @@ static void state(void)
     power_on(); host_preset(TSEL, ENGI_FM6, 3);
     synth_state_t s; state_capture(&s);
     uint8_t old[sizeof s]; memset(old, 0, sizeof old);
-    memcpy(old, &s, __builtin_offsetof(synth_state_t, j106));
-    uint32_t size = SYN_SIZE_V1; memcpy(old + 4, &size, 4);
+    {
+        static synth_state1_t o; memset(&o, 0, sizeof o);
+        const synth_part_t *a = &s.part[0];
+        o.magic = SYN_MAGIC1; o.size = SYN_SIZE_V1;
+        memcpy(o.g, s.g, sizeof o.g); o.octave = s.octave;
+        o.engine = a->engine; o.preset = a->preset; o.user_native = a->user_native; o.mpc_octave = a->mpc_octave; o.user = a->user;
+        memcpy(o.p, a->p, sizeof o.p); memcpy(o.fm6, a->fm6, sizeof o.fm6); memcpy(o.fm6_fn, a->fm6_fn, sizeof o.fm6_fn);
+        o.cz = a->cz; o.p5 = a->p5;
+        memcpy(old, &o, __builtin_offsetof(synth_state1_t, j106));
+    }
     uint32_t sum = syn_hash(old, SYN_SIZE_V1 - 4u); memcpy(old + SYN_SIZE_V1 - 4u, &sum, 4);
     synth_state_t up; memcpy(&up, old, sizeof up);
     j106_patch_t init; j106_patch_init(&init);
-    ok("an older state upgrades", state_upgrade(&up, SYN_SIZE_V1) && state_valid(&up) && up.engine == ENGI_FM6 && !memcmp(&up.j106, &init, sizeof init));
-    memcpy(&up, old, sizeof up); up.p[0] ^= 1;
+    ok("an older state upgrades", state_upgrade(&up, SYN_SIZE_V1) && state_valid(&up) && up.part[0].engine == ENGI_FM6 && !memcmp(&up.part[0].j106, &init, sizeof init));
+    memcpy(&up, old, sizeof up); ((synth_state1_t *)&up)->p[0] ^= 1;
     ok(".. not a corrupt one", !state_upgrade(&up, SYN_SIZE_V1));
     assert(!st_save(OBJ_SYNTH, old, SYN_SIZE_V1));
     power_on(); host_preset(TSEL, ENGI_J106, 4); syn_saved = 0; state_boot();

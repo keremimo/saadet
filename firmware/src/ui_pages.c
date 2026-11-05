@@ -26,8 +26,8 @@ typedef struct { const char *name; const ui_stop_t *stop; uint8_t n; } ui_place_
 #define F0 {FK_NONE, 0, 0, 0}
 
 /* the library's lists (ui_lib.c); its fields, SAVE's and an import's */
-enum { LIB_FAV, LIB_USER, LIB_P5, LIB_FM6, LIB_CZ, LIB_J106, LIB_N };
-enum { LF_SOUND, LF_FAV, LF_SLOT, LF_CURSOR, LF_LETTER, LF_SFAV, LF_FIRST, LF_DELETE, LF_ERASE, LF_SEND, LF_N };
+enum { LIB_FAV, LIB_USER, LIB_P5, LIB_FM6, LIB_CZ, LIB_J106, LIB_PERF, LIB_N };
+enum { LF_SOUND, LF_FAV, LF_SLOT, LF_CURSOR, LF_LETTER, LF_SFAV, LF_FIRST, LF_DELETE, LF_ERASE, LF_SEND, LF_PSLOT, LF_N };
 static const ui_stop_t ST_LIB[LIB_N] = {
     {"", "FAVOURITES", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
     {"", "USER", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
@@ -35,9 +35,11 @@ static const ui_stop_t ST_LIB[LIB_N] = {
     {"", "FM6", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
     {"", "CZ-1", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
     {"", "J106", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
+    {"", "PERFORM", PIC_LIB, {FL(LF_SOUND, "SETUP"), F0, F0, FL(LF_DELETE, "DELETE")}},
 };
 static const ui_stop_t ST_SAVE[] = {
     {"", "SAVE", PIC_NONE, {FL(LF_SLOT, "SLOT"), FL(LF_CURSOR, "CURSOR"), FL(LF_LETTER, "LETTER"), FL(LF_SFAV, "FAV")}},
+    {"", "PERFORM", PIC_NONE, {FL(LF_PSLOT, "SLOT"), FL(LF_CURSOR, "CURSOR"), FL(LF_LETTER, "LETTER"), F0}},
 };
 static const ui_stop_t ST_IMPORT[] = {
     {"", "IMPORT", PIC_NONE, {FL(LF_FIRST, "FIRST"), F0, F0, F0}},
@@ -200,6 +202,7 @@ static const ui_stop_t ST_GLO[] = {
 #else
     {"", "OUTPUT", PIC_READOUT, {FT(P_LEVEL, "LEVEL"), FT(P_PAN, "PAN"), FT(P_SPRD, "SPREAD"), F0}},
 #endif
+    {"", "PARTS", PIC_READOUT, {FG(G_PMODE, "MODE"), FD(DEV_PART, "PART"), FG(G_PSPLIT, "SPLIT"), FG(G_PCH2, "B CH")}},
     {"", "TUNING", PIC_READOUT, {FG(G_A4, "A4"), FG(G_TUNE, "FINE"), F0, F0}},
 #ifdef SAADET_FM1_BASE
     {"", "MIDI", PIC_READOUT, {FG(G_ROUTE, "IN CH"), FG(G_DRUMCH, "OUT CH"), FD(DEV_THRU, "THRU"), F0}},
@@ -246,7 +249,8 @@ static ui_place_t place_of(uint32_t p)
     switch (p) {
     case PL_LIB: SET(ST_LIB); break;
     case PL_SAVE:
-        if (sx_staged()) { SET(ST_IMPORT); r.name = "IMPORT"; } else SET(ST_SAVE);
+        if (sx_staged()) { SET(ST_IMPORT); r.name = "IMPORT"; }
+        else { SET(ST_SAVE); if (trk_n() == 1u) r.n = 1; }   /* (a performance is both parts) */
         break;
     case PL_SCL: SET(ST_SCL); break;
     case PL_ENV:

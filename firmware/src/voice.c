@@ -10,11 +10,12 @@
  * share a weighted budget (voice_budget: normally 16, resident audio with CPU1
  * online 18 at 360 MHz, scaled with the clock running; FM6 takes one unit,
  * ordinary engines two, serial Prophet three).
- * A part that starts
- * a voice while the budget is full takes one from any part (voice_victim): the oldest
- * released voice, else the oldest extra UNISON voice, else the oldest held voice of a
- * POLY part that is not its lowest note. A voice taken from another part fades out
- * over one block (stage 4: the envelope goes to 0, the block's amplitude ramp
+ * Each part in use is guaranteed an equal share of the budget and may borrow what the
+ * others are not using. A part that starts a voice while the budget is full takes one
+ * (voice_victim) from a part over its share when it is within its own, else from itself:
+ * the oldest released voice, else the oldest extra UNISON voice, else the oldest held
+ * voice of a POLY part that is not its lowest note. A voice taken from another part
+ * fades out over one block (stage 4: the envelope goes to 0, the block's amplitude ramp
  * declicks it); one of the part's own is restarted in place, as before. Extra UNISON
  * voices only start when there is room. */
 static uint32_t vage;                                   /* voice ages: one clock for every part */
@@ -166,15 +167,32 @@ static uint32_t voice_budget(void)
 #endif
 }
 
-static uint32_t voices_busy(void)                       /* budget units of all parts' sounding voices (not fading) */
+static uint32_t part_busy(const track_t *t)             /* budget units of a part's sounding voices (not fading) */
 {
-    uint32_t p, i, n, u = 0;
-    for (p = 0; p < NPART; p++) {
-        for (i = n = 0; i < NVOICE; i++)
-            n += trk[p].v[i].active && trk[p].v[i].stage != 4u;
-        u += n * voice_units(&trk[p]);
-    }
+    uint32_t i, n = 0;
+    for (i = 0; i < NVOICE; i++)
+        n += t->v[i].active && t->v[i].stage != 4u;
+    return n * voice_units(t);
+}
+static uint32_t voices_busy(void)                       /* .. of all parts' */
+{
+    uint32_t p, u = 0;
+    for (p = 0; p < NPART; p++)
+        u += part_busy(&trk[p]);
     return u;
+}
+/* the parts a voice for self may come from (bit per part): within its share, those over theirs; over it, its own */
+static uint32_t voice_lenders(const track_t *self)
+{
+    uint32_t p, mask = 0, share = voice_budget() / trk_n();
+    if (trk_n() == 1u)
+        return (1u << NPART) - 1u;
+    if (part_busy(self) + voice_units(self) > share)
+        return 1u << (uint32_t)(self - trk);
+    for (p = 0; p < NPART; p++)
+        if (&trk[p] != self && part_busy(&trk[p]) > share)
+            mask |= 1u << p;
+    return mask;
 }
 
 static uint32_t lowest_held(const track_t *t)           /* index of the lowest held note (the bass), NVOICE = none */
@@ -191,12 +209,12 @@ static uint32_t lowest_held(const track_t *t)           /* index of the lowest h
  * Returns its index, *pp its part; NVOICE = none */
 static uint32_t voice_victim(const track_t *self, int soft, track_t **pp)
 {
-    uint32_t p, i, best = NVOICE, cat = 4;
+    uint32_t p, i, best = NVOICE, cat = 4, lenders = voice_lenders(self);
     for (p = 0; p < NPART; p++) {
         track_t *t = &trk[p];
         uint32_t mode = trk_vmode(t);
         uint32_t low = mode == V_POLY ? lowest_held(t) : NVOICE;
-        if (soft && t == self)
+        if ((soft && t == self) || !((lenders >> p) & 1u))
             continue;
         for (i = 0; i < NVOICE; i++) {
             const voice_t *v = &t->v[i];
@@ -712,7 +730,7 @@ static __attribute__((noinline)) void spread_sum(int32_t *out)
  * and the smoothed value the voices play (track_render_audio moves it to the target, a step each block) */
 static int32_t midi_bend_target[NTRK], midi_bend_q8[NTRK];
 #ifdef SAADET_SMK37
-static volatile int16_t sd_vib_q8;                  /* the mod wheel on an engine with no wheel of its own (instrument.c) */
+static volatile int16_t sd_vib_q8[NPART];           /* the mod wheel on an engine with no wheel of its own (instrument.c) */
 #endif
 /* a 14-bit bend (-8192..8191) at range (Q8 semitones) -> Q8 semitones, rounded. Each side is scaled by its own full
  * scale: the centre is 0, the ends exactly +-range */
@@ -803,7 +821,7 @@ static __attribute__((noinline)) uint32_t track_render_audio(track_t *t, int32_t
     /* the bend as TUNE: whole 1/16 semitones (rounded down, so a negative bend's rest is positive too) and the rest,
      * 0..15 Q8 units of 100/256 cent, in 1/4096 (2.367 a cent) */
 #ifdef SAADET_SMK37
-    {int32_t bend_q8=midi_bend_q8[ti]+sd_vib_q8;bend=bend_q8>>4;bend_fine=((bend_q8&15)*2367+1280)/2560;}
+    {int32_t bend_q8=midi_bend_q8[ti]+sd_vib_q8[ti];bend=bend_q8>>4;bend_fine=((bend_q8&15)*2367+1280)/2560;}
 #else
     bend=midi_bend_q8[ti]>>4;bend_fine=((midi_bend_q8[ti]&15)*2367+1280)/2560;
 #endif

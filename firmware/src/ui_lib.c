@@ -17,15 +17,25 @@ static int up_old(uint32_t k);
 static void sx_name(uint32_t i, char *b);                 /* shared_presets.c */
 static int sx_commit(uint32_t first, uint32_t *saved);
 static int library_sysex_send(uint32_t engine, uint32_t index, int user, int live);
+static int perf_used(uint32_t k);                         /* perf.c */
+static uint32_t perf_engine(uint32_t k);
+static void perf_name(uint32_t k, char *b);
+static void perf_label(char *b, uint32_t k);
+static int perf_store(uint32_t k, const char *name);
+static int perf_load(uint32_t k);
+static int perf_delete(uint32_t k);
+static uint8_t perf_now;
 
-typedef struct { uint8_t user, eng; uint16_t idx; } lib_item_t;   /* a factory sound (eng, preset idx), or user slot idx */
+typedef struct { uint8_t user, eng; uint16_t idx; } lib_item_t;   /* user 0: a factory sound (eng, preset idx); 1: user slot
+                                                                   * idx; 2: performance idx (eng: its part A's) */
 #define LIB_ROWS 5u
 static struct {
     uint16_t at[LIB_N];          /* each list's chosen sound */
     uint8_t pending;             /* the chosen sound loads when the knob rests */
     uint32_t t;
     lib_item_t want;
-    uint16_t slot;               /* SAVE: the slot, the name and its cursor, the star for it */
+    uint16_t slot;               /* SAVE: the slot, the name and its cursor, the star for it; a performance's slot */
+    uint8_t pslot;
     uint8_t cursor, star, edited;
     char name[13];
     uint16_t first;              /* IMPORT: the first slot */
@@ -34,7 +44,7 @@ static struct {
     uint32_t delete_t, delete_gen;
 } lib;
 
-static uint32_t lib_engine(uint32_t src) { return eng_vis(src - LIB_P5); }   /* LIB_P5.. -> P5, FM6, CZ-1, JUNO-106 */
+static uint32_t lib_engine(uint32_t src) { return eng_vis(src - LIB_P5); }   /* LIB_P5..LIB_J106 -> P5, FM6, CZ-1, JUNO-106 */
 /* one pass over list src: its count; the sounds from .. from + nw - 1 into w (w[i].eng 255: none) */
 static uint32_t lib_scan(uint32_t src, int32_t from, lib_item_t *w, uint32_t nw)
 {
@@ -42,6 +52,12 @@ static uint32_t lib_scan(uint32_t src, int32_t from, lib_item_t *w, uint32_t nw)
     for (k = 0; k < nw; k++) w[k].eng = 255u;
 #define TAKE(u, en, i) do { if ((int32_t)c >= from && (int32_t)c < from + (int32_t)nw) { \
         lib_item_t *x = &w[c - (uint32_t)from]; x->user = (u); x->eng = (uint8_t)(en); x->idx = (uint16_t)(i); } c++; } while (0)
+    if (src == LIB_PERF) {                           /* the performances in use */
+        for (k = 0; k < PERF_SLOTS; k++)
+            if (perf_used(k))
+                TAKE(2u, perf_engine(k), k);
+        return c;
+    }
     for (e = 0; e < NENG_SHOWN; e++) {               /* the factory sounds */
         uint32_t eng = eng_vis(e), n = ENGINES[eng]->npresets;
         if (src != LIB_FAV && (src == LIB_USER || lib_engine(src) != eng))
@@ -64,13 +80,19 @@ static uint32_t lib_count(uint32_t src) { lib_item_t w; return lib_scan(src, 0, 
 static int lib_item(uint32_t src, uint32_t n, lib_item_t *it) { return n < lib_scan(src, (int32_t)n, it, 1) && it->eng != 255u; }
 static void lib_item_name(const lib_item_t *it, char *b)   /* b holds 24 */
 {
-    if (it->user) up_name(it->idx, b);
+    if (it->user == 2u) perf_name(it->idx, b);
+    else if (it->user) up_name(it->idx, b);
     else str_cpy(b, eng_preset(ENGINES[it->eng], it->idx)->name, 22);
 }
-static int lib_item_star(const lib_item_t *it) { return it->user ? up_favorite(it->idx) : favorite_has(it->eng, it->idx); }
+static int lib_item_star(const lib_item_t *it)
+{
+    return it->user == 2u ? 0 : it->user ? up_favorite(it->idx) : favorite_has(it->eng, it->idx);
+}
 static int lib_item_now(const lib_item_t *it)      /* the sound playing now */
 {
     uint32_t u = user_of(TSEL);
+    if (it->user == 2u)
+        return perf_now == it->idx + 1u;
     return it->user ? u == it->idx : u == USER_NONE && TSEL->eng_req == it->eng && TSEL->preset == it->idx;
 }
 /* the list's position of the sound playing now, or -1 */
@@ -87,7 +109,8 @@ static int32_t lib_find_now(uint32_t src)
 }
 static void lib_load(const lib_item_t *it)
 {
-    if (it->user) up_load(it->idx);
+    if (it->user == 2u) perf_load(it->idx);
+    else if (it->user) up_load(it->idx);
     else if (it->eng != TSEL->eng_req) engine_load_of(TSEL, it->eng, it->idx);
     else apply_preset(it->idx);
 }
@@ -141,9 +164,11 @@ static void lib_delete(void)
     lib_delete_cancel();
     if (!lib_deletable(&it) || it.idx != lib.delete_slot) return;
     lib_item_name(&it, name);
-    rc = up_delete(it.idx);
+    rc = it.user == 2u ? perf_delete(it.idx) : up_delete(it.idx);
+    if (rc == 2 && it.user == 2u) { ui_message("STOP TO SAVE"); return; }
     if (rc && rc != 3) { ui_message("DELETE ERROR"); return; }
-    up_slot_label(msg + 8, it.idx);
+    if (it.user == 2u) perf_label(msg + 8, it.idx);
+    else up_slot_label(msg + 8, it.idx);
     str_cpy(msg + str_len(msg), " ", 2);
     str_cpy(msg + str_len(msg), name, sizeof msg - str_len(msg));
     ui_message(rc == 3 ? "DELETED (RAM)" : msg);
@@ -155,10 +180,28 @@ static void lib_delete(void)
 
 /* --------------------------------------------------------------- SAVE --- */
 static const char LIB_CHARS[] = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-+.#&/";
+static int save_perf(void) { return ui_stop(PL_SAVE) == 1u; }
 static void save_open(void)                        /* the sound's own slot and name, or the first free slot */
 {
     uint32_t u = user_of(TSEL), k;
     char b[24];
+    if (save_perf()) {                             /* a performance: the one playing, or the first free slot */
+        if (perf_now)
+            k = perf_now - 1u;
+        else
+            for (k = 0; k < PERF_SLOTS - 1u && perf_used(k); k++)
+                ;
+        lib.pslot = (uint8_t)k;
+        if (perf_used(k)) {
+            perf_name(k, lib.name);
+        } else {
+            perf_label(b, k);
+            str_cpy(lib.name, b, sizeof lib.name);
+        }
+        lib.cursor = 0;
+        lib.edited = 0;
+        return;
+    }
     if (u != USER_NONE) {
         lib.slot = (uint16_t)u;
     } else {
@@ -185,6 +228,16 @@ static void save_store(void)                       /* SAVE pressed again: the so
     char b[13];
     uint32_t gen = up_gen;
     save_name(b);
+    if (save_perf()) {
+        char l[5];
+        int rc = perf_store(lib.pslot, b);
+        perf_label(l, lib.pslot);
+        if (rc == 2) ui_message("STOP TO SAVE");
+        else if (rc) ui_message("SAVE ERROR");
+        else ui_say("SAVED ", l);
+        ui.force = 1;
+        return;
+    }
     up_ui_named(2u, lib.slot, b);
     if (up_gen != gen && up_used(lib.slot)) {          /* (stored: not refused while playing, no write error) */
         up_favorite_set(lib.slot, lib.star);
@@ -246,6 +299,7 @@ static const param_desc_t *lib_desc(uint32_t id)
     }
     case LF_FAV: case LF_SFAV: d.label = "FAV"; d.fmt = F_ENUM; d.max = 1; d.names = N_STAR; break;
     case LF_SLOT: d.label = "SLOT"; d.max = UP_SLOTS - 1u; break;
+    case LF_PSLOT: d.label = "SLOT"; d.max = PERF_SLOTS - 1u; break;
     case LF_CURSOR: d.label = "CURSOR"; d.max = 11; break;
     case LF_LETTER: d.label = "LETTER"; d.max = (int16_t)(sizeof LIB_CHARS - 2u); break;
     case LF_FIRST: d.label = "FIRST"; d.max = (int16_t)(UP_SLOTS - (sx_stage.count ? sx_stage.count : 1u)); break;
@@ -269,6 +323,7 @@ static int32_t lib_get(uint32_t id)
     case LF_SOUND: return lib.at[src];
     case LF_FAV: return lib_item(src, lib.at[src], &it) && lib_item_star(&it);
     case LF_SLOT: return lib.slot;
+    case LF_PSLOT: return lib.pslot;
     case LF_CURSOR: return lib.cursor;
     case LF_LETTER:
         for (k = 0; LIB_CHARS[k] && LIB_CHARS[k] != (lib.name[lib.cursor] ? lib.name[lib.cursor] : ' '); k++)
@@ -289,7 +344,7 @@ static void lib_step(uint32_t id, int32_t s)
     switch (id) {
     case LF_SOUND: lib_move(src, s); break;
     case LF_FAV:                                       /* (as the editor's favourites: saved with the settings) */
-        if (lib_item(src, lib.at[src], &it)) {
+        if (lib_item(src, lib.at[src], &it) && it.user != 2u) {
             if (it.user) up_favorite_set(it.idx, s > 0);
             else if (favorite_set(it.eng, it.idx, s > 0)) settings_save();
             n = lib_count(src);                         /* (FAVOURITES: the list itself changed) */
@@ -297,6 +352,16 @@ static void lib_step(uint32_t id, int32_t s)
         }
         break;
     case LF_SLOT: lib.slot = (uint16_t)clamp((int32_t)lib.slot + s, 0, (int32_t)UP_SLOTS - 1); break;
+    case LF_PSLOT:
+        lib.pslot = (uint8_t)clamp((int32_t)lib.pslot + s, 0, (int32_t)PERF_SLOTS - 1);
+        if (perf_used(lib.pslot)) {                    /* a slot in use: its name, to keep or change */
+            perf_name(lib.pslot, lib.name);
+            lib.cursor = 0;
+        } else if (!lib.edited) {
+            perf_label(lib.name, lib.pslot);
+            lib.cursor = 0;
+        }
+        break;
     case LF_CURSOR:
         lib.cursor = (uint8_t)clamp((int32_t)lib.cursor + one, 0, 11);
         while (str_len(lib.name) < lib.cursor) str_cpy(lib.name + str_len(lib.name), " ", 2);   /* (a gap: spaces) */
@@ -311,7 +376,7 @@ static void lib_step(uint32_t id, int32_t s)
     case LF_SFAV: lib.star = s > 0; break;
     case LF_FIRST: lib.first = (uint16_t)clamp((int32_t)lib.first + s, 0, lib_desc(LF_FIRST)->max); break;
     case LF_SEND:
-        if (s <= 0 || !lib_item(src, lib.at[src], &it)) break;
+        if (s <= 0 || !lib_item(src, lib.at[src], &it) || it.user == 2u) break;
         if (!usb.config) { ui_message("CONNECT USB TO SEND"); break; }
         ui_message(library_sysex_send(it.eng, it.idx, it.user, lib_item_now(&it)) ?
                    "SYSEX SEND ERROR" : "SOUND SENT");
@@ -340,6 +405,7 @@ static void lib_text(uint32_t id, char *val, char *unit)
     }
     case LF_FAV: case LF_SFAV: str_cpy(val, lib_get(id) ? "ON" : "OFF", 4); break;
     case LF_SLOT: up_slot_label(val, lib.slot); break;
+    case LF_PSLOT: perf_label(val, lib.pslot); break;
     case LF_CURSOR: fmt_int(val, lib.cursor + 1); break;
     case LF_LETTER: {
         char c = LIB_CHARS[lib_get(LF_LETTER)];

@@ -9,10 +9,10 @@
  * the pads show. Pads 0..7 are the top row, 8..15 the bottom, left to right. */
 enum { BK_PAGE, BK_MACROS, BK_FILTER, BK_ENV, BK_LFO, BK_ARP, BK_CHORD, BK_MIX, BK_N };
 static const char *const BK_NAME[BK_N] = {"PAGE", "MACROS", "FILTER", "ENV", "LFO", "ARP", "CHORD", "MIX"};
-enum { PM_CHORDS, PM_SOUNDS, PM_FAVS, PM_N };       /* the pad bank */
-static const char *const PM_NAME[PM_N] = {"CHORDS", "SOUNDS", "FAVS"};
+enum { PM_CHORDS, PM_SOUNDS, PM_FAVS, PM_PARTS, PM_N };   /* the pad bank */
+static const char *const PM_NAME[PM_N] = {"CHORDS", "SOUNDS", "FAVS", "PARTS"};
 /* what the pads are this moment */
-enum { PMAP_CHORDS, PMAP_SOUNDS, PMAP_PICK, PMAP_WAIT, PMAP_LIST, PMAP_FAVS, PMAP_PIANO, PMAP_NAME };
+enum { PMAP_CHORDS, PMAP_SOUNDS, PMAP_PICK, PMAP_WAIT, PMAP_LIST, PMAP_FAVS, PMAP_PIANO, PMAP_NAME, PMAP_PARTS };
 enum { PS_OFF, PS_ON, PS_FILLED, PS_ACTIVE, PS_WAIT, PS_NONE };
 #define SMK_X_KBANK 1u
 #define SMK_X_FBANK 2u
@@ -262,8 +262,11 @@ static uint32_t smk_map(void)
         return uix.held == PL_HOME ? PMAP_FAVS : uix.held == PL_SCL ? PMAP_PIANO : PMAP_LIST;
     if (uix.place == PL_SAVE)
         return PMAP_NAME;
-    return smk_mode_now() == PM_CHORDS ? PMAP_CHORDS : PMAP_SOUNDS;
+    return smk_mode_now() == PM_CHORDS ? PMAP_CHORDS : smk_mode_now() == PM_PARTS ? PMAP_PARTS : PMAP_SOUNDS;
 }
+/* the PARTS pads. Top row: the two parts, then the four modes on the right. Bottom row: the first eight performances */
+#define SMK_PART_MODE0 4u
+static int smk_pads_sounds(void) { return smk_mode_now() == PM_SOUNDS || smk_mode_now() == PM_FAVS; }
 /* the sounds on the pads: FAVS the favourites; in LIBRARY the list it has open; elsewhere the engine's own */
 static uint32_t smk_list(void)
 {
@@ -271,7 +274,7 @@ static uint32_t smk_list(void)
     if (smk_mode_now() == PM_FAVS)
         return LIB_FAV;
     if (uix.place != PL_LIB)
-        for (s = LIB_P5; s < LIB_N; s++)
+        for (s = LIB_P5; s <= LIB_J106; s++)
             if (lib_engine(s) == (uint32_t)TSEL->eng_req)
                 return s;
     return ui_stop(PL_LIB);
@@ -370,6 +373,22 @@ static void smk_pad_down(uint32_t p, uint32_t vel)
     case PMAP_NAME:
         smk_name_tap(p);
         break;
+    case PMAP_PARTS:
+        if (p < NPART) {
+            if (p < trk_n()) {
+                track_select(p);
+                ui_say("PART ", N_PART[p]);
+            }
+        } else if (p >= SMK_PART_MODE0 && p < SMK_PART_MODE0 + PT_N) {
+            song.g[G_PMODE] = (int16_t)(p - SMK_PART_MODE0);
+            ui_say("PARTS ", N_PMODE[p - SMK_PART_MODE0]);
+        } else if (p >= 8u && perf_used(p - 8u)) {
+            char n[PERF_NAME];
+            perf_load(p - 8u);
+            perf_name(p - 8u, n);
+            ui_message(n);
+        }
+        break;
     default:                                       /* PMAP_WAIT: the question is the button's */
         break;
     }
@@ -430,7 +449,7 @@ static void smk_buttons(void)
                 smk_pad_bank((smk.pick_sel + 1u) % PM_N);
             smk.pad_both = 0;
             smk.pick = 0;
-            if (smk_mode_now() != PM_CHORDS) {         /* the pads open on the page of the sound playing */
+            if (smk_pads_sounds()) {                   /* the pads open on the page of the sound playing */
                 uint32_t src = smk_list();
                 int32_t at = lib_find_now(src);
                 if (at >= 0) lib.at[src] = (uint16_t)at;
@@ -474,7 +493,7 @@ static void smk_buttons(void)
         }
     }
     if (d) {
-        if (smk_mode_now() != PM_CHORDS && !uix.br.on) {   /* the next 16 sounds; the chosen one follows, nothing loads */
+        if (smk_pads_sounds() && !uix.br.on) {     /* the next 16 sounds; the chosen one follows, nothing loads */
             uint32_t src = smk_list(), n = lib_count(src), at = n ? lib.at[src] % n : 0u;
             if (n) {
                 int32_t to = (int32_t)(at / 16u) * 16 + d * 16;
@@ -596,6 +615,19 @@ static void smk_lights(void)
         }
         case PMAP_NAME:
             st = down || (p == smk.name_pad && fm1_ms - smk.name_t < SMK_NAME_MS && smk.name_t) ? PS_ACTIVE : PS_ON;
+            break;
+        case PMAP_PARTS:
+            if (p < NPART) {
+                tint = eng_tint(trk[p].eng_req);
+                st = p >= trk_n() ? PS_NONE : down ? PS_ACTIVE : p == song.sel ? PS_FILLED : PS_ON;
+            } else if (p >= SMK_PART_MODE0 && p < SMK_PART_MODE0 + PT_N) {
+                st = down ? PS_ACTIVE : p - SMK_PART_MODE0 == parts_mode() ? PS_FILLED : PS_ON;
+            } else if (p >= 8u && perf_used(p - 8u)) {
+                tint = eng_tint(perf_engine(p - 8u));
+                st = down ? PS_ACTIVE : perf_now == p - 7u ? PS_FILLED : PS_ON;
+            } else {
+                st = PS_NONE;
+            }
             break;
         }
         smk_pad_out[p] = smk_rgb(st, tint);

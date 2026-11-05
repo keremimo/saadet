@@ -235,6 +235,7 @@ static const param_desc_t TP[P_COUNT] = {
     [P_MPCDEG] = PD("DEG", F_INT, 1, 12, 1),         /* its max: the scale's notes (track_desc) */
 };
 
+static const char *const N_PMODE[PT_N] = {"ONE", "MULTI", "SPLIT", "LAYER"};
 static const param_desc_t GP[G_COUNT] = {
     [G_BPM] = PD("BPM", F_BPM, 40, 240, 120),
     [G_SWING] = PD("SWG", F_PCT, 0, 100, 0),
@@ -246,8 +247,8 @@ static const param_desc_t GP[G_COUNT] = {
     [G_RESERVED7] = PD("", F_INT, 0, 127, 0),
     [G_RESERVED8] = PD("", F_INT, 0, 127, 0),
     [G_RESERVED9] = PD("", F_INT, 0, 127, 0),
-    [G_RESERVED10] = PD("", F_INT, 0, 127, 0),
-    [G_RESERVED11] = PD("", F_INT, 0, 127, 0),
+    [G_PMODE] = PE("PARTS", N_PMODE, PT_ONE),
+    [G_PSPLIT] = PD("SPLIT", F_KEY, 0, 127, 60),
     [G_MIDI] = PE("MIDI", N_MIDI_INPUT, 0),
     [G_DRUMCH] = PD("OUT", F_INT, 1, 16, 1),
     [G_ROUTE] = PE("IN", N_ROUTE, 0),          /* (was "--": stored 0 = CH1-4, as MIDI IN always was) */
@@ -260,7 +261,7 @@ static const param_desc_t GP[G_COUNT] = {
     [G_A4] = {"A4", F_INT, A4_MIN, A4_MAX, A4_DEFAULT, 0, "Hz"},
     [G_CLRSEQ] = PD("", F_INT, 0, 0, 0),
     [G_INITSND] = PE("INIT", N_GO, 0),
-    [G_RESERVED24] = PD("", F_INT, 0, 127, 0),
+    [G_PCH2] = PD("B CH", F_INT, 1, 16, 2),
     [G_RESERVED25] = PD("", F_INT, 0, 127, 0),
     [G_RESERVED26] = PD("", F_INT, 0, 127, 0),
     /* the retired shared inserts (global_reserved) */
@@ -430,6 +431,10 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
             *unit = d->unit;
         break;
     }
+    case F_KEY:                                       /* a MIDI note: 60 = C4 */
+        str_cpy(val, N_NOTE[v % 12], 6);
+        fmt_int(val + str_len(val), v / 12 - 1);
+        break;
     case F_FMNOTE:                                    /* the DX7 break point: 0 = A-1, 39 = C3 (MIDI 60) */
         str_cpy(val, N_NOTE[(v + 21) % 12], 6);
         fmt_int(val + str_len(val), (v + 21) / 12 - 1);

@@ -92,10 +92,13 @@ static void power_on(void)
     memset(trk, 0, sizeof trk); memset(&song, 0, sizeof song); memset(&ui, 0, sizeof ui);
     memset(&midi_clock, 0, sizeof midi_clock); midi_input_reset(); midi_forget_track(0);
     up_cache_reset(); native_cache_reset();
-    cz_init();
+    fm6_init(); cz_init();
     for (uint32_t i = 0; i < G_COUNT; i++) song.g[i] = GP[i].def;
-    track_defaults(&trk[0]); set_engine_of(&trk[0], TRK_DEF[0][0]);
-    apply_preset_to(&trk[0], TRK_DEF[0][1]); trk[0].engine = trk[0].eng_req;
+    for (uint32_t p = 0; p < NPART; p++) {
+        track_defaults(&trk[p]); set_engine_of(&trk[p], TRK_DEF[p][0]);
+        apply_preset_to(&trk[p], TRK_DEF[p][1]); trk[p].engine = trk[p].eng_req;
+    }
+    panic_req = 0;
     song.master_q12 = 4096; ui.force = 1;
     panel = PANEL_DEFAULT; settings_init(); palette_set(settings.palette);
     kb_prev = kb_layer = kb_lock = kb_mask = 0;
@@ -107,7 +110,8 @@ static void power_on(void)
 #endif
     memset(host_enc, 0, sizeof host_enc);
     midi_sync_active=0;midi_beat_samples=beat_pos=beat_n=0;
-    kb_strum_pending=midi_strum_pending=0;
+    memset(kb_strum_pending,0,sizeof kb_strum_pending);midi_strum_pending=0;
+    memset(kb_down,0,sizeof kb_down);memset(kb_parts,0,sizeof kb_parts);
     panic_req = 0; mi_r = mi_w = midi_in_overflow = 0;
 }
 static void frame(void)

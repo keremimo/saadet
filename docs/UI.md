@@ -1,7 +1,7 @@
 # The Saadet panel
 
-Saadet is one instrument with four engines: P5 (Prophet-5), FM6 (DX7), CZ-1 and J106 (JUNO-106). The screen takes on
-the colour of the engine that is playing. Every button opens a place, and each place stays where you left it.
+Saadet is an instrument of one or two parts with four engines: P5 (Prophet-5), FM6 (DX7), CZ-1 and J106 (JUNO-106). The
+screen takes on the colour of the engine of the part you are on. Every button opens a place, and each place stays where you left it.
 
 ## Controls
 
@@ -28,12 +28,34 @@ exception: holding it is the sustain pedal, and the keys play.
 | ENV | ENV | The engine's own envelopes (P5 filter and amp; FM6 pitch EG; the CZ-1's six 8-stage envelopes; the J106's one ADSR with its VCA mode, VCF amount and polarity), then the common MOD ENV. |
 | LFO | LFO | The engine's own LFO (P5 LFO, FM LFO, CZ-1 vibrato, J106 LFO rate, delay and its DCO and VCF depths), the common LFO, and the four-route matrix. |
 | EDIT | EDIT | The engine's own panel. P5: oscillators, mixer, filter, poly mod, wheel mod, play. FM6: voice and algorithm, OP1–OP6, macros, function settings. CZ-1: tone, detune, line 1 and line 2. J106: DCO waves and modulation, VCF cutoff and modulation (with the HPF), VCA mode, level and chorus. A value that has no effect on the sound as it stands is shown dim, but you can still edit it. |
-| GLO | GLOBAL | Tempo, output, tuning, MIDI channels and thru, voice budget, display, erase everything. |
+| GLO | GLOBAL | Tempo, output, the parts, tuning, MIDI channels and thru, voice budget, display, erase everything. |
 | SAVE | SAVE | Choose a slot, set the name letter by letter (CURSOR, LETTER), and star it if you like. Press SAVE again to store. |
 | ARP | ARP | Pattern and feel. Its LED flashes with the arp's notes. Tap ARP to open it or turn its page. Hold ARP as a sustain pedal that latches, a drone: the notes you play or let go of while it is down keep sounding after you let go of ARP, and the keys play over them, until you press ARP again. That press ends them instead of opening the page, and what you play while still holding it becomes the new drone. Striking a kept note again restarts it, and it stays. With the arp on, the arp keeps playing the kept notes. While notes are kept, HOME shows SUSTAIN and the LED stays lit (with the arp on, it flashes with the arp). Loading another sound ends them. |
 | SEQ | CHORD | Chord, voicing, strum. |
 | PLAY | PLAY | Voice mode, glide, priority, unison. |
 | REC | (latch) | Holds the notes you let go of until you play the next chord, or until you press REC again. With the arp on, it holds the arp's notes instead. |
+
+## Parts
+
+Saadet plays one part until you ask for two. **GLOBAL > PARTS**: K1 MODE, K2 PART, K3 SPLIT, K4 B CH.
+
+| MODE | The keys | MIDI |
+| --- | --- | --- |
+| ONE | Part A. | IN CH plays part A. Part B is silent and costs nothing. |
+| MULTI | The part you are on. | B CH plays part B; IN CH plays part A (OMNI: every other channel). |
+| SPLIT | Below the SPLIT note part B, from it part A. The split stays on the same key whatever the octave. | The same, on IN CH. |
+| LAYER | Both parts, each with its own chord, arp and transpose. | The same, on IN CH. |
+
+With two parts, **tap HOME on HOME to change part**, and every page, knob, the library and SAVE follow: the header says PART A
+or PART B, and on GLOBAL's OUTPUT the values do: A LEVEL, A PAN, A SPREAD are the part's own. Scale and key mode stay one
+for both; ROOT and SHIFT are each part's. Part B's keys go out on B CH. REC, in SPLIT and LAYER, latches both.
+
+The parts share one voice budget (**GLOBAL > VOICES**): each is guaranteed half. A part may borrow what the other is not using
+and gives voices back, its oldest first, when the other needs them. Overload never cuts a voice.
+
+A **performance** keeps both parts' whole sounds, the mode, the split, B CH and the part you were on, in one of 12 slots. It does
+not keep the tempo or IN CH and OUT CH. With two parts on, SAVE has a second page, PERFORM: turn SELECT to reach it, then choose a
+slot, spell a name and press SAVE. LIBRARY's last list, PERFORM, loads one when K1 rests; K4 and FX delete it.
 
 ## Bluetooth (experimental platform build)
 

@@ -6,6 +6,11 @@ This is an experimental release; the outstanding hardware checks are listed belo
 
 ## New in 0.2.0
 
+- Two parts. GLOBAL > PARTS plays them by MIDI channel, split or layered, and tap HOME to change part. With one part, the
+  default, nothing changes and part B costs nothing. They share the voice budget, half guaranteed to each, the rest lent.
+- Performances: 12 named setups of both parts, saved from SAVE's PERFORM page and loaded from LIBRARY. Backups include them;
+  an older backup restores and leaves them alone. A saved state from before this release loads as one part.
+- Overload no longer cuts voices, whatever a stored Melodee SAFETY setting says.
 - Hold ARP as a sustain pedal that latches, for a drone. The notes you play or let go of while ARP is down keep
   sounding after you let go of it, and the keys play over them, until you press ARP again. Striking a kept note
   again restarts it, and with the arp on, the arp keeps playing the kept notes. Their MIDI note-offs wait for
@@ -25,7 +30,7 @@ This is an experimental release; the outstanding hardware checks are listed belo
 
 ## Included
 
-- One polyphonic synthesizer with Prophet, FM6, CZ-1 and JUNO-106 engines.
+- A polyphonic synthesizer of one or two parts with Prophet, FM6, CZ-1 and JUNO-106 engines.
 - Native tone editing, SysEx import/export, factory sounds and 384 shared user sound slots.
 - Arpeggiator, HOLD, panel sustain, chords, strum, scales, microtonal tuning and MIDI expression.
 - Native 24-bit audio, stereo USB playback and synth-master capture at 44.1 kHz.
@@ -69,6 +74,10 @@ Final acceptance of this exact 0.2.0 package on an FM-1 remains to be recorded:
 5. Reboot and test the remembered outgoing device, retries, manual Disconnect, Radio Off and Forget.
 6. Exercise USB/TRS/BLE together while playing all four engines, and check audio continuity under load.
 7. Save/reopen sounds and settings, and check the normal update and recovery path.
+8. Two parts on the device, with CPU1 online: every pair of engines at the full budget, in LAYER and SPLIT, with USB audio on.
+   Record the longest render against the 2902 us deadline and missed renders. Overload cuts no voice now, so this is the only
+   proof the budget is safe. Also: tap HOME, the PARTS pads on an SMK-37, a performance saved, power-cycled and loaded, and
+   a saved state from 0.1.x coming back as one part.
 
 The preparation tools do not install or publish anything. BUILD_INFO.json and SHA256SUMS identify the exact
 package and corresponding source; VERIFICATION.json records the completed automated preparation checks.

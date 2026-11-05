@@ -3,7 +3,7 @@ wait 1200
 ble connect
 expect ble 1
 tap GLO
-turn SELECT 5 80
+turn SELECT 6 80
 wait 600
 expect ble_device 1
 expect ble_found 1
@@ -79,7 +79,7 @@ mididev 80 40 00
 wait 50
 expect held 0
 # Both BLE inputs use the BLE clock-source choice.
-turn SELECT -5 80
+turn SELECT -6 80
 turn K2 3 80
 mididev fa
 wait 50
@@ -89,7 +89,7 @@ mididev fc
 wait 50
 expect playing 0
 # Forget explicitly clears all bonds and closes both links.
-turn SELECT 4 80
+turn SELECT 5 80
 ble connect
 mididev 90 43 64
 wait 50

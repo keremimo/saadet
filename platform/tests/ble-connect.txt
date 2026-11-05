@@ -3,7 +3,7 @@ wait 1200
 expect ble_state 2
 expect ble_enabled 1
 tap GLO
-turn SELECT 4 80
+turn SELECT 5 80
 shot ble-advertising.png
 ble link
 wait 30

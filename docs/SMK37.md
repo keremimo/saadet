@@ -42,9 +42,11 @@ Hold NOTE REPEAT while moving a fader for an edit that lasts as long as the butt
   its single note. Leaning on a pad strums faster, up to twice the rate set.
 - **SOUNDS**. Sixteen sounds of the engine playing, or of the open list on LIBRARY. A tap loads one at once. `<` `>` turn the page.
 - **FAVS**. The same, with your favourites.
+- **PARTS**. Top row: part A, part B, then on the right the four modes ONE, MULTI, SPLIT and LAYER. Bottom row: the first eight
+  performances. In SPLIT, the chord pads play the part you are on; in LAYER, both.
 
 Press KNOB BANK and FADER BANK together to choose what the pads are. Tap both for the next, or hold both and tap one of the first
-three pads. On HOME your choice stays, even through power-off. On any other page it lasts until the page changes, and the page
+four pads. On HOME your choice stays, even through power-off. On any other page it lasts until the page changes, and the page
 opens with its own pads: SOUNDS on LIBRARY, CHORDS everywhere else. The header names the bank while it differs from the page's own.
 
 | While | The pads are |
@@ -54,7 +56,7 @@ opens with its own pads: SOUNDS on LIBRARY, CHORDS everywhere else. The header n
 | SCALE is held | A piano. A tap sets the root |
 | On SAVE | Letters. A tap sets the letter under the cursor, another within a second cycles it |
 | A BANK button is held | The top row the banks |
-| Both BANK buttons are held | The first three pads: CHORDS, SOUNDS, FAVS |
+| Both BANK buttons are held | The first four pads: CHORDS, SOUNDS, FAVS, PARTS |
 | A question waits (an import, a delete, an erase) | All breathing orange. The answer is the button's |
 
 The pads take the engine's colour. Dark ember: nothing there. Dim: something there. Full: the one in use. White-blue: happening now.

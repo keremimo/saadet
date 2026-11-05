@@ -141,14 +141,14 @@ int main(void)
     uix.stop[PL_GLO] = 0;
     frame();
     bad |= check("GLOBAL: the tempo large", lint_has("120") && lint_has("BPM"));
-    uix.stop[PL_GLO] = 5;
+    uix.stop[PL_GLO] = 6;
     frame();
     turn(EN_K1, 1);
     turn(EN_K2, 1);
     bad |= check("DISPLAY: sleep and lights are the device's", scr_get() == 1u && settings_lights == LIGHTS_HIGH);
     turn(EN_K1, -1);
     turn(EN_K2, -1);
-    uix.stop[PL_GLO] = 4;
+    uix.stop[PL_GLO] = 5;
     frame();
     turn(EN_K1, -1);
     bad |= check("VOICES: the budget is the device's", settings_budget == VOICE_BUDGET_DEFAULT - 1);
@@ -1093,6 +1093,135 @@ int main(void)
 #undef HELD
     }
 #endif
+    {   /* the parts: their page, HOME's tap, the header, a performance saved and loaded from the library */
+        uint32_t parts = 255u;
+        char name[PERF_NAME];
+        power_on();
+        frames(800);
+        ui_open(PL_HOME);
+        frame();
+        press(B_HOME);
+        bad |= check("parts: with one part, HOME's tap changes nothing", song.sel == 0u && !lint_has("PART A"));
+        for (uint32_t i = 0; i < NELEM(ST_GLO); i++)
+            if (str_eq(ST_GLO[i].page, "PARTS"))
+                parts = i;
+        show(PL_GLO, parts);
+        bad |= check(".. its page, with no part to pick yet", parts != 255u && lint_has("ONE") && !lint_has("PART"));
+        bad |= check(".. SAVE has one page", place_of(PL_SAVE).n == 1u);
+        turn(EN_K1, 1); tick();
+        bad |= check(".. K1: MULTI", parts_mode() == PT_MULTI && lint_has("MULTI") && lint_has("PART"));
+        turn(EN_K1, 1); tick(); frame();
+        bad |= check(".. K1: SPLIT, the point by its note", parts_mode() == PT_SPLIT && lint_has("C4"));
+        turn(EN_K3, -1);
+        bad |= check(".. K3 moves it", song.g[G_PSPLIT] == 59 && lint_has("B3"));
+        song.g[G_PSPLIT] = 60;
+        turn(EN_K2, 1);
+        bad |= check(".. K2 picks the part", song.sel == 1u && lint_has("B"));
+        show(PL_ENV, 0);
+        bad |= check(".. a page of the sound names it", lint_has("PART B"));
+        ui_open(PL_GLO);
+        for (uint32_t i = 0; i < NELEM(ST_GLO); i++)
+            if (str_eq(ST_GLO[i].page, "OUTPUT"))
+                uix.stop[PL_GLO] = (uint8_t)i;
+        frame();
+        bad |= check(".. GLOBAL's mix too, on its values", lint_has("B LEVEL") && lint_has("B PAN"));
+        show(PL_GLO, parts);
+        turn(EN_K4, 1);
+        bad |= check(".. K4: its MIDI channel", song.g[G_PCH2] == 3);
+        song.g[G_PCH2] = 2;
+        lint_all("parts split");
+        bad |= check(".. every page fits with the part in the header", 1);
+        ui_open(PL_HOME);
+        frame();
+        press(B_HOME);
+        bad |= check(".. HOME's tap: the other part", song.sel == 0u);
+        frames(1700);
+        bad |= check(".. HOME names it", lint_has("PART A"));
+        song.octave = -2;
+        frame();
+        bad |= check(".. and the octave beside it", lint_has("A OCT-2"));
+        song.octave = 1;
+        frame();
+        bad |= check(".. up too", lint_has("A OCT+1"));
+        song.octave = 0;
+        frame();
+        host_preset(&trk[1], ENGI_FM6, 1);
+        press(B_HOME);
+        frames(1700);
+        bad |= check(".. and takes on its sound", TSEL == &trk[1] && eng_tint(TSEL->eng_req) == 1u && lint_has("PART B"));
+        press(B_HOME);
+        song.g[G_PMODE] = PT_LAYER; tick();
+        press(B_REC);
+        bad |= check(".. REC latches all the keys play", trk[0].p[P_AHOLD] && trk[1].p[P_AHOLD]);
+        press(B_REC);
+        bad |= check(".. and lets go", !trk[0].p[P_AHOLD] && !trk[1].p[P_AHOLD]);
+        ui_open(PL_HOME);
+        uix.stop[PL_SAVE] = 0;                         /* (lint_all left it on the last page) */
+        frame();
+        press(B_SAVE);
+        bad |= check(".. SAVE has a page for a performance", place_of(PL_SAVE).n == 2u && !save_perf());
+        turn(EN_SELECT, 1);
+        bad |= check(".. its first free slot, named after it", save_perf() && lib.pslot == 0u && lint_has("P01") && lint_has("EMPTY SLOT"));
+        press(B_SAVE);
+        perf_name(0, name);
+        bad |= check(".. SAVE stores both parts", perf_used(0) && str_eq(name, "P01") && up_used(0u) == 0);
+        turn(EN_SELECT, -1);
+        bad |= check(".. back on the sound's page", !save_perf());
+        song.g[G_PMODE] = PT_ONE; tick();
+        host_preset(&trk[0], ENGI_CZ, 1);
+        show(PL_LIB, LIB_PERF);
+        lib_open(LIB_PERF);
+        frame();
+        bad |= check(".. the library lists it", lint_has("P01") && lint_has("SETUP"));
+        lib_item_t it;
+        bad |= check(".. it is the one playing", lib_item(LIB_PERF, 0, &it) && it.user == 2u && lib_item_now(&it));
+        lib_load(&it);
+        tick();
+        bad |= check(".. loading brings the layer back", parts_mode() == PT_LAYER && trk[0].eng_req == ENGI_PROPHET && trk[1].eng_req == ENGI_FM6);
+        lint_all("parts layer");
+        show(PL_LIB, LIB_PERF);
+        turn(EN_K4, 1);
+        frame();
+        bad |= check(".. K4 arms its deletion", lib.deleting && lint_has("DELETE P01? PRESS FX"));
+        press(B_FX);
+        frame();
+        bad |= check(".. FX deletes it", !perf_used(0) && !lib.deleting);
+        frame();
+        bad |= check(".. an empty list says so", lint_has("NO SETUPS YET"));
+        song.g[G_PMODE] = PT_SPLIT; song.g[G_PSPLIT] = 60; tick();
+        key_down(0); key_down(7); tick();
+        bad |= check(".. the keys split, each lit for its part", gates() == 2u && trk[1].v[0].gate + trk[1].v[1].gate + trk[1].v[2].gate + trk[1].v[3].gate +
+                     trk[1].v[4].gate + trk[1].v[5].gate + trk[1].v[6].gate + trk[1].v[7].gate == 1u && key_track(0) == &trk[1] && key_track(7) == &trk[0]);
+        key_up(0); key_up(7); tick();
+#ifdef SAADET_SMK37
+        {   /* the PARTS pads */
+            ui_open(PL_HOME);
+            settings_pad_bank = PM_PARTS;
+            frame();
+            bad |= check("SMK parts: a pad bank", smk_map() == PMAP_PARTS && smk_mode_now() == PM_PARTS);
+            smk_pad_down(1u, 100u);
+            bad |= check(".. a pad picks part B", song.sel == 1u);
+            smk_pad_down(0u, 100u);
+            bad |= check(".. another part A", song.sel == 0u);
+            smk_pad_down(SMK_PART_MODE0 + PT_LAYER, 100u); tick();
+            bad |= check(".. a pad picks the mode", parts_mode() == PT_LAYER);
+            frame();
+            bad |= check(".. lit: the part and the mode", smk_pad_out[0] == smk_rgb(PS_FILLED, eng_tint(trk[0].eng_req)) &&
+                         smk_pad_out[SMK_PART_MODE0 + PT_LAYER] == smk_rgb(PS_FILLED, eng_tint(TSEL->eng_req)) && smk_pad_out[8] == smk_rgb(PS_NONE, eng_tint(TSEL->eng_req)));
+            bad |= check(".. a performance to load", !perf_store(0, "PAD ONE"));
+            song.g[G_PMODE] = PT_MULTI; tick();
+            frame();
+            bad |= check(".. a performance lights its pad", smk_pad_out[8] == smk_rgb(PS_FILLED, eng_tint(perf_engine(0))));
+            smk_pad_down(8u, 100u); tick();
+            bad |= check(".. and loads it", parts_mode() == PT_LAYER);
+            song.g[G_PMODE] = PT_ONE; tick();
+            frame();
+            smk_pad_down(1u, 100u);
+            bad |= check(".. one part: part B's pad does nothing", song.sel == 0u);
+            settings_pad_bank = PM_CHORDS;
+        }
+#endif
+    }
     printf(bad ? "UI TEST FAILED\n" : "UI test passed\n");
     return bad;
 }

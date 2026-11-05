@@ -106,10 +106,10 @@ static void track_defaults(track_t *t)
         t->p[i] = TP[i].def;
 }
 
-/* select track i (the editor): its sound from now on */
+/* select part i (the panel, the editor): its sound from now on; with one part, part A stays */
 static void track_select(uint32_t i)
 {
-    if (i >= NTRK || i == song.sel)
+    if (i >= trk_n() || i == song.sel)
         return;
     song.sel = (uint8_t)i;
     sync_reload = 1;

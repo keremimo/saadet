@@ -6,12 +6,13 @@
  * main firmware's template after it kept byte for byte as it was read (this build has no template, but must not
  * lose one), so either firmware can be installed over the other.
  *
- * The last state (OBJ_SYNTH, an A/B pair repurposed from the main firmware's first project): the track's sound (engine,
- * preset, user slot, parameters, its FM6 patch and functions, CZ-1 tone, Prophet program), the globals (BPM, the
- * effects, CLK ..) and the octave. Saved when it changed and the FM-1 rests (sound.c autosave_poll: untouched for
+ * The last state (OBJ_SYNTH, an A/B pair repurposed from the main firmware's first project): both parts' sounds (engine,
+ * preset, user slot, parameters, its FM6 patch and functions, CZ-1 tone, Prophet program, JUNO-106 tone), the globals
+ * (BPM, CLK, the parts mode ..), the octave and the part selected. Saved when it changed and the FM-1 rests (sound.c autosave_poll: untouched for
  * a few seconds, nothing sounding), restored at power-on (state_boot). There is no project: what you hear at
  * power-on is what you left. */
 #include "settings_persist.c"
+static void perf_boot(void);                      /* perf.c, at the end */
 /* Bounded main-loop transfer scratch, shared by SysEx, backups and updater. */
 static union { uint32_t align; uint8_t raw[8192]; } transfer_scratch __attribute__((section(".pool")));
 static uint32_t transfer_gen;
@@ -46,8 +47,26 @@ static int tmpl_take(const uint8_t *b, uint32_t len)
 }
 
 /* ----------------------------------------------------------- the last state --- */
-#define SYN_MAGIC 0x31534453u                     /* "SDS1" */
+#define SYN_MAGIC 0x32534453u                     /* "SDS2": both parts */
+#define SYN_MAGIC1 0x31534453u                    /* "SDS1": one part, before the parts */
+typedef struct {                                  /* a part's whole sound and its place in the mix */
+    uint8_t engine, preset, user_native; int8_t mpc_octave; uint16_t user, rsv;
+    int16_t p[P_COUNT];
+    uint8_t fm6[FM6_PACKED], fm6_fn[FM6_NFN];
+    cz_patch_t cz;
+    p5_patch_t p5;
+    j106_patch_t j106;
+} synth_part_t;
 typedef struct {
+    uint32_t magic, size;
+    int16_t g[G_COUNT];
+    int8_t octave;
+    uint8_t sel;                                  /* the part selected */
+    uint8_t rsv[2];
+    synth_part_t part[NPART];
+    uint32_t sum;
+} synth_state_t;
+typedef struct {                                  /* SDS1: what came before the parts */
     uint32_t magic, size;
     int16_t g[G_COUNT];
     int8_t octave;
@@ -58,9 +77,9 @@ typedef struct {
     p5_patch_t p5;
     j106_patch_t j106;                            /* appended with JUNO-106: an older state ends before it */
     uint32_t sum;
-} synth_state_t;
+} synth_state1_t;
 /* the size of a state from before JUNO-106, its sum straight after the Prophet program */
-#define SYN_SIZE_V1 ((((uint32_t)__builtin_offsetof(synth_state_t, j106) + 3u) & ~3u) + 4u)
+#define SYN_SIZE_V1 ((((uint32_t)__builtin_offsetof(synth_state1_t, j106) + 3u) & ~3u) + 4u)
 static synth_state_t syn_scratch __attribute__((section(".pool")));
 static uint32_t syn_saved;                        /* hash of the state as flash holds it (0: unknown) */
 static uint8_t syn_retry;
@@ -73,78 +92,41 @@ static uint32_t syn_hash(const void *p, uint32_t n)   /* FNV-1a */
     return h;
 }
 
-static void state_capture(synth_state_t *s)
+/* part k's sound as it stands */
+static void part_capture(uint32_t k, synth_part_t *s)
 {
-    const track_t *t = &trk[0];
+    const track_t *t = &trk[k];
     uint32_t i;
     memset(s, 0, sizeof *s);
-    s->magic = SYN_MAGIC;
-    s->size = sizeof *s;
-    for (i = 0; i < G_COUNT; i++)
-        s->g[i] = song.g[i];
-    s->octave = song.octave;
     s->engine = t->eng_req;
     s->preset = t->preset;
     s->user = t->user;
-    s->mpc_octave=t->mpc_octave;
+    s->mpc_octave = t->mpc_octave;
     s->user_native = t->user_native;
     for (i = 0; i < P_COUNT; i++)
         s->p[i] = t->p[i];
     s->p[P_AHOLD] = 0;                                  /* REC's latch is a gesture, not the sound: never kept */
-    fm6_pack(fm6_patch[0], s->fm6);
-    memcpy(s->fm6_fn, fm6_fn[0], FM6_NFN);
-    s->cz = cz_patch[0];
+    fm6_pack(fm6_patch[k], s->fm6);
+    memcpy(s->fm6_fn, fm6_fn[k], FM6_NFN);
+    s->cz = cz_patch[k];
     s->p5 = *p5_patch_of(t);
     s->j106 = *j106_patch_of(t);
-    s->sum = syn_hash(s, sizeof *s - 4u);
 }
-/* len bytes of a stored state -> today's (an older one gains the INIT tone, as a fresh JUNO-106 part); 0: neither */
-static int state_upgrade(synth_state_t *s, uint32_t len)
+static int part_valid(const synth_part_t *s)
 {
-    uint32_t sum, at = (uint32_t)__builtin_offsetof(synth_state_t, j106);
-    if (len == sizeof *s) return 1;
-    if (len != SYN_SIZE_V1 || s->magic != SYN_MAGIC || s->size != SYN_SIZE_V1) return 0;
-    memcpy(&sum, (const uint8_t *)s + SYN_SIZE_V1 - 4u, 4);
-    if (sum != syn_hash(s, SYN_SIZE_V1 - 4u)) return 0;
-    memset((uint8_t *)s + at, 0, sizeof *s - at);
-    j106_patch_init(&s->j106);
-    s->size = sizeof *s;
-    s->sum = syn_hash(s, sizeof *s - 4u);
-    return 1;
-}
-
-_Static_assert(sizeof(synth_state_t) <= ST_PAYLOAD_MAX, "last state fits its flash object");
-static int state_valid(const synth_state_t *s)
-{
-    if (s->magic != SYN_MAGIC || s->size != sizeof *s || s->sum != syn_hash(s, sizeof *s - 4u) ||
-        (s->user>UP_SLOTS || s->user_native>1u || s->rsv || s->octave < -3 || s->octave>3 || s->mpc_octave < -3 || s->mpc_octave>3) ||
+    if (s->user > UP_SLOTS || s->user_native > 1u || s->rsv || s->mpc_octave < -3 || s->mpc_octave > 3 ||
         !eng_ok(s->engine) || !cz_patch_valid(s->cz.raw) || !p5_patch_valid(&s->p5) || !j106_patch_valid(&s->j106) ||
         !fm6_fn_ok(s->fm6_fn)) return 0;
     for (uint32_t i = 0; i < FM6_PACKED; i++) if (s->fm6[i] > 127u) return 0;
     return 1;
 }
-
-/* power-on, after melodee_init: the last state in place of the default sound. A boot that crashed or hung within
- * 30 s (bootguard) skips it: a state that cannot load does not lock the FM-1 out */
-static void state_boot(void)
+/* part k takes the sound s (valid). Audio IRQs off around the track, then the FM6 patch as the panel writes it */
+static void part_apply(uint32_t k, const synth_part_t *s)
 {
-#if MELODEE_FLASH
-    synth_state_t *s = &syn_scratch;
-    track_t *t = &trk[0];
-    uint32_t i, e;
-    int n;
-    if (!flash_ok || (n = st_load(OBJ_SYNTH, s, sizeof *s)) < 0 || !state_upgrade(s, (uint32_t)n) || !state_valid(s))
-        return;
-    if (bootguard.failed) {
-        ui_message("LAST SOUND SKIPPED");
-        return;
-    }
-    e = s->engine;
-    if (!eng_ok(e)) return;
+    track_t *t = &trk[k];
+    uint32_t i, e = s->engine;
+    uint8_t v[FP_SIZE + 1u];
     fm1_irq_off();                                      /* the audio ISR must not see half a sound */
-    for (i = 0; i < G_COUNT; i++)
-        song.g[i] = (int16_t)clamp(s->g[i], GP[i].min, GP[i].max);
-    song.octave = (int8_t)clamp(s->octave, -3, 3);
     t->eng_req = (uint8_t)e;
     for (i = 0; i < P_COUNT; i++) {
         const param_desc_t *d = param_desc_of(e, i);
@@ -153,20 +135,104 @@ static void state_boot(void)
     t->p[P_AHOLD] = 0;                                  /* (an earlier build's state may hold it on) */
     t->preset = (uint8_t)(ENGINES[e]->npresets ? s->preset % ENGINES[e]->npresets : s->preset);
     t->user = s->user;
-    t->mpc_octave=(int8_t)clamp(s->mpc_octave,-3,3);
+    t->mpc_octave = (int8_t)clamp(s->mpc_octave, -3, 3);
     t->user_native = s->user_native;
-    cz_patch[0] = s->cz;
-    p5_patch[0] = s->p5; p5_ready[0] = 1;
-    j106_patch[0] = s->j106; j106_ready[0] = 1;
-    memcpy(fm6_fn[0], s->fm6_fn, FM6_NFN);
-    fm6_fn[0][FN_ENGINE] = FM6_MODERN; /* old renderer IDs load through MSFA */
+    cz_patch[k] = s->cz;
+    p5_patch[k] = s->p5; p5_ready[k] = 1;
+    j106_patch[k] = s->j106; j106_ready[k] = 1;
+    memcpy(fm6_fn[k], s->fm6_fn, FM6_NFN);
+    fm6_fn[k][FN_ENGINE] = FM6_MODERN; /* old renderer IDs load through MSFA */
     cz_track_accept(t);
     fm1_irq_on();
-    {
-        uint8_t v[FP_SIZE + 1u];
-        fm6_unpack(s->fm6, v);
-        fm6_set_patch(0, v);
+    fm6_unpack(s->fm6, v);
+    fm6_set_patch(k, v);
+}
+static void state_capture(synth_state_t *s)
+{
+    uint32_t i;
+    memset(s, 0, sizeof *s);
+    s->magic = SYN_MAGIC;
+    s->size = sizeof *s;
+    for (i = 0; i < G_COUNT; i++)
+        s->g[i] = song.g[i];
+    s->octave = song.octave;
+    s->sel = song.sel;
+    for (i = 0; i < NPART; i++)
+        part_capture(i, &s->part[i]);
+    s->sum = syn_hash(s, sizeof *s - 4u);
+}
+/* the parts settings a state from before them starts with: one part, part A its sound, part B as at power-on */
+static void state_parts_default(synth_state_t *s)
+{
+    s->g[G_PMODE] = GP[G_PMODE].def;
+    s->g[G_PSPLIT] = GP[G_PSPLIT].def;
+    s->g[G_PCH2] = GP[G_PCH2].def;
+    s->sel = 0;
+    part_capture(1u, &s->part[1]);
+}
+/* len bytes of a stored state -> today's (an older one's sound becomes part A; one from before JUNO-106 gains the INIT
+ * tone, as a fresh JUNO-106 part); 0: neither */
+static int state_upgrade(synth_state_t *s, uint32_t len)
+{
+    synth_state1_t old;
+    synth_part_t *a = &s->part[0];
+    uint32_t i, sum;
+    if (len == sizeof *s && s->magic == SYN_MAGIC) return 1;
+    if (len != sizeof old && len != SYN_SIZE_V1) return 0;
+    memcpy(&old, s, len);
+    if (old.magic != SYN_MAGIC1 || old.size != len) return 0;
+    memcpy(&sum, (const uint8_t *)&old + len - 4u, 4);
+    if (sum != syn_hash(&old, len - 4u)) return 0;
+    if (len == SYN_SIZE_V1)
+        j106_patch_init(&old.j106);
+    memset(s, 0, sizeof *s);
+    s->magic = SYN_MAGIC;
+    s->size = sizeof *s;
+    for (i = 0; i < G_COUNT; i++)
+        s->g[i] = old.g[i];
+    s->octave = old.octave;
+    a->engine = old.engine; a->preset = old.preset; a->user_native = old.user_native;
+    a->mpc_octave = old.mpc_octave; a->user = old.user; a->rsv = old.rsv;
+    memcpy(a->p, old.p, sizeof a->p);
+    memcpy(a->fm6, old.fm6, sizeof a->fm6);
+    memcpy(a->fm6_fn, old.fm6_fn, sizeof a->fm6_fn);
+    a->cz = old.cz; a->p5 = old.p5; a->j106 = old.j106;
+    state_parts_default(s);
+    s->sum = syn_hash(s, sizeof *s - 4u);
+    return 1;
+}
+
+_Static_assert(sizeof(synth_state_t) <= ST_PAYLOAD_MAX - 32u, "last state fits its flash object");
+static int state_valid(const synth_state_t *s)
+{
+    if (s->magic != SYN_MAGIC || s->size != sizeof *s || s->sum != syn_hash(s, sizeof *s - 4u) ||
+        s->octave < -3 || s->octave > 3 || s->sel >= NPART || s->rsv[0] || s->rsv[1]) return 0;
+    for (uint32_t k = 0; k < NPART; k++) if (!part_valid(&s->part[k])) return 0;
+    return 1;
+}
+
+/* power-on, after melodee_init: the last state in place of the default sounds. A boot that crashed or hung within
+ * 30 s (bootguard) skips it: a state that cannot load does not lock the FM-1 out */
+static void state_boot(void)
+{
+#if MELODEE_FLASH
+    synth_state_t *s = &syn_scratch;
+    uint32_t i;
+    int n;
+    if (!flash_ok || (n = st_load(OBJ_SYNTH, s, sizeof *s)) < 0 || !state_upgrade(s, (uint32_t)n) || !state_valid(s))
+        return;
+    if (bootguard.failed) {
+        ui_message("LAST SOUND SKIPPED");
+        return;
     }
+    fm1_irq_off();
+    for (i = 0; i < G_COUNT; i++)
+        song.g[i] = (int16_t)clamp(s->g[i], GP[i].min, GP[i].max);
+    song.octave = (int8_t)clamp(s->octave, -3, 3);
+    song.sel = trk_n() > 1u ? s->sel : 0u;
+    fm1_irq_on();
+    for (i = 0; i < NPART; i++)
+        part_apply(i, &s->part[i]);
     state_capture(s);                                   /* (what flash holds, as this build reads it) */
     syn_saved = s->sum;
     sync_reload = 1;
@@ -230,6 +296,7 @@ static void persist_boot(void)                    /* before settings_init / pane
         } else persist_old = (uint8_t)st_exists(OBJ_SETTINGS);
     }
     up_boot();                                     /* user presets */
+    perf_boot();                                   /* performances */
 #endif
 }
 
@@ -320,3 +387,5 @@ static int persist_erase_all(void)
     return -1;
 #endif
 }
+
+#include "perf.c"

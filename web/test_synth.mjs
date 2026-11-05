@@ -9,7 +9,7 @@ const html=readFileSync(new URL('editor.html',import.meta.url),'utf8');
 const proto=html.split('/*PROTO-BEGIN*/')[1].split('/*PROTO-END*/')[0];
 const E=vm.runInNewContext(`${proto};({parse,CMD,engineOrder,FM6,CZ,P5,J106,bank,cleanPatch,libraryFile})`,{setTimeout,clearTimeout,setInterval,clearInterval,console});
 const info=E.parse[E.CMD.INFO](Array.from(readFileSync('build/host/synth-info.bin')));
-assert(info.synthOnly && info.ntrk===1 && info.nstep===0);
+assert(info.synthOnly && info.ntrk===2 && info.nstep===0);
 assert(info.fm6 && info.cz && info.prophet && info.backupCaps===3);
 assert.equal(info.uiCaps&16,0);assert.equal(info.shared.total,384);assert.equal(info.native,null);
 assert.equal(E.engineOrder(info.engines).map(i=>info.engines[i]).join(),'PROPHET,FM6,CZ-1,JUNO-106');
@@ -40,12 +40,12 @@ await E.bank.put(libraryPeer,5,{name:'PATCH A22',engine:21,p:Array(info.pcount).
 assert.throws(()=>E.cleanPatch({engine:10,p:[]}));
 const clean=E.cleanPatch({engine:3,p:[],pattern:[[60,1]],grid:[[1,1]]});assert(!clean.pattern && !clean.grid);
 const exported=E.libraryFile('bank',[clean],{}).patches[0];assert(!('pattern' in exported) && !('grid' in exported));
-const file={format:'saadet-backup',version:1,objects:BACKUP_IDS.map(id=>{
+const file={format:'saadet-backup',version:2,objects:BACKUP_IDS.map(id=>{
  const bytes=readFileSync(`build/host/archive-${id}.bin`);return {id,size:bytes.length,crc:bkCrc(bytes),data:bytes.toString('base64')};
 })};
 readBackup(file);
 const manifest=[1,0,BACKUP_IDS.length,...file.objects.flatMap(o=>[o.id,...bkU32(o.size),...bkU32(o.crc)])];
-assert.equal(bkManifest(manifest).length,24);
+assert.equal(bkManifest(manifest).length,30);
 const committed=[],writes=new Map(),staged=new Map();
 async function peer([cmd,a]){
  if(cmd===65)return manifest;
@@ -58,7 +58,7 @@ async function peer([cmd,a]){
  return [op,id,0];
 }
 const captured=await captureBackup(peer,'test');assert.deepEqual(captured.objects,file.objects);
-await restoreBackup(peer,file);assert.deepEqual(committed.slice(-2),[1,32]);assert.equal(committed.length,24);
+await restoreBackup(peer,file);assert.deepEqual(committed.slice(-2),[1,32]);assert.equal(committed.length,30);
 for(const o of file.objects)assert.deepEqual(writes.get(o.id),Buffer.from(o.data,'base64'));
 const reject=structuredClone(file);reject.objects[0].id=2;assert.throws(()=>readBackup(reject));
 assert.throws(()=>readBackup({...file,format:'felucca-backup'}));
@@ -66,6 +66,11 @@ for(const id of [1,28,32]){
  const bad=structuredClone(file),o=bad.objects.find(o=>o.id===id);let b=Buffer.from(o.data,'base64');if(!b.length)b=Buffer.alloc(3716);b[0]^=1;o.size=b.length;o.crc=bkCrc(b);o.data=b.toString('base64');assert.throws(()=>readBackup(bad));
 }
 let commits=0;await assert.rejects(restoreBackup(async([cmd,a])=>cmd===65?manifest:(a[0]===2&&(commits++),[a[0],a[1],a[0]===0&&a[1]===32?2:0]),file));assert.equal(commits,0);
+/* a backup from before the performances still reads; a performance bank must be one */
+{const old={...file,version:1,objects:file.objects.filter(o=>o.id<=32)};assert.equal(readBackup(old).objects.length,24);
+ const short=structuredClone(file);short.objects.pop();assert.throws(()=>readBackup(short));
+ const bad=structuredClone(file),o=bad.objects.find(o=>o.id===33),b=Buffer.alloc(16);o.size=16;o.crc=bkCrc(b);o.data=b.toString('base64');assert.throws(()=>readBackup(bad));
+ assert.equal(bkManifest([1,0,24,...file.objects.filter(o=>o.id<=32).flatMap(o=>[o.id,...bkU32(o.size),...bkU32(o.crc)])]).length,24);}
 for(const n of [0,1,7,8,256]){const bytes=Uint8Array.from({length:n},(_,i)=>i*137);assert.deepEqual(bkUnpack(bkPack(bytes),n),bytes);}
 assert.throws(()=>bkUnpack([128,0],1));assert.throws(()=>bkManifest(manifest.slice(0,-1)));
 console.log('SAADET WEB: real INFO, four tabs, DOM references, 384 slots, archive round trip, preflight, corrupt/foreign rejection passed');

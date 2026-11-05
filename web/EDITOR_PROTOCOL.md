@@ -9,22 +9,23 @@ Frames use `F0 7D 46 4C command arguments… F7`. All payload bytes are seven-bi
 safe. Signed parameter values use two least-significant-first seven-bit bytes,
 offset by 8192. Replies echo the command. WATCH enables parameter/reload pushes.
 
-INFO identifies `SAADET`, one part, zero steps, synth marker `53 01` (hex), native
+INFO identifies `SAADET`, two parts, zero steps, synth marker `53 01` (hex), native
 engine capabilities, and shared-library marker `55 01` with a two-byte total of
 384 slots. Engine identities remain Prophet 19, FM6 12, CZ-1 15 and SID 3;
 JUNO-106 is 21. After the shared-library marker, `4A 01 15 16 60 1A` announces
 JUNO-106: engine 21, favourites namespace 22, command 96 and 26 fields. Engine 20
 is reserved (the Prophet's user namespace). Reserved identities do not expose
-additional engines or parts.
+additional engines or parts. Globals 10, 11 and 24 are the parts mode (0 ONE, 1 MULTI, 2 SPLIT, 3 LAYER), the split note
+and part B's MIDI channel. With the mode at ONE, only part zero can be selected.
 
 | Commands | Purpose |
 |---|---|
 | 1–5, 8, 10 | INFO, parameter get/set/dump/descriptors, preset selection, factory names |
 | 16–21 | Legacy seven-bit user-slot compatibility; use command 80 for the full library |
 | 22–25 | WATCH, CHANGED, RELOAD and PING |
-| 27–29, 31–32 | Single-part compatibility, restricted to part zero; no additional tracks |
+| 27–29, 31–32 | Parts: select one, read and set the other part's mix and parameters |
 | 34–38 | UI state/preferences/palettes and favorites |
-| 65–67 | Saadet archive inventory, chunk read and staged restore |
+| 65–67 | Saadet archive inventory, chunk read and staged restore; objects 33–38 hold the performances |
 | 68–71 | Native FM6 transfers |
 | 72 | Audio diagnostics |
 | 78 | Legacy native-slot compatibility |

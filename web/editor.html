@@ -201,6 +201,7 @@
 
   <section class="panel" id="p-sound" data-tab="sound" data-dev hidden>
     <div class="browser" id="browser">
+      <label id="partbox" hidden><span data-t="part"></span><br><select id="part"><option value="0">A</option><option value="1">B</option></select></label>
       <label><span data-t="engine"></span><br><select id="engine"></select></label>
       <label><span data-t="presets"></span><br><select id="preset" size="8"></select></label>
       <div>
@@ -545,7 +546,7 @@ const CZ = {
 };
 /* user preset bank: name 1..12 printable ASCII, a 16-step pattern of (note, flags 1 acc 2 slide 4 tie) */
 const UP = { NAME_MAX: 12, PAT: 16, LIST_MAX: 16 };
-const F = { INT: 0, PCT: 1, BIPCT: 2, TIME: 3, LFOHZ: 4, CUTOFF: 5, DB: 6, SEMI: 7, ENUM: 8, BPM: 9, NOTE: 10, ONOFF: 11, OCT: 12, STEPS: 13, TONE: 17 };
+const F = { INT: 0, PCT: 1, BIPCT: 2, TIME: 3, LFOHZ: 4, CUTOFF: 5, DB: 6, SEMI: 7, ENUM: 8, BPM: 9, NOTE: 10, ONOFF: 11, OCT: 12, STEPS: 13, TONE: 17, KEY: 18 };
 
 const v14enc = (v) => { const u = Math.max(-8192, Math.min(8191, Math.round(v))) + 8192; return [u & 0x7F, (u >> 7) & 0x7F]; };
 const v14dec = (lo, hi) => (lo | (hi << 7)) - 8192;
@@ -633,7 +634,7 @@ const parse = {
     if (trailer.length >= 4 && [0, 16].includes(trailer[0]) && trailer[1] === 0x55 && trailer[2] === 1)
       o.uiCaps = trailer[3] & 63;                 /* tagged preferences; never interpret old PR bytes as SONG */
     o.motionMax = 0; o.chance = false; o.backupCaps = 0;
-    o.synthOnly = o.nstep === 0 && o.ntrk === 1 && trailer[7] === 0x53 && trailer[8] === 1;
+    o.synthOnly = o.nstep === 0 && (o.ntrk === 1 || o.ntrk === 2) && trailer[7] === 0x53 && trailer[8] === 1;
     if (o.synthOnly) {
       o.backupCaps = trailer[4] === 0x42 && trailer[5] === 1 ? trailer[6] & 3 : 0;
       o.fm6 = trailer[9] === 0x46 && trailer[10] === 1 ? {factory:trailer[11], bank:trailer[12]} : null;
@@ -1054,6 +1055,7 @@ function fmtValue(d, v) {
       return [(ms10 / 10000).toFixed(2), "s"];
     }
     case F.LFOHZ: { const h = 0.05 * Math.pow(800, (v & 127) / 127); return [h < 10 ? h.toFixed(2) : h.toFixed(1), "Hz"]; }
+    case F.KEY: return [`${["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"][v % 12]}${Math.trunc(v / 12) - 1}`, ""];   /* a MIDI note: 60 = C4 */
     case F.TONE: {                                 /* core.h fx_tone_hz: below 0 a high cut, above a low cut */
       const a = Math.min(63, Math.abs(v)), hz = v > 0 ? 150 + Math.floor(a * a * 1130 / 3969) : 120 + Math.floor((64 - a) * (64 - a) * 2520 / 3969);
       return v ? [`${v < 0 ? "Dark" : "Thin"} ${hz}`, "Hz"] : ["Full", ""];
@@ -1837,7 +1839,7 @@ const reservedFm4 = (engines, e) => e === 1 && (engines || [])[1] === "-";   /* 
 const engineLabel = (engines, e) => (e === 1 && (engines || [])[1] === "-" ? "FM6" : (engines || [])[e] ?? String(e));
 
 const paramReserved = id => (id>=33 && id<=36) || (id>=45 && id<=48);
-const globalReserved = id => (id>=4 && id<=11) || (id>=24 && id<=26);
+const globalReserved = id => (id>=4 && id<=9) || (id>=25 && id<=26);
 /* Optional preferences: old firmware is never probed with unknown commands. */
 async function readDevicePreferences(rq, info, names, previous = null) {
   if (!info.uiCaps) return null;
@@ -1987,7 +1989,7 @@ const TEXT = {
 
     other: "English", connect: "接続", disconnect: "切断", mock: "モック（実機なし）",
     sound: "音色", engine: "エンジン", presets: "プリセット", initSound: "音色を初期化",
-    track: "トラック",
+    track: "トラック", part: "パート",
     saveFile: "ファイルに保存", loadFile: "ファイルを読み込む", projects: "プロジェクト",
     load: "読込", save: "保存", used: "使用中", empty: "空", unknown: "—",
     steps: "ステップ", reload: "再読み込み", clearSeq: "シーケンスを消去",
@@ -2081,7 +2083,7 @@ const TEXT = {
 
     other: "日本語", connect: "Connect", disconnect: "Disconnect", mock: "Mock device (no hardware)",
     sound: "Sound", engine: "Engine", presets: "Presets", initSound: "Init sound",
-    track: "Track",
+    track: "Track", part: "Part",
     saveFile: "Save to file", loadFile: "Load file", projects: "Projects",
     load: "Load", save: "Save", used: "used", empty: "empty", unknown: "—",
     steps: "Steps", reload: "Reload", clearSeq: "Clear sequence",
@@ -2263,7 +2265,7 @@ const LAYOUT = (pe0) => [
     ...(pe0 >= 84 ? [["MPC", 0, [P_MPCDEG]]] : [])] },                                                 /* DEG 83 */
   { t: "ARP", pages: [["ARP", 0, [17, 18, 19, 20]], ["ARP 2", 0, [21, 22, 23, 24]]] },
   { t: "TEMPO", pages: [["TEMPO", 1, [0, 1]]] },   /* BPM SWG: the project's (SEQ > TEMPO) */
-  { t: "GLOBAL", tab: "setgroups", pages: [["GLOBAL", 1, [21, 41, 2, 3]], ["SYSTEM", 1, [14]]] }, /* device workload budget */
+  { t: "GLOBAL", tab: "setgroups", pages: [["GLOBAL", 1, [21, 41, 2, 3]], ["PARTS", 1, [10, 11, 24]], ["SYSTEM", 1, [14]]] }, /* device workload budget */
 ];
 /* globals that are actions or placeholders on the device: buttons instead, or hidden */
 const G_SKIP = new Set(["SLOT","NAME","BOOT","LOAD","SAVE","ENG","SET","CLRSQ","INIT","CPU"]);
@@ -2397,7 +2399,7 @@ async function load(d) {
     d.keys = paramKeys(d.pdesc, d.info.pe0, d.info.pcount);
     await libAdopt(d);
     assertSession(d);
-    d.sel=0; // Saadet has one synth.   /* v3: the selected track */
+    d.sel=d.info.ntrk?parse[CMD.TRACK](await sessionRequest(d,req.track())).sel:0;   /* v3: the part selected */
     d.dump = await getDump(d);
     if(d.dump.p5){p5Tone=d.dump.p5.slice();p5Render();}
     if(d.dump.j106){j106Tone=d.dump.j106.slice();j106Render();}
@@ -2459,6 +2461,7 @@ function buildUI() {
   renderSysinfo();
   fm6List = null;
   renderFm6();
+  renderPart();
 }
 
 /* the track selector (v3): the four parts; the editor shows the selected one */
@@ -2699,6 +2702,7 @@ async function sendSet(s, id, k) {
   try {
     const d = dev;
     const r = parse[CMD.SET](await rq(req.set(s, id, v), { key: k }));
+    if (s === 1 && id === G_PMODE) { dev.dump.g[id] = r.value; dev.sel = r.value ? dev.sel : 0; renderPart(); }
     if (!s && id === 26 && d === dev) await rereadMpcDesc(d);
     if (dev && dragging !== k && st.sent === v && !dev.link.hasQueued(k)) {   /* the device's value after clamping */
       (s ? dev.dump.g : dev.dump.p)[id] = r.value;
@@ -2721,6 +2725,18 @@ async function choosePreset(e, p) {
     await afterSoundChange();
   } catch (err) { report(err); } finally { releaseBusy(); }
 }
+/* the part the Sound tab edits: the device's selected one, offered when both are in use */
+const G_PMODE = 10;
+function renderPart() {
+  const on = !!dev?.dump && dev.info.ntrk > 1 && dev.dump.g[G_PMODE] > 0;
+  $("partbox").hidden = !on;
+  if (on) $("part").value = String(dev.sel ?? 0);
+}
+$("part").addEventListener("change", () => op(async () => {
+  const r = parse[CMD.TRACK](await rq(req.track(+$("part").value)));
+  dev.sel = r.sel;
+  await afterSoundChange("reloaded");
+}));
 async function afterSoundChange(msg = "ready", d = dev) {
   assertSession(d);
   needReload = false;                               /* this re-reads everything a RELOAD asks for */
@@ -2731,6 +2747,7 @@ async function afterSoundChange(msg = "ready", d = dev) {
   await rereadMpcDesc(d);
   updateBrowser();
   refreshAll();
+  renderPart();
   sayK(msg);
 }
 $("init").addEventListener("click", async () => {
@@ -2786,8 +2803,8 @@ $("backup-file").addEventListener("change", () => {
 function onPush(f) {
   if(!dev?.dump)return;
   try{
-    if(f.cmd===CMD.CHANGED){const c=parse[CMD.CHANGED](f.a),arr=c.scope?dev.dump.g:dev.dump.p,k=key(c.scope,c.id);if(c.id<arr.length&&!touched(k)){arr[c.id]=c.value;showValue(k,c.value,false);blink(k);}}
-    else if(f.cmd===CMD.RELOAD){if(selfReload.n>0&&Date.now()<selfReload.until){selfReload.n--;return;}needReload=true;maybeReload();}
+    if(f.cmd===CMD.CHANGED){const c=parse[CMD.CHANGED](f.a),arr=c.scope?dev.dump.g:dev.dump.p,k=key(c.scope,c.id);if(c.scope&&c.id===G_PMODE){arr[c.id]=c.value;renderPart();}if(c.id<arr.length&&!touched(k)){arr[c.id]=c.value;showValue(k,c.value,false);blink(k);}}
+    else if(f.cmd===CMD.RELOAD){dev.sel=parse[CMD.RELOAD](f.a).track;renderPart();if(selfReload.n>0&&Date.now()<selfReload.until){selfReload.n--;return;}needReload=true;maybeReload();}
   }catch(error){console.warn(error);}
 }
 function blink(k) {

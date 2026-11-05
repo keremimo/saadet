@@ -159,13 +159,14 @@ Each step ends with a measurable "done". Hardware steps need Kerem's Elite and a
 
    The remap is built and tested on the host, against `boards/smk37/fm1_flash.h` (`tests/storage_test.c`,
    `tests/ui_erase_test.c`), not yet on a unit; the backup round trip and the return to stock remain. An object keeps
-   its FM-1 address where that lies in a data window. 48 object sectors and 6 platform sectors, the same objects and
+   its FM-1 address where that lies in a data window. 60 object sectors and 6 platform sectors, the same objects and
    the same format (`firmware/src/storage.c` `st_sector`, `platform/app.h` `APP_STORE_MAP`):
 
    | Object | Sectors | FM-1 | SMK-37 | SMK window |
    | --- | --- | --- | --- | --- |
    | Prophet banks (`OBJ_P5BANK0`..+4) | 10 | 0x93000-0x9CFFF | 0xA3000-0xACFFF | `FL_XDATA1` |
    | Last state (`OBJ_SYNTH`) | 2 | 0xA0000, 0xA1000 | 0xA1000, 0xA2000 | `FL_AUTO` |
+   | Performances (`OBJ_PERF0`..+5) | 12 | 0xA8000-0xB3FFF | 0xAD000-0xB8FFF | `FL_XDATA1` |
    | FM6 bank (`OBJ_FM6BANK`) | 2 | 0x9F000, 0xFE000 | 0xE0000, 0xE1000 | `FL_DATA` |
    | FM6 user slots (`OBJ_UPFM6_EXT`) | 2 | 0xE9000, 0xFA000 | 0xE9000, 0xE2000 | `FL_DATA` |
    | Settings (`OBJ_SETTINGS`) | 2 | 0xFC000, 0xFD000 | 0xEB000, 0xEC000 | `FL_GLOB` |

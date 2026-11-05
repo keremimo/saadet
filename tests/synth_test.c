@@ -20,7 +20,7 @@ static void packet(uint32_t st,uint32_t note,uint32_t vel){midi_event(st&0xF0u,s
 static uint32_t held_count(void){uint32_t n=0;for(uint32_t i=0;i<4u;i++)n+=__builtin_popcount(live_held[0][i]);return n;}
 static void save_file(const char *name,const void *p,uint32_t n){FILE *f=fopen(name,"wb");assert(f);assert(fwrite(p,1,n,f)==n);fclose(f);}
 static void playing(void){
-    power_on();assert(NTRK==1 && NENG_SHOWN==4 && !eng_ok(3) && !eng_ok(ENGI_DRUM) && !eng_ok(USER_NATIVE_P5) && eng_ok(ENGI_J106));
+    power_on();assert(NTRK==2 && NENG_SHOWN==4 && !eng_ok(3) && !eng_ok(ENGI_DRUM) && !eng_ok(USER_NATIVE_P5) && eng_ok(ENGI_J106));
     for(uint32_t i=0;i<NENG_SHOWN;i++){
         host_preset(TSEL,ENGINE_ORDER[i],0);trk_note_on(TSEL,60,100);uint64_t energy=0;
         for(uint32_t b=0;b<160;b++){int32_t out[CTL*2];mix_block(out,CTL);for(uint32_t j=0;j<CTL*2;j++)energy+=labs(out[j]);}
@@ -53,7 +53,7 @@ static void persistence(void){
         power_on();syn_saved=0;state_boot();state_capture(&actual);assert(!memcmp(&expected,&actual,sizeof actual));
     }
     {   /* REC's latch starts off, even from a state an earlier build saved with it on, and is never worth a flash write */
-        synth_state_t old;power_on();state_capture(&old);old.p[P_AHOLD]=1;old.sum=syn_hash(&old,sizeof old-4u);
+        synth_state_t old;power_on();state_capture(&old);old.part[0].p[P_AHOLD]=1;old.sum=syn_hash(&old,sizeof old-4u);
         assert(st_save(OBJ_SYNTH,&old,sizeof old)==0);
         power_on();syn_saved=0;state_boot();assert(!TSEL->p[P_AHOLD]);
         uint32_t before=erases;TSEL->p[P_AHOLD]=1;assert(state_autosave() && before==erases);TSEL->p[P_AHOLD]=0;
@@ -61,7 +61,7 @@ static void persistence(void){
     TSEL->p[P_SPRD]=63;erase_error=1;assert(!state_autosave() && syn_retry);erase_error=0;assert(state_autosave() && !syn_retry);
     uint32_t saved=syn_saved;TSEL->p[P_SPRD]=71;fail_after=1;assert(!state_autosave());fail_after=-1;
     power_on();state_boot();assert(TSEL->p[P_SPRD]==63 && syn_saved==saved);
-    synth_state_t bad;state_capture(&bad);bad.engine=ENGI_DRUM;bad.sum=syn_hash(&bad,sizeof bad-4u);assert(!state_valid(&bad));
+    synth_state_t bad;state_capture(&bad);bad.part[0].engine=ENGI_DRUM;bad.sum=syn_hash(&bad,sizeof bad-4u);assert(!state_valid(&bad));
     bootguard.failed=1;power_on();state_boot();assert(TSEL->p[P_SPRD]!=63);bootguard.failed=0;
     for(uint32_t b=0;b<UP_BANKS;b++)for(uint32_t c=0;c<2;c++)assert(st_sector(up_obj(b),c)!=st_sector(OBJ_SYNTH,0) && st_sector(up_obj(b),c)!=st_sector(OBJ_SYNTH,1));
     puts("STATE: four engines, slot 384, track/MIDI settings, unchanged saves, failed writes and boot-loop recovery passed");
@@ -77,7 +77,7 @@ static void renderer_migration(void){
         assert(TSEL->eng_req==ENGI_FM6 && fm6_fn[0][FN_ENGINE]==FM6_MODERN);
         assert(fm6_fn[0][FN_PBUP]==7 && !memcmp(patch,fm6_patch[0],sizeof patch));
     }
-    synth_state_t retired;state_capture(&retired);retired.engine=3;
+    synth_state_t retired;state_capture(&retired);retired.part[0].engine=3;
     retired.sum=syn_hash(&retired,sizeof retired-4u);assert(!state_valid(&retired));
     assert(ENGINES[3]==&ENG_RETIRED && eng_extra_retired(3));
     fm6_fn_set(0,FN_ENGINE,2);assert(fm6_fn[0][FN_ENGINE]==FM6_MODERN);
@@ -90,7 +90,7 @@ static void editor(void){
     for(uint32_t i=0;i<sizeof removed/sizeof *removed;i++){request(removed[i],args,sizeof args);assert(!wire_n);}
     uint8_t library[]={3,127,2,0,'L','A','S','T'};request(ED_LIBRARY,library,sizeof library);assert(wire_n && wire[8]==0 && up_used(383));assert(!up_used(127));
     up_ui_named(3,383,"LAST384");char label[20];up_name(383,label);assert(str_eq(label,"LAST384"));
-    TSEL->p[P_SPRD]=51;assert(state_autosave());assert(!ed_bk_capture());assert(ED_BK_N==24 && ed_bk_supported(32) && ed_bk_supported(28));assert(!ed_bk_supported(0) && !ed_bk_supported(2));
+    TSEL->p[P_SPRD]=51;assert(state_autosave());assert(!ed_bk_capture());assert(ED_BK_N==30 && ed_bk_supported(32) && ed_bk_supported(28));assert(!ed_bk_supported(0) && !ed_bk_supported(2));
     uint32_t len;const uint8_t *bytes=ed_bk_object(32,&len);assert(len==sizeof(synth_state_t) && state_valid((const synth_state_t *)bytes));
     save_file("build/host/synth-state.bin",bytes,len);save_file("build/host/synth-settings.bin",&set_rec,ed_bk_set_len);
     for(uint32_t i=0;i<ED_BK_N;i++){uint32_t n,id=ED_BK_IDS[i];const uint8_t *p=ed_bk_object(id,&n);char path[80];snprintf(path,sizeof path,"build/host/archive-%u.bin",id);save_file(path,p,n);}

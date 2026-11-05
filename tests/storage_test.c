@@ -100,7 +100,7 @@ static int map_test(void)
         }
     }
     bad += check("every live object's sectors allowed, none used twice", ok);
-    bad += check("48 live object sectors", live == 48u);
+    bad += check("60 live object sectors", live == 60u);
     ok = 1;
     for (obj = 0; obj < OBJ_NOBJ; obj++)
         for (copy = 0; copy < 2u; copy++) {

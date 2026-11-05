@@ -177,7 +177,7 @@ static __attribute__((noinline,section(".dsp_text"))) void mix_mono_samples(trac
 }
 #endif
 
-static int32_t solo_gain[NPART]={32768};
+static int32_t solo_gain[NPART]={32768,32768};
 static void mix_solo(track_t *t,int32_t *b,uint32_t n)
 {
     uint32_t ti=(uint32_t)(t-trk);

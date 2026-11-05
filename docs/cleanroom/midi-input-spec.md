@@ -55,8 +55,8 @@ These names and signatures are used by `seq.c`, `chord.c`, `platform/instrument.
   and not playing a pool entry) or a tone of one of the track's MIDI chords (`mchord_held`). `seq.c` declares it
   ahead of `input_off`.
 - `static int midi_local_held(const track_t *t, uint32_t note)`: whether a physical key on track `t` sounds
-  `note`. True if some key `k` with `kb_chn[k] > 0` and `kb_trk[k] == trk_index(t)` has `note` among its first
-  `kb_chn[k]` entries of `kb_chord[k]`.
+  `note`. True if, for some key `k`, the track's slot `s = KB_SLOT(k, trk_index(t))` has `note` among the first
+  `kb_chn[s]` entries of `kb_chord[s]`.
 - `static void midi_forget_track(uint32_t track)`: a panic for one track (preset change, project load, a lost
   note-off). See section 4.8.
 - `static void midi_input_reset(void)`: all channels back to their power-on state and no MIDI note owned by any
@@ -72,16 +72,17 @@ The 16 MIDI channels each have their own state, shared by every input port (USB,
 same way). The power-on state is: pitch bend centred; bend sensitivity 2 semitones and 0 cents; sustain pedal up;
 no registered parameter selected (the null RPN, 127/127). This state is runtime only and never saved.
 
-A channel "targets" the track it routes to now (`midi_track(ch)`, when not NULL), plus every track on which it
-still owns notes. Controllers that affect sound (pitch bend, sensitivity, the channel mode messages) act on all
+A channel "targets" the tracks it routes to now (`midi_parts(ch)`, a bit per track: LAYER and SPLIT reach both),
+plus every track on which it still owns notes. Controllers that affect sound (pitch bend, sensitivity, the channel mode messages) act on all
 of a channel's targets. Channel state always updates even when the channel routes nowhere. In particular,
 releasing the pedal must end the channel's pedal-held notes even after the routing has changed.
 
 ### 4.2 Note on (0x90 with velocity above 0)
 
-1. If the channel already owns that note number, including one kept only by the pedal, end it first as in 4.3,
-   ignoring the pedal. Then continue: a repeated note restarts.
-2. The destination is `midi_note_track(ch, note)`. If it is NULL, stop here.
+1. If the channel already owns that note number on any track, including one kept only by the pedal, end it first
+   as in 4.3, ignoring the pedal. Then continue: a repeated note restarts.
+2. The destinations are `midi_note_parts(ch, note)`, a bit per track. If there are none, stop here. Steps 3 to 6 run
+   for each.
 3. Bring the destination's bend up to date with the channel's (4.5) before starting the note.
 4. Map the note with `midi_map`. If the result is `KB_SILENT`, nothing sounds and nothing is owned.
 5. Build its pitches with `chord_build`.
@@ -101,7 +102,7 @@ Velocity is passed through as received. Note-on with velocity 0 is a note-off.
 ### 4.3 Note off (0x80, or 0x90 with velocity 0)
 
 If the channel does not own the note number, ignore it. If the channel's pedal is down, the note stays owned
-and is marked as kept by the pedal (4.4). Otherwise end it:
+and is marked as kept by the pedal (4.4). Otherwise end it on every track it owns it on:
 
 1. Drop the ownership first, because `input_off` consults `midi_note_held`.
 2. If a pool entry belongs to that channel, source note and track: clear its bit in `midi_strum_pending` (tones

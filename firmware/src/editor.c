@@ -4,7 +4,7 @@
 /* Editor protocol: SysEx for the web editor (web/EDITOR_PROTOCOL.md; v2 = user presets + live sync,
  * v3 = four tracks: the v1 / v2 commands act on the selected track, cmds 27-30 reach any track;
  * v4 = TRACK_PARAM (31) and the TRACK_CHANGED push (32), enabled by WATCH bit 1).
- * The synth build: one track, no sequencer: the step, pattern, song, motion and project commands get no reply;
+ * The synth build: two parts, no sequencer: the step, pattern, song, motion and project commands get no reply;
  * INFO says 0 steps and carries tag 0x53 ('S', the synth build).
  *   F0 7D 46 4C cmd args.. F7     (7D = non-commercial ID, "FL")
  * Values are 14 bit, two 7-bit bytes LSB first, offset by 8192 (so -8192..8191).
@@ -464,7 +464,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_b(0);                                          /* project-based SONG retired: tagged bank SONG below */
         ed_b(0x55); ed_b(1); ed_b(ed_ui_caps());             /* tagged preferences v1: commands 34..38 */
         ed_b(0x42); ed_b(1); ed_b(3); /* bounded full-backup read + restore */
-        ed_b(0x53); ed_b(1);                              /* the synth build: one track, no sequencer, no projects */
+        ed_b(0x53); ed_b(1);                              /* the synth build: no sequencer, no projects */
         ed_b(0x46); ed_b(1); ed_b(FM6_NFAC); ed_b(0);   /* FM6 patches: cmds 68..71 */
         ed_b(0x43); ed_b(1); ed_b(CZ_BYTES & 127u); ed_b(CZ_BYTES >> 7); ed_b(0); ed_b(0); /* old CZ bank controls retired */
         ed_b(0x35);ed_b(1);ed_b(ENGI_PROPHET);ed_b(USER_GENERAL);ed_b(USER_NATIVE_FM);ed_b(USER_NATIVE_CZ);ed_b(USER_NATIVE_P5);ed_b(0);ed_b(1); /* Prophet/native stable namespaces */

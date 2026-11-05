@@ -5,7 +5,7 @@
  * step (events_block), once per channel voice message.
  * Each of the 16 channels keeps its own bend, sensitivity, pedal and RPN selection, whichever port its messages came
  * in on. A channel owns the notes it started, per track: its note-offs, pedal and All Notes Off end exactly those,
- * even after the routing changed. Its bend, sensitivity and mode messages act on its targets: the track it routes to
+ * even after the routing changed. Its bend, sensitivity and mode messages act on its targets: the tracks it routes to
  * now and every track it still owns notes on. */
 static struct {
     int16_t bend;                /* -8192..8191, 0 = centre */
@@ -13,24 +13,23 @@ static struct {
     uint8_t rpn[2];              /* the selected RPN, MSB and LSB: 127 / 127 = none (also after an NRPN) */
     uint8_t pedal;               /* CC64 down */
 } midi_chan[16];
-/* bit per note: the notes each channel owns on each track (a note on one track at most), and of those the ones only
- * the pedal keeps. (NTRK + 1) x 256 bytes */
+/* bit per note: the notes each channel owns on each track (LAYER: on both), and of those the ones only the pedal keeps.
+ * (NTRK + 1) x 256 bytes */
 static uint32_t midi_own[NTRK][16][4], midi_kept[16][4];
 
-/* the track channel ch owns note on, NTRK = none */
-static uint32_t midi_owner(uint32_t ch, uint32_t note)
+/* the tracks channel ch owns note on, bit per track */
+static uint32_t midi_owners(uint32_t ch, uint32_t note)
 {
-    uint32_t tr = 0;
-    while (tr < NTRK && !((midi_own[tr][ch][note >> 5] >> (note & 31u)) & 1u))
-        tr++;
-    return tr;
+    uint32_t tr, mask = 0;
+    for (tr = 0; tr < NTRK; tr++)
+        mask |= ((midi_own[tr][ch][note >> 5] >> (note & 31u)) & 1u) << tr;
+    return mask;
 }
 
 /* channel ch's targets, bit per track */
 static uint32_t midi_targets(uint32_t ch)
 {
-    const track_t *t = midi_track(ch);
-    uint32_t mask = t ? 1u << trk_index(t) : 0u, tr;
+    uint32_t mask = midi_parts(ch), tr;
     for (tr = 0; tr < NTRK; tr++)
         if (midi_own[tr][ch][0] | midi_own[tr][ch][1] | midi_own[tr][ch][2] | midi_own[tr][ch][3])
             mask |= 1u << tr;
@@ -72,11 +71,12 @@ static int midi_note_held(const track_t *t, uint32_t note)
 static int midi_local_held(const track_t *t, uint32_t note)
 {
     uint32_t tr = trk_index(t), k, i;
-    for (k = 0; k < 27u; k++)
-        if (kb_chn[k] && kb_trk[k] == tr)
-            for (i = 0; i < kb_chn[k] && i < CHORD_MAX; i++)
-                if (kb_chord[k][i] == note)
-                    return 1;
+    for (k = 0; k < KB_N; k++) {
+        uint32_t s = KB_SLOT(k, tr);
+        for (i = 0; i < kb_chn[s] && i < CHORD_MAX; i++)
+            if (kb_chord[s][i] == note)
+                return 1;
+    }
     return 0;
 }
 
@@ -106,40 +106,44 @@ static void midi_end(uint32_t ch, uint32_t note, uint32_t tr)
         midi_pitch_off(t, m->note[i]);
 }
 
+/* channel ch's note ends on every track it owns it on */
+static void midi_end_all(uint32_t ch, uint32_t note, uint32_t owners)
+{
+    uint32_t tr;
+    for (tr = 0; tr < NTRK; tr++)
+        if ((owners >> tr) & 1u)
+            midi_end(ch, note, tr);
+}
+
 /* note-off (release velocity ignored): with the pedal down the note stays, kept by the pedal */
 static void midi_note_off(uint32_t ch, uint32_t note)
 {
-    uint32_t tr = midi_owner(ch, note);
-    if (tr == NTRK)
+    uint32_t owners = midi_owners(ch, note);
+    if (!owners)
         return;
     if (midi_chan[ch].pedal)
         midi_kept[ch][note >> 5] |= 1u << (note & 31u);
     else
-        midi_end(ch, note, tr);
+        midi_end_all(ch, note, owners);
 }
 
 static void midi_pedal_up(uint32_t ch)
 {
-    uint32_t note, tr;
+    uint32_t note;
     midi_chan[ch].pedal = 0;
     for (note = 0; note < 128u; note++)
-        if ((midi_kept[ch][note >> 5] >> (note & 31u)) & 1u && (tr = midi_owner(ch, note)) < NTRK)
-            midi_end(ch, note, tr);
+        if ((midi_kept[ch][note >> 5] >> (note & 31u)) & 1u)
+            midi_end_all(ch, note, midi_owners(ch, note));
 }
 
-/* note-on: a repeat restarts; mapped and built as the keys do. A note that plays itself starts once per track (other
- * MIDI notes and keys may sound it already); a chord or another pitch takes a pool entry (full: only a note that
- * plays itself sounds, alone). Either way the channel owns the note on that track */
-static void midi_note_on(uint32_t ch, uint32_t note, uint32_t vel)
+/* a note on one track: mapped and built as the keys do. A note that plays itself starts once per track (other MIDI
+ * notes and keys may sound it already); a chord or another pitch takes a pool entry (full: only a note that plays itself
+ * sounds, alone). Either way the channel owns the note on that track */
+static void midi_note_start(uint32_t ch, uint32_t note, uint32_t vel, track_t *t)
 {
-    uint32_t tr = midi_owner(ch, note), root, n, i = MCHORD_N;
+    uint32_t tr, root, n, i = MCHORD_N;
     uint8_t x[CHORD_MAX];
-    track_t *t;
     int plain;
-    if (tr < NTRK)
-        midi_end(ch, note, tr);
-    if (!(t = midi_note_track(ch, note)))
-        return;
     midi_bend_to(ch, t);                                /* the bend the note starts with */
     if ((root = midi_map(t, note)) == KB_SILENT)
         return;
@@ -173,6 +177,17 @@ static void midi_note_on(uint32_t ch, uint32_t note, uint32_t vel)
     midi_own[tr][ch][note >> 5] |= 1u << (note & 31u);
 }
 
+/* note-on: a repeat restarts, on the tracks the note plays now */
+static void midi_note_on(uint32_t ch, uint32_t note, uint32_t vel)
+{
+    uint32_t parts, tr;
+    midi_end_all(ch, note, midi_owners(ch, note));
+    parts = midi_note_parts(ch, note);
+    for (tr = 0; tr < NTRK; tr++)
+        if ((parts >> tr) & 1u)
+            midi_note_start(ch, note, vel, &trk[tr]);
+}
+
 /* every note of t released, the arp's held and latched ones too */
 static void midi_release_all(track_t *t)
 {
@@ -187,8 +202,8 @@ static void midi_release_all(track_t *t)
 static void midi_forget_track(uint32_t track)
 {
     uint32_t k, ch, w;
-    for (k = 0; k < 27u; k++)
-        if (kb_trk[k] == track && kb_chn[k])
+    for (k = 0; k < KB_N; k++)
+        if (kb_chn[KB_SLOT(k, track)])
             key_off(k, &trk[track]);
     for (k = 0; k < MCHORD_N; k++)
         if (mchord[k].id == track + 1u)
@@ -286,9 +301,9 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t v)
         for (tr = 0; tr < NTRK; tr++) {
             if (!((mask >> tr) & 1u) || midi_held_count(tr))
                 continue;
-            for (i = 0; i < 27u && !(((fm1_in.notes >> i) & 1u) && kb_trk[i] == tr); i++)
+            for (i = 0; i < KB_N && !(((KB_KEYS() >> i) & 1u) && ((kb_parts[i] >> tr) & 1u)); i++)
                 ;
-            if (i == 27u)
+            if (i == KB_N)
                 midi_release_all(&trk[tr]);
         }
         break;
@@ -297,25 +312,26 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t v)
     }
 }
 
-/* one channel voice message: st the status without its channel, ch 0..15, data 0..127. The routed track's
- * controllers go to the modulation matrix and the mapped parameters first; poly pressure and program change are not
- * handled here */
+/* one channel voice message: st the status without its channel, ch 0..15, data 0..127. The controllers go to the
+ * modulation matrix of every track the channel reaches and to the mapped parameters of the one it edits, first; poly
+ * pressure and program change are not handled here */
 static __attribute__((noinline)) void midi_event(uint32_t st, uint32_t ch, uint32_t d1, uint32_t d2)
 {
-    track_t *t = midi_track(ch);
     if (st == 0x80u || (st == 0x90u && !d2)) {
         midi_note_off(ch, d1);
     } else if (st == 0x90u) {
         midi_note_on(ch, d1, d2);
-    } else if (st == 0xB0u) {
-        if (t) {
-            mod_midi(t, st, d1, d2);
-            midi_parameter(t, d1, d2);
+    } else if (st == 0xB0u || st == 0xD0u) {
+        uint32_t parts = midi_parts(ch), tr;
+        track_t *t = midi_track(ch);
+        for (tr = 0; tr < NTRK; tr++)
+            if ((parts >> tr) & 1u)
+                mod_midi(&trk[tr], st, d1, d2);
+        if (st == 0xB0u) {
+            if (t)
+                midi_parameter(t, d1, d2);
+            midi_control(ch, d1, d2);
         }
-        midi_control(ch, d1, d2);
-    } else if (st == 0xD0u) {
-        if (t)
-            mod_midi(t, st, d1, d2);
     } else if (st == 0xE0u) {
         midi_chan[ch].bend = (int16_t)((int32_t)(d1 | d2 << 7) - 8192);
         midi_bend_all(ch);

@@ -4,15 +4,19 @@
 /* Keyboard, scale, chords, arpeggiator, MIDI in and the external clock (the synth build: no sequencer).
  * Everything here runs in the audio ISR, once per CTL-sample block, and
  * ends in trk_note_on / trk_note_off: engines never see where a note came from.
- * The keys and every MIDI channel play the one track. Its CC1 (mod wheel), CC11 (expression) and channel
- * aftertouch go to the track's modulation matrix (mod.c). A key or MIDI note plays a chord when the track's CHRD
- * is on (chord.c): its notes go through the same input as so many keys. MIDI Start / Continue / Stop of the clock
+ * The keys and MIDI reach the parts as G_PMODE says (core.h, key_parts, midi_parts). A channel's CC1 (mod wheel), CC11
+ * (expression) and aftertouch go to the modulation matrix (mod.c) of each part it reaches. A key or MIDI note plays a
+ * chord when the part's CHRD is on (chord.c): its notes go through the same input as so many keys. MIDI Start / Continue / Stop of the clock
  * input GLO > GLOBAL CLK picks run the transport the ARP, the SLICER and the FX layer follow (song.playing); with
  * the internal clock they run free at BPM. */
 #define KB_SILENT 255u
+/* A key plays a part through its slot: k for part A, k + KB_N for part B, so in LAYER one key holds two notes and two
+ * chords. A key's parts are fixed while it is down: its release ends what it started there */
+#define KB_SLOTS (KB_N * NPART)
+#define KB_SLOT(k, p) ((k) + (p) * KB_N)
 static volatile uint8_t kb_asleep;
-static kb_word_t kb_prev;
-static uint8_t kb_note[KB_N], kb_trk[KB_N];  /* per key: the note it started and on which track */
+static kb_word_t kb_prev, kb_down[NPART];        /* the keys down; those down on each part */
+static uint8_t kb_note[KB_SLOTS], kb_parts[KB_N];   /* per slot: the note it started; per key: its parts, bit per part */
 static uint8_t last_note = 60;
 /* Stage's played notes, after scale/chord mapping. The ISR owns the held bits per
  * track; each track's last complete voicing survives release, including a tap between UI frames. */
@@ -21,7 +25,36 @@ static volatile uint8_t panic_req;       /* bit per track: release every soundin
 
 static uint32_t trk_index(const track_t *t) { return (uint32_t)(t - trk); }
 
-static uint32_t trk_midi_ch(uint32_t i) { (void)i; return (uint32_t)song.g[G_DRUMCH] - 1u; }   /* MIDI channel 0..15 of track i (keys -> MIDI out) */
+/* MIDI channel 0..15 of part i (keys -> MIDI out): OUT CH for part A, its own for part B */
+static uint32_t trk_midi_ch(uint32_t i) { return (uint32_t)(i ? song.g[G_PCH2] : song.g[G_DRUMCH]) - 1u; }
+
+/* the parts key k plays now: both in LAYER; by where the key is in SPLIT, whatever the octave (a chord pad: the selected
+ * part); else the selected part */
+static uint32_t key_parts(uint32_t k)
+{
+    uint32_t mode = parts_mode();
+    if (mode == PT_LAYER)
+        return (1u << NPART) - 1u;
+#ifdef SAADET_SMK37
+    if (k >= KB_PAD0)
+        return 1u << song.sel;
+#endif
+    if (mode == PT_SPLIT)
+        return 53 + KB_OFS(k) < song.g[G_PSPLIT] ? 2u : 1u;
+    return 1u << song.sel;
+}
+/* the parts the keyboard's own controls reach (wheels, REC, the pedal's message): all it can play */
+static uint32_t keyboard_parts(void)
+{
+    uint32_t mode = parts_mode();
+    return mode == PT_SPLIT || mode == PT_LAYER ? (1u << NPART) - 1u : 1u << song.sel;
+}
+/* the part key k lights for: the selected one if it plays that */
+static track_t *key_track(uint32_t k)
+{
+    uint32_t parts = key_parts(k);
+    return (parts >> song.sel) & 1u ? TSEL : &trk[parts == 2u];
+}
 
 static void live_note_on(const track_t *t, uint32_t note)
 {
@@ -366,7 +399,7 @@ static int sustain_on(void)
  * 1..4 (F#3 G#3 A#3 C#4) the track mutes */
 static void key_chord_tone(uint32_t k, track_t *t)
 {
-    uint32_t x = kb_chord[k][kb_chn[k]], held = midi_local_held(t, x);
+    uint32_t s = KB_SLOT(k, trk_index(t)), x = kb_chord[s][kb_chn[s]], held = midi_local_held(t, x);
     int kept = note_in(kb_sustained[trk_index(t)], x);
 #ifdef SAADET_SMK37
     if (note_in(kb_footed[trk_index(t)], x)) {      /* the foot pedal's: a key has it now */
@@ -374,7 +407,7 @@ static void key_chord_tone(uint32_t k, track_t *t)
         kept = 1;
     }
 #endif
-    kb_chn[k]++;
+    kb_chn[s]++;
     if (pedal_down())
         pedal_keep(t, x);
     if (held) return;
@@ -386,27 +419,27 @@ static void key_chord_tone(uint32_t k, track_t *t)
 
 static void key_on(uint32_t k, track_t *t)
 {
-    uint32_t n;
-    if (!(kb_prev & ~KB_BIT(k)))                    /* keys from none: a new chord replaces the latched one */
+    uint32_t n, p = trk_index(t), s = KB_SLOT(k, p);
+    if (!(kb_down[p] & ~KB_BIT(k)))                 /* the part's keys from none: a new chord replaces the latched one */
         latch_release(t);
-    n = chord_build(t, kb_note[k], kb_chord[k]);
-    n = chord_strum_begin(t, kb_chord[k], n, &kb_strum[k], KB_VEL(k));
-    kb_chn[k] = 0;
+    n = chord_build(t, kb_note[s], kb_chord[s]);
+    n = chord_strum_begin(t, kb_chord[s], n, &kb_strum[s], KB_VEL(k));
+    kb_chn[s] = 0;
     /* Publish pending work after the first tone: input_on may start transport. */
     for (uint32_t i = 0; i < n; i++) key_chord_tone(k, t);
-    if (kb_strum[k].total) kb_strum_pending |= KB_BIT(k);
-    last_note = kb_note[k];
+    if (kb_strum[s].total) kb_strum_pending[p] |= KB_BIT(k);
+    last_note = kb_note[s];
 }
 
 /* key k is up: the notes it started end, but those another key still holds */
 static void key_off(uint32_t k, track_t *t)
 {
-    uint32_t n = kb_chn[k], i;
-    kb_strum_pending &= ~KB_BIT(k);
-    kb_strum[k].total = 0;
-    kb_chn[k] = 0;
+    uint32_t p = trk_index(t), s = KB_SLOT(k, p), n = kb_chn[s], i;
+    kb_strum_pending[p] &= ~KB_BIT(k);
+    kb_strum[s].total = 0;
+    kb_chn[s] = 0;
     for (i = 0; i < n; i++) {
-        uint32_t x = kb_chord[k][i];
+        uint32_t x = kb_chord[s][i];
         if (midi_local_held(t, x)) continue;
         if (pedal_down())
             pedal_keep(t, x);
@@ -455,33 +488,44 @@ static void keyboard_block(void)
         sd_kb_retrig = 0;
         if (sd_jack_pedal != pedal_was) {
             pedal_was = sd_jack_pedal;
-            midi_out_event(0x0Bu | (0xB0u | trk_midi_ch(song.sel)) << 8 | 64u << 16 | (pedal_was ? 127u : 0u) << 24);
+            for (uint32_t p = 0; p < NPART; p++)
+                if ((keyboard_parts() >> p) & 1u)
+                    midi_out_event(0x0Bu | (0xB0u | trk_midi_ch(p)) << 8 | 64u << 16 | (pedal_was ? 127u : 0u) << 24);
         }
         rt &= cur & kb_prev & ~kb_layer;
         for (k = 0; rt && k < KB_N; k++)
-            if ((rt >> k) & 1u && kb_note[k] != KB_SILENT) {
-                key_off(k, &trk[kb_trk[k] % NTRK]);
-                key_on(k, &trk[kb_trk[k] % NTRK]);
-            }
+            for (uint32_t p = 0; (rt >> k) & 1u && p < NPART; p++)
+                if ((kb_parts[k] >> p) & 1u && kb_note[KB_SLOT(k, p)] != KB_SILENT) {
+                    key_off(k, &trk[p]);
+                    key_on(k, &trk[p]);
+                }
     }
 #endif
     ch = cur ^ kb_prev;                           /* keys also sound while entering steps */
     if (!ch) return;
     for (k = 0; k < KB_N; k++) {
+        uint32_t p;
         if (!((ch >> k) & 1u))
             continue;
-        if ((cur >> k) & 1u) {                    /* the selected track; the key-up goes to the same one */
-            kb_trk[k] = song.sel;
-            if (kb_asleep) { kb_note[k]=KB_SILENT; continue; }
+        if ((cur >> k) & 1u) {                    /* its parts now; the key-up goes to the same ones */
+            uint32_t parts = key_parts(k);
+            kb_parts[k] = (uint8_t)parts;
+            for (p = 0; p < NPART; p++)
+                if ((parts >> p) & 1u)
+                    kb_note[KB_SLOT(k, p)] = KB_SILENT;
+            if (kb_asleep) continue;
             if ((fm1_in.buttons & kb_mask) || kb_lock) {       /* a layer's button held: the key is the layer's (ui_layer.c), */
-                kb_note[k] = KB_SILENT;           /* a quick-layer key */
-                kb_layer |= KB_BIT(k);
+                kb_layer |= KB_BIT(k);            /* a quick-layer key */
                 continue;
             }
-            kb_note[k] = song.grid ? KB_SILENT : (uint8_t)kb_map(TSEL, k);
-            if (kb_note[k] == KB_SILENT)
-                continue;
-            key_on(k, &trk[kb_trk[k]]);
+            for (p = 0; p < NPART; p++) {
+                if (!((parts >> p) & 1u))
+                    continue;
+                kb_down[p] |= KB_BIT(k);
+                kb_note[KB_SLOT(k, p)] = song.grid ? KB_SILENT : (uint8_t)kb_map(&trk[p], k);
+                if (kb_note[KB_SLOT(k, p)] != KB_SILENT)
+                    key_on(k, &trk[p]);
+            }
 #ifdef FM1_INPUT_LAT
             kb_lat(k);
 #endif
@@ -490,9 +534,13 @@ static void keyboard_block(void)
                 kb_layer &= ~KB_BIT(k);
                 continue;
             }
-            if (kb_note[k] == KB_SILENT)
-                continue;
-            key_off(k, &trk[kb_trk[k] % NTRK]);
+            for (p = 0; p < NPART; p++) {
+                if (!((kb_parts[k] >> p) & 1u))
+                    continue;
+                kb_down[p] &= ~KB_BIT(k);
+                if (kb_note[KB_SLOT(k, p)] != KB_SILENT)
+                    key_off(k, &trk[p]);
+            }
         }
     }
     kb_prev = cur;
@@ -537,10 +585,11 @@ static void midi_chord_tone(mchord_t *m)
 
 static uint32_t chord_strum_next(uint32_t limit)
 {
-    for (uint32_t k = 0; kb_strum_pending && k < KB_N; k++) if (kb_strum_pending & KB_BIT(k)) {
-        uint32_t due = chord_strum_due(&kb_strum[k], kb_chn[k], 0);
-        if (due < limit) limit = due;
-    }
+    for (uint32_t p = 0; p < NPART; p++)
+        for (uint32_t k = 0; kb_strum_pending[p] && k < KB_N; k++) if (kb_strum_pending[p] & KB_BIT(k)) {
+            uint32_t s = KB_SLOT(k, p), due = chord_strum_due(&kb_strum[s], kb_chn[s], 0);
+            if (due < limit) limit = due;
+        }
     for (uint32_t k = 0; midi_strum_pending && k < MCHORD_N; k++) if (midi_strum_pending & (1u << k)) {
         uint32_t due = chord_strum_due(&mchord[k].strum, mchord[k].n, 0);
         if (due < limit) limit = due;
@@ -550,17 +599,19 @@ static uint32_t chord_strum_next(uint32_t limit)
 
 static void chord_strum_tick(uint32_t n)
 {
-    for (uint32_t k = 0; kb_strum_pending && k < KB_N; k++) if (kb_strum_pending & KB_BIT(k)) {
-        chord_strum_t *s = &kb_strum[k];
+    for (uint32_t p = 0; p < NPART; p++)
+        for (uint32_t k = 0; kb_strum_pending[p] && k < KB_N; k++) if (kb_strum_pending[p] & KB_BIT(k)) {
+            uint32_t slot = KB_SLOT(k, p);
+            chord_strum_t *s = &kb_strum[slot];
 #ifdef SAADET_SMK37
-        /* leaning on a degree pad strums faster, up to twice the rate set */
-        chord_strum_due(s, kb_chn[k], k >= KB_PAD0 ? n + n * sd_kb_press[k - KB_PAD0] / 127u : n);
+            /* leaning on a degree pad strums faster, up to twice the rate set */
+            chord_strum_due(s, kb_chn[slot], k >= KB_PAD0 ? n + n * sd_kb_press[k - KB_PAD0] / 127u : n);
 #else
-        chord_strum_due(s, kb_chn[k], n);
+            chord_strum_due(s, kb_chn[slot], n);
 #endif
-        while (kb_chn[k] < s->total && !chord_strum_due(s, kb_chn[k], 0)) key_chord_tone(k, &trk[kb_trk[k]]);
-        if (kb_chn[k] == s->total) kb_strum_pending &= ~KB_BIT(k);
-    }
+            while (kb_chn[slot] < s->total && !chord_strum_due(s, kb_chn[slot], 0)) key_chord_tone(k, &trk[p]);
+            if (kb_chn[slot] == s->total) kb_strum_pending[p] &= ~KB_BIT(k);
+        }
     for (uint32_t k = 0; midi_strum_pending && k < MCHORD_N; k++) if (midi_strum_pending & (1u << k)) {
         mchord_t *m = &mchord[k];
         chord_strum_due(&m->strum, m->n, n);
@@ -569,8 +620,27 @@ static void chord_strum_tick(uint32_t n)
     }
 }
 
-static track_t *midi_track(uint32_t ch) { return !song.g[G_ROUTE] || ch + 1u == (uint32_t)song.g[G_ROUTE] ? TSEL : 0; }
-static track_t *midi_note_track(uint32_t ch, uint32_t note) { (void)note; return midi_track(ch); }
+/* the parts channel ch reaches, bit per part. MULTI: part B on its own channel, part A on IN CH (OMNI: every other
+ * channel). One part: IN CH. SPLIT and LAYER: IN CH reaches both */
+static uint32_t midi_parts(uint32_t ch)
+{
+    uint32_t mode = parts_mode(), in = !song.g[G_ROUTE] || ch + 1u == (uint32_t)song.g[G_ROUTE];
+    if (mode == PT_MULTI)
+        return ch + 1u == (uint32_t)song.g[G_PCH2] ? 2u : in;
+    return !in ? 0u : mode == PT_ONE ? 1u : (1u << NPART) - 1u;
+}
+/* the parts note plays on channel ch: SPLIT by the split point, else the channel's */
+static uint32_t midi_note_parts(uint32_t ch, uint32_t note)
+{
+    uint32_t parts = midi_parts(ch);
+    return parts && parts_mode() == PT_SPLIT ? (note < (uint32_t)song.g[G_PSPLIT] ? 2u : 1u) : parts;
+}
+/* the sound channel ch's mapped controllers edit: where both parts listen, the selected one */
+static track_t *midi_track(uint32_t ch)
+{
+    uint32_t parts = midi_parts(ch);
+    return !parts ? 0 : (parts >> song.sel) & 1u ? TSEL : &trk[parts == 2u];
+}
 
 #include "midi_param.c"
 #include "midi_input.c"
@@ -580,7 +650,8 @@ static void clock_advance(uint32_t n)
 {
     do {
         uint32_t step=chord_strum_next(n), beat=seq_beat_samples();
-        arp_step(TSEL, song.playing || !song.g[G_CLOCK] ? step : 0u, step);
+        for (uint32_t p = 0; p < trk_n(); p++)
+            arp_step(&trk[p], song.playing || !song.g[G_CLOCK] ? step : 0u, step);
         beat_pos+=step;
         while(beat_pos>=beat){beat_pos-=beat;beat_n=(beat_n+1u)&3u;}
         chord_strum_tick(step);
@@ -588,6 +659,7 @@ static void clock_advance(uint32_t n)
     } while(n);
 }
 
+static uint8_t parts_mode_was;
 /* everything that happens between two rendered blocks */
 static void events_block(uint32_t n)
 {
@@ -609,6 +681,12 @@ static void events_block(uint32_t n)
     panic_req = 0;
     uint32_t sustain_end = kb_sustain_end;
     kb_sustain_end = 0;
+    if (parts_mode() != parts_mode_was) {              /* another parts mode: nothing sounding or held carries over, */
+        parts_mode_was = (uint8_t)parts_mode();        /* and one part means part A */
+        pr |= (1u << NTRK) - 1u;
+        if (trk_n() == 1u)
+            song.sel = 0;
+    }
     if (midi_in_overflow) {                            /* a lost note-off must never leave a held note */
         mi_r = mi_w;
         midi_input_reset();
@@ -630,7 +708,18 @@ static void events_block(uint32_t n)
             t->nheld = 0;
             t->arp_phys = 0;
             t->arp_note = 0;
+            if (i >= trk_n()) {                       /* out of use: it renders no more, so nothing may stay active, */
+                for (uint32_t v = 0; v < NVOICE; v++) {   /* and its engine gives its memory back */
+                    t->v[v].active = t->v[v].gate = t->v[v].stage = 0;
+                    t->v[v].env = t->v[v].env_out = 0;
+                }
+                t->engine = eng_idx(t->eng_req);
+                t->xf_on = 0;
+                eng_state_clear(i);
+            }
         }
+        if (i >= trk_n())
+            continue;
         engine_block(t);                              /* engine switch: fade, then switch (voice.c) */
         /* ARP turned off, or HOLD released with no key down: drop the latched chord */
         if ((t->armp && !t->p[P_AMODE]) || (t->aholdp && !t->p[P_AHOLD] && !t->arp_phys)) {

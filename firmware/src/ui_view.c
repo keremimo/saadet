@@ -52,8 +52,8 @@ typedef struct {
     uint8_t pic, parg;                              /* PAGE: its picture (ui_pics.c), which one, the picture's data */
     int16_t pv[24];
     char ps[4][24];
+    char tag[8];                                    /* the header's state: the part; a bank, FADERS, a pad mode picked by hand */
 #ifdef SAADET_SMK37
-    char tag[8];                                    /* the header's state: a bank, FADERS, a pad mode picked by hand */
     uint8_t strip;                                  /* the strip is a bank's cards: on HOME, for the keyboard */
     struct { uint8_t on, picked, val, pos; } gauge[4];   /* a fader's card: its value's bar, where the fader stands */
 #endif
@@ -74,14 +74,13 @@ static void vm_header(const ui_vm_t *v)
     }
     if (v->head[0]) {
         int32_t x = cv_text(10, 8, TY_HD, v->head, v->mode == VM_HOME || v->mode == VM_BROWSE ? T_THEME : T_TEXT);
-#ifdef SAADET_SMK37
-        if (v->tag[0] && v->mode != VM_HOME) {           /* (HOME's stands where its octave does) */
-            int32_t right = v->ndots > 1u ? 216 - 10 * (int32_t)v->ndots : 230, w = text_w(TY_LB, v->tag);
-            cv_text_r(right, 9, TY_LB, v->tag, T_THEME, T_BG);
+        int32_t right = v->ndots > 1u ? 216 - 10 * (int32_t)v->ndots : 230, w = text_w(TY_LB, v->tag);
+        int32_t room = right - w - 6 - x - 8;
+        if (v->tag[0] && v->mode != VM_HOME && (!v->sub[0] || room >= 40)) {   /* (HOME's stands where its octave does; */
+            cv_text_r(right, 9, TY_LB, v->tag, T_THEME, T_BG);                 /* too many pages for both: the page's name) */
             if (v->sub[0])
-                cv_text_fit(x + 8, 8, TY_TX, v->sub, T_MID, T_BG, right - w - 6 - x - 8);
+                cv_text_fit(x + 8, 8, TY_TX, v->sub, T_MID, T_BG, room);
         } else
-#endif
         if (v->sub[0])
             cv_text_fit(x + 8, 8, TY_TX, v->sub, T_MID, T_BG, (v->ndots > 1u ? 216 - 10 * (int32_t)v->ndots : 220) - x);
     }
@@ -252,11 +251,9 @@ static void vm_draw_home(const ui_vm_t *v)
     const aafont_t *f = text_has(TY_HR, v->name) && text_w(TY_HR, v->name) <= 220 ? TY_HR : TY_NM;
     int32_t i;
     vm_header(v);
-#ifdef SAADET_SMK37
     if (!v->toast[0] && v->tag[0]) {
         cv_text_r(230, 9, TY_LB, v->tag, T_THEME, T_BG);
     } else
-#endif
     if (!v->toast[0]) {
         cv_text_r(230, 8, TY_TX, v->oct, T_MID, T_BG);
     }

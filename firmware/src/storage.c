@@ -23,7 +23,7 @@
 /* Preserve upstream preset/settings identities for unified-bank migration.
  * Saadet state uses A0000/A1000, formerly part of project slot A.
  * All project identities are reserved and rejected before flash access. */
-enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_FM6BANK = OBJ_UPRESET0 + 2, OBJ_BANK0, OBJ_CZBANK0 = OBJ_BANK0 + 4, OBJ_UPRESET_EXT0 = OBJ_CZBANK0 + 8, OBJ_UPFM6_EXT = OBJ_UPRESET_EXT0 + 2, OBJ_NATIVEFM0, OBJ_P5BANK0 = OBJ_NATIVEFM0 + 2, OBJ_SHARED_EXT = OBJ_P5BANK0 + 5, OBJ_SYNTH, OBJ_COUNT };
+enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_FM6BANK = OBJ_UPRESET0 + 2, OBJ_BANK0, OBJ_CZBANK0 = OBJ_BANK0 + 4, OBJ_UPRESET_EXT0 = OBJ_CZBANK0 + 8, OBJ_UPFM6_EXT = OBJ_UPRESET_EXT0 + 2, OBJ_NATIVEFM0, OBJ_P5BANK0 = OBJ_NATIVEFM0 + 2, OBJ_SHARED_EXT = OBJ_P5BANK0 + 5, OBJ_SYNTH, OBJ_PERF0, OBJ_COUNT = OBJ_PERF0 + 6 };
 
 typedef struct {
     uint32_t magic;
@@ -58,6 +58,7 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
 #ifdef SAADET_SMK37
     /* The SMK-37 (store_map.h, docs/SMK37_PORT.md section 5): the FM-1's address where it lies in a data window, a
      * new one where it does not. The retired identities have no sector here: st_retired stops them first */
+    if (obj >= OBJ_PERF0) return 0xAD000u + (obj - OBJ_PERF0) * 2u * ST_SECTOR + copy * ST_SECTOR;
     if (obj == OBJ_SYNTH) return 0xA1000u + copy * ST_SECTOR;
     if (obj == OBJ_SHARED_EXT) return 0x9D000u + copy * ST_SECTOR;
     if (obj >= OBJ_P5BANK0) return 0xA3000u + (obj - OBJ_P5BANK0) * 2u * ST_SECTOR + copy * ST_SECTOR;
@@ -71,6 +72,7 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
     if (obj >= OBJ_UPRESET0) return 0xDC000u + (obj - OBJ_UPRESET0) * 2u * ST_SECTOR + copy * ST_SECTOR;
     return 0;
 #else
+    if (obj >= OBJ_PERF0) return 0xA8000u + (obj - OBJ_PERF0) * 2u * ST_SECTOR + copy * ST_SECTOR;
     if (obj == OBJ_SYNTH) return 0xA0000u+copy*ST_SECTOR;
     if (obj == OBJ_SHARED_EXT) return 0x9D000u+copy*ST_SECTOR;
     if (obj >= OBJ_P5BANK0) return 0x93000u+(obj-OBJ_P5BANK0)*2u*ST_SECTOR+copy*ST_SECTOR;

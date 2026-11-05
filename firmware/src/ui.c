@@ -113,6 +113,8 @@ static void ui_turn_page(uint32_t p, int32_t d)  /* the place's next (d > 0) or 
     uix.hot = 4u;
     if (p == PL_LIB)
         lib_open(ui_stop(PL_LIB));
+    if (p == PL_SAVE && !sx_staged())                  /* another thing to save: its slot and name */
+        save_open();
 }
 /* the field knob k edits now: a HOME macro, the stop's, or none */
 static const ui_field_t *ui_knob_field(uint32_t k)
@@ -210,8 +212,11 @@ static void ui_button_down(uint32_t b)
         ui_octave(b);
         return;
     }
-    if (b == B_REC) {                                  /* latch the notes held, or let them go */
-        TSEL->p[P_AHOLD] = (int16_t)!TSEL->p[P_AHOLD];
+    if (b == B_REC) {                                  /* latch the notes held, or let them go: on all the keys play */
+        int16_t on = (int16_t)!TSEL->p[P_AHOLD];
+        for (uint32_t i = 0; i < NPART; i++)
+            if ((keyboard_parts() >> i) & 1u)
+                trk[i].p[P_AHOLD] = on;
         return;
     }
     if (p >= PL_N)
@@ -249,6 +254,9 @@ static void ui_button_up(uint32_t b)
     } else if (!uix.held_new && !uix.jumped && !uix.reveal) {  /* a tap on the open place: its next page; SAVE: */
         if (p == PL_SAVE) {                                     /* it stores */
             if (sx_staged()) import_store(); else save_store();
+        } else if (p == PL_HOME && trk_n() > 1u) {              /* HOME: the other part */
+            track_select(song.sel ^ 1u);
+            ui_say("PART ", N_PART[song.sel]);
         } else {
             ui_turn_page(p, 1);
         }
@@ -491,7 +499,7 @@ static void vm_state(char *b, uint32_t n)        /* what changes the notes now: 
 /* the list's five sounds around the one chosen (an empty list: its word in name); the count */
 static uint32_t vm_list_of(ui_vm_t *v, uint32_t src)
 {
-    static const char *const EMPTY[LIB_N] = {"NO FAVOURITES YET", "NO USER SOUNDS YET", "", "", "", ""};
+    static const char *const EMPTY[LIB_N] = {"NO FAVOURITES YET", "NO USER SOUNDS YET", "", "", "", "", "NO SETUPS YET"};
     lib_item_t w[5];
     uint32_t n = lib_count(src), i, at = n ? lib.at[src] % n : 0u;
     lib_scan(src, (int32_t)at - 2, w, 5u);
@@ -500,7 +508,8 @@ static uint32_t vm_list_of(ui_vm_t *v, uint32_t src)
         if (w[i].eng == 255u) continue;
         lib_item_name(&w[i], v->brow[i]);
         if (!v->brow[i][0]) str_cpy(v->brow[i], "-", 2);
-        if (w[i].user) up_slot_label(v->btag[i], w[i].idx);
+        if (w[i].user == 2u) perf_label(v->btag[i], w[i].idx);
+        else if (w[i].user) up_slot_label(v->btag[i], w[i].idx);
         else fmt3(v->btag[i], w[i].idx);
         if (lib_item_star(&w[i])) v->bstar |= (uint8_t)(1u << i);
         if (lib_item_now(&w[i])) v->bnow |= (uint8_t)(1u << i);
@@ -538,6 +547,19 @@ static void vm_save(ui_vm_t *v)
     v->mode = VM_SAVE;
     str_cpy(v->name, lib.name, sizeof v->name);
     v->cursor = lib.cursor;
+    if (save_perf()) {                                 /* a performance */
+        char n[PERF_NAME];
+        perf_label(v->sub, lib.pslot);
+        if (perf_used(lib.pslot)) {
+            perf_name(lib.pslot, n);
+            str_cpy(v->line[0], "REPLACES", sizeof v->line[0]);
+            str_cpy(v->line[1], n, sizeof v->line[1]);
+        } else {
+            str_cpy(v->line[0], "EMPTY SLOT", sizeof v->line[0]);
+        }
+        str_cpy(v->line[2], "PRESS SAVE: BOTH PARTS", sizeof v->line[2]);
+        return;
+    }
     up_slot_label(v->sub, lib.slot);
     if (up_used(lib.slot)) {
         up_name(lib.slot, b);
@@ -615,6 +637,15 @@ static void vm_build(ui_vm_t *v)
     if (smk_pick_view(v))
         return;
 #endif
+    if (trk_n() > 1u && !v->tag[0]) {                  /* which part the pages and the knobs are on */
+        str_cpy(v->tag, "PART ", sizeof v->tag);
+        str_cpy(v->tag + 5, N_PART[song.sel], sizeof v->tag - 5u);
+        if (uix.place == PL_HOME && song.octave) {     /* (it stands where the octave does: both) */
+            str_cpy(v->tag, N_PART[song.sel], sizeof v->tag);
+            str_cpy(v->tag + 1, song.octave > 0 ? " OCT+" : " OCT", sizeof v->tag - 1u);
+            fmt_int(v->tag + str_len(v->tag), song.octave);
+        }
+    }
     if (uix.br.on) {                                   /* browsing: the sounds around the one chosen */
         uint32_t n = vm_list_of(v, uix.br.src);
         v->mode = VM_BROWSE;
@@ -696,15 +727,24 @@ static void vm_build(ui_vm_t *v)
         uint32_t s = ui_stop(uix.place);
         if (uix.place != PL_SAVE) str_cpy(v->sub, stop_title(&pl, s), sizeof v->sub);
         stop_dots(&pl, s, &v->ndots, &v->dot);
-        for (i = 0; i < 4u; i++)
+        for (i = 0; i < 4u; i++) {
             vm_col_of(&v->col[i], &pl.stop[s].f[i]);
+            if (uix.place == PL_GLO && trk_n() > 1u && pl.stop[s].f[i].kind == FK_TRACK && v->col[i].on) {
+                char l[sizeof v->col[i].label];        /* (no room for the part in GLOBAL's header: the values say it) */
+                str_cpy(l, N_PART[song.sel], sizeof l);
+                str_cpy(l + 1, " ", sizeof l - 1u);
+                str_cpy(l + 2, v->col[i].label, sizeof l - 2u);
+                str_cpy(v->col[i].label, l, sizeof l);
+            }
+        }
         if (uix.place == PL_SAVE) vm_save(v);
         else if (pl.stop[s].pic == PIC_LIB) {
             v->pic = PIC_LIB;
             vm_list_of(v, ui_stop(PL_LIB));
             if (lib.deleting) {
                 str_cpy(v->warn, "DELETE ", sizeof v->warn);
-                up_slot_label(v->warn + 7, lib.delete_slot);
+                if (ui_stop(PL_LIB) == LIB_PERF) perf_label(v->warn + 7, lib.delete_slot);
+                else up_slot_label(v->warn + 7, lib.delete_slot);
                 str_cpy(v->warn + str_len(v->warn), "? PRESS FX", sizeof v->warn - str_len(v->warn));
             }
         } else if (pl.stop[s].pic == PIC_ERASE) {
@@ -822,7 +862,7 @@ static void ui_leds(void)
         keys = fm1_in.notes & ~kb_layer;                    /* the keys held */
     }
     for (k = 0; k < 27u; k++) {
-        uint32_t lv = play ? play_key_led(TSEL, k) : KL_OFF;   /* playing: the layout, MIDI's notes too (LIGHTS) */
+        uint32_t lv = play ? play_key_led(key_track(k), k) : KL_OFF;   /* playing: the layout, MIDI's notes too (LIGHTS) */
         led_put(nl, 14u + k, (int)(((keys >> k) & 1u) || lv == KL_ON));
         led_put(nd, 14u + k, (((dimkeys >> k) & 1u) || lv == KL_DIM) && (lights != LIGHTS_OFF || !play));
     }

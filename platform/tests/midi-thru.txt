@@ -13,7 +13,7 @@ midi USB 80 3c 00
 wait 50
 # GLOBAL > MIDI K3 THRU, a device setting.
 tap GLO
-turn SELECT 3 80
+turn SELECT 4 80
 turn K3 1
 expect thru 1
 shot midi-thru.png

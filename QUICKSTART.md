@@ -1,6 +1,6 @@
 # Saadet quick start
 
-Saadet turns the M-VAVE FM-1 into one polyphonic synthesizer with four engines: P5 (Prophet-5), FM6 (DX7),
+Saadet turns the M-VAVE FM-1 into a polyphonic synthesizer of one or two parts with four engines: P5 (Prophet-5), FM6 (DX7),
 CZ-1 and J106 (JUNO-106). This page gets you from a stock FM-1 to playing and saving sounds.
 
 ## 1. Install (about 5 minutes)
@@ -33,6 +33,12 @@ Every button opens a place; tap it again (or turn **SELECT**) to turn its page. 
 inside on the keys, then press a key to jump there. Holding **ARP** is the exception: it is a sustain pedal that
 latches. Press **ARP** again to let go of what it keeps.
 
+### Two sounds at once
+
+**GLOBAL > PARTS**, K1: MULTI gives each part a MIDI channel, SPLIT divides the keys at the SPLIT note (below it part B), LAYER
+plays both. Then tap **HOME** on HOME to change part: everything edits the part named in the header. The parts share the voices,
+half each, and lend what they aren't using.
+
 ## 3. Shape the sound
 
 - **EDIT**: the engine's own panel (oscillators, operators, filter and so on). **ENV** and **LFO**: envelopes,
@@ -46,7 +52,9 @@ latches. Press **ARP** again to let go of what it keeps.
 - **SAVE**: choose a slot, spell a name with CURSOR and LETTER, star it if you like, then press **SAVE** again.
 - **FX** opens the **LIBRARY**: favourites, your sounds and every engine's factory sounds. K2 stars a sound.
 - Hold **HOME** to put your favourites on the keys.
-- The current sound and settings are kept automatically and come back at power-on.
+- With two parts on, turn **SELECT** in SAVE to the PERFORM page to keep both parts as a named performance. LIBRARY's PERFORM
+  list brings it back.
+- The current sounds and settings are kept automatically and come back at power-on.
 
 ## 5. The editor and backups
 

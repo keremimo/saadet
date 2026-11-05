@@ -13,7 +13,7 @@
 /* ------------------------------------------------------------ sizes --- */
 #define NVOICE 16                /* voice slots per part (FM6 plays Dexed's 16) */
 #define NPOLY 8                  /* the voices of an engine without its own cap (its per-voice state: engines.c eng_state) */
-#define NPART 1                  /* synth parts: tracks 1..4 */
+#define NPART 2                  /* synth parts: A and B; B plays only in a multitimbral mode (G_PMODE, trk_n) */
 #ifndef VBUDGET
 #define VBUDGET (MELODEE_RAM_AUDIO ? 18u : 16u) /* shared weighted voices; RAM profile uses 18 with CPU1 online
                                                  * at 360 MHz (voice.c voice_budget: scaled with a kept 320) */
@@ -60,6 +60,8 @@
 #endif
 #define SMP_USER_SLOTS 0u        /* sample material and its upload slots are retired */
 #define UP_SLOTS 384u            /* shared user slots: any engine, including native SysEx */
+#define PERF_SLOTS 12u           /* performances: named setups of both parts (perf.c) */
+#define PERF_NAME 13u
 #define NELEM(a) (sizeof(a) / sizeof((a)[0]))
 
 /* ------------------------------------------------------- parameters --- */
@@ -67,7 +69,8 @@ enum {
     F_INT, F_PCT, F_BIPCT, F_TIME, F_LFOHZ, F_CUTOFF, F_DB, F_SEMI, F_ENUM, F_BPM, F_NOTE,
     F_ONOFF, F_OCT, F_STEPS,
     F_OFS, F_FMNOTE, F_FMFRQ,   /* FM6's pages: 0 at the middle of the range, the DX7 break point, an operator's frequency */
-    F_TONE                      /* retired with the inserts' TONE; the id stays (the editor's format numbers) */
+    F_TONE,                     /* retired with the inserts' TONE; the id stays (the editor's format numbers) */
+    F_KEY                       /* a MIDI note by name and octave: 60 = C4 */
 };
 
 typedef struct {
@@ -144,12 +147,19 @@ enum {                          /* global parameters */
 #define G_WDRUM G_RESERVED8
 #define G_SAFETY G_RESERVED9
 #define G_DRREV G_RESERVED26
+/* The parts: how the keys and MIDI reach A and B, kept with the state and a performance. G_PMODE: PT_ONE plays part A
+ * alone and costs part B nothing; PT_MULTI: a MIDI channel for each, the keys play the selected part; PT_SPLIT: notes
+ * below G_PSPLIT play B, the rest A; PT_LAYER: every note plays both. G_PCH2: part B's MIDI channel */
+#define G_PMODE G_RESERVED10
+#define G_PSPLIT G_RESERVED11
+#define G_PCH2 G_RESERVED24
+enum { PT_ONE, PT_MULTI, PT_SPLIT, PT_LAYER, PT_N };
 
 static int param_reserved(uint32_t id)
 { return id==P_RECQ || (id>=P_SLEN && id<=P_SGATE) || (id>=P_LN0 && id<=P_LN7) || (id>=P_RESERVED33 && id<=P_RESERVED36) || (id>=P_RESERVED45 && id<=P_RESERVED48) ||
   (id>=P_FXTYPE && id<=P_FX3TONE); }
 static int global_reserved(uint32_t id)
-{ return (id>=G_SLOT && id<=G_SAVE) || id==G_CLRSEQ || (id>=G_RESERVED4 && id<=G_RESERVED11) || (id>=G_RESERVED24 && id<=G_RESERVED26) ||
+{ return (id>=G_SLOT && id<=G_SAVE) || id==G_CLRSEQ || (id>=G_RESERVED4 && id<=G_RESERVED9) || (id>=G_RESERVED25 && id<=G_RESERVED26) ||
   (id>=G_MFXTYPE && id<=G_FXMODE) || (id>=G_MFXTONE && id<=G_MFX3TONE); }
 
 /* stored parameters of an older layout -> today's P_* order. A store keeps np = the P_COUNT it was
@@ -341,15 +351,16 @@ typedef struct {
     int32_t batt_raw;            /* smoothed ADC ch3 (battery divider), 0 = not read yet */
 } song_t;
 
-static track_t trk[NTRK];        /* the instrument: four parts */
+static track_t trk[NTRK] __attribute__((section(".pool")));   /* the instrument: parts A and B (saadet_init clears it) */
 static song_t song;
 #define TSEL (&trk[song.sel])    /* the selected track */
 
 static int32_t input_octave(const track_t *t)
 { return t->p[P_QUANT] == Q_MPC ? t->mpc_octave : song.octave; }
-/* The tracks in use: 1..trk_n(), always from track 1 (it clocks the song). The others keep their structs, sound and
- * play nothing (voice.c trk_note_on), are drawn nowhere and get a fresh sound when added (project.c track_add) */
-static inline uint32_t trk_n(void) { return 1u; }
+/* The parts in use: part A alone, or both in a multitimbral mode. The other keeps its struct and sound, plays nothing
+ * (voice.c trk_note_on) and costs no CPU (mix.c mix_block) */
+static inline uint32_t parts_mode(void) { return (uint32_t)song.g[G_PMODE] < PT_N ? (uint32_t)song.g[G_PMODE] : PT_ONE; }
+static inline uint32_t trk_n(void) { return parts_mode() == PT_ONE ? 1u : NPART; }
 
 #include "microtonal.h"
 

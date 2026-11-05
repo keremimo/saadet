@@ -85,6 +85,8 @@ static void setup_case(uint32_t alg, uint32_t eng, uint32_t voices)
     mod_seed = 0x2545F491u;
     vage = 0; panic_req = 0;
     host_tracks_init();
+    song.g[G_PMODE] = PT_MULTI;                   /* both parts in use: the worker's parity across them */
+    parts_mode_was = PT_MULTI;                    /* (already in it: no panic at the first block) */
     fm6_fn_reset();
     for (uint32_t i = 0; i < NTRK; i++) {
         host_preset(&trk[i], ENGI_FM6, i);
@@ -195,8 +197,9 @@ static void prophet_allocation(void)
     audio_worker_online=1;
     for(uint32_t i=0;i<8;i++)trk_note_on(&trk[0],48+i,100);
     assert(active_voices(&trk[0])==8 && voices_busy()==VBUDGET);
+    /* part B within its share: the part over its own gives up a voice, within the budget */
     for(uint32_t i=1;i<NTRK;i++)trk_note_on(&trk[i],60+i,100);
-    assert(active_voices(&trk[0])==8 && voices_busy()==VBUDGET);
+    assert(active_voices(&trk[0])==7 && voices_busy()<=VBUDGET);
     for(uint32_t i=1;i<NTRK;i++)assert(active_voices(&trk[i])==1);
     /* Native factory unison stays at its requested five; an explicit count
      * of eight is allowed only with an online worker. */
