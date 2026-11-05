@@ -114,6 +114,22 @@ that connect the engine to the existing instrument (engine table, library, state
 editor) are now MPL-2.0, like the rest of the fm1-base build. The web editor's hooks stay
 GPL-3.0-only with the web editor.
 
+## HYDRA engine (MPL-2.0)
+
+HYDRA is Kerem Kilic's (Ellic Studio) engine from Melodee, licensed under the Mozilla Public License 2.0 file by file here. Melodee
+cancelled it before release; its copies there read GPL-3.0-only, and their author licenses them here under MPL-2.0.
+
+| File | What |
+| --- | --- |
+| `firmware/src/hydra_patch.h` | The native patch, its limits and its message |
+| `firmware/src/eng_hydra.c` | The voice, its budget and the presets. It grew from Melodee's WT engine, by john (@johnskiller), who licensed that file under MPL-2.0 (Melodee `e2b7ff53`); his and Leo Kuroshita's notices stay on it |
+| `firmware/src/hydra_edit.h`, `firmware/src/hydra_factory.h` | Panel field descriptors; our own 16 factory sounds |
+| `firmware/src/editor_hydra.c` | Editor command 97 and the native message |
+| `tests/hydra_test.c` | Host tests |
+| `tools/gen_hy_waves.py` | The 56 waves, computed from our own recipes (a build tool: GPL-3.0-only, as the others; it is not in the firmware's sources) |
+
+It follows the published design of the ASM Hydrasynth. No ASM code, wavetable or sound data is used.
+
 ## Retained Hügelton Instruments material
 
 The following original material is by Hügelton Instruments (Leo Kuroshita).
@@ -202,7 +218,8 @@ Contributions are welcome under the licence of the file they change. New firmwar
 
 "M-VAVE" and "FM-1" are trademarks of their respective owners. "Juno-106" and
 "Roland" are trademarks of Roland Corporation; JUNO-106 names the instrument this
-engine's tones are compatible with, and Saadet is not affiliated with Roland. Melodee is independent
+engine's tones are compatible with, and Saadet is not affiliated with Roland. "Hydrasynth" and "ASM" belong to Ashun Sound
+Machines; Saadet's HYDRA follows that instrument's design and is not affiliated with it. Melodee is independent
 firmware that runs on FM-1 hardware. It is not affiliated with, endorsed by or supported
 by those owners, nor by Hügelton Instruments.
 

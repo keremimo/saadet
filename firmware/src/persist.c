@@ -47,25 +47,35 @@ static int tmpl_take(const uint8_t *b, uint32_t len)
 }
 
 /* ----------------------------------------------------------- the last state --- */
-#define SYN_MAGIC 0x32534453u                     /* "SDS2": both parts */
+#define SYN_MAGIC 0x33534453u                     /* "SDS3": both parts, each with its HYDRA patch */
+#define SYN_MAGIC2 0x32534453u                    /* "SDS2": both parts, before HYDRA */
 #define SYN_MAGIC1 0x31534453u                    /* "SDS1": one part, before the parts */
-typedef struct {                                  /* a part's whole sound and its place in the mix */
-    uint8_t engine, preset, user_native; int8_t mpc_octave; uint16_t user, rsv;
-    int16_t p[P_COUNT];
-    uint8_t fm6[FM6_PACKED], fm6_fn[FM6_NFN];
-    cz_patch_t cz;
-    p5_patch_t p5;
+#define SYN_PART_FIELDS                                                       \
+    uint8_t engine, preset, user_native; int8_t mpc_octave; uint16_t user, rsv; \
+    int16_t p[P_COUNT];                                                       \
+    uint8_t fm6[FM6_PACKED], fm6_fn[FM6_NFN];                                 \
+    cz_patch_t cz;                                                            \
+    p5_patch_t p5;                                                            \
     j106_patch_t j106;
+typedef struct {                                  /* a part's whole sound and its place in the mix */
+    SYN_PART_FIELDS
+    hy_patch_t hy;
 } synth_part_t;
-typedef struct {
-    uint32_t magic, size;
-    int16_t g[G_COUNT];
-    int8_t octave;
-    uint8_t sel;                                  /* the part selected */
-    uint8_t rsv[2];
-    synth_part_t part[NPART];
+typedef struct { SYN_PART_FIELDS } synth_part2_t;  /* a part in an SDS2 state or an SPF1 performance: without the patch */
+#undef SYN_PART_FIELDS
+_Static_assert(__builtin_offsetof(synth_part_t, hy) == __builtin_offsetof(synth_part2_t, j106) + sizeof(j106_patch_t),
+               "an older part is the head of today's");
+#define SYN_STATE_FIELDS(part_t)                                              \
+    uint32_t magic, size;                                                     \
+    int16_t g[G_COUNT];                                                       \
+    int8_t octave;                                                            \
+    uint8_t sel;                                  /* the part selected */     \
+    uint8_t rsv[2];                                                           \
+    part_t part[NPART];                                                       \
     uint32_t sum;
-} synth_state_t;
+typedef struct { SYN_STATE_FIELDS(synth_part_t) } synth_state_t;
+typedef struct { SYN_STATE_FIELDS(synth_part2_t) } synth_state2_t;
+#undef SYN_STATE_FIELDS
 typedef struct {                                  /* SDS1: what came before the parts */
     uint32_t magic, size;
     int16_t g[G_COUNT];
@@ -111,12 +121,13 @@ static void part_capture(uint32_t k, synth_part_t *s)
     s->cz = cz_patch[k];
     s->p5 = *p5_patch_of(t);
     s->j106 = *j106_patch_of(t);
+    s->hy = *hy_patch_of(t);
 }
 static int part_valid(const synth_part_t *s)
 {
     if (s->user > UP_SLOTS || s->user_native > 1u || s->rsv || s->mpc_octave < -3 || s->mpc_octave > 3 ||
         !eng_ok(s->engine) || !cz_patch_valid(s->cz.raw) || !p5_patch_valid(&s->p5) || !j106_patch_valid(&s->j106) ||
-        !fm6_fn_ok(s->fm6_fn)) return 0;
+        !hy_patch_valid(&s->hy) || !fm6_fn_ok(s->fm6_fn)) return 0;
     for (uint32_t i = 0; i < FM6_PACKED; i++) if (s->fm6[i] > 127u) return 0;
     return 1;
 }
@@ -140,6 +151,7 @@ static void part_apply(uint32_t k, const synth_part_t *s)
     cz_patch[k] = s->cz;
     p5_patch[k] = s->p5; p5_ready[k] = 1;
     j106_patch[k] = s->j106; j106_ready[k] = 1;
+    hy_patch[k] = s->hy; hy_ready[k] = 1;
     memcpy(fm6_fn[k], s->fm6_fn, FM6_NFN);
     fm6_fn[k][FN_ENGINE] = FM6_MODERN; /* old renderer IDs load through MSFA */
     cz_track_accept(t);
@@ -170,14 +182,39 @@ static void state_parts_default(synth_state_t *s)
     s->sel = 0;
     part_capture(1u, &s->part[1]);
 }
+/* n bytes up to to, never below from, over themselves (the last first) */
+static void bytes_up(void *to, const void *from, uint32_t n)
+{
+    uint8_t *t = to;
+    const uint8_t *f = from;
+    while (n--) t[n] = f[n];
+}
+/* older parts laid end to end at from, n of them -> today's at to, in place (to is never below from: from the last back),
+ * each with HYDRA's INIT patch */
+static void parts_upgrade(synth_part_t *to, const uint8_t *from, uint32_t n)
+{
+    while (n--) {
+        bytes_up(&to[n], from + n * sizeof(synth_part2_t), sizeof(synth_part2_t));
+        hy_patch_init(&to[n].hy);
+    }
+}
 /* len bytes of a stored state -> today's (an older one's sound becomes part A; one from before JUNO-106 gains the INIT
- * tone, as a fresh JUNO-106 part); 0: neither */
+ * tone, as a fresh JUNO-106 part; one from before HYDRA gains HYDRA's INIT patch); 0: neither. s holds a whole state */
 static int state_upgrade(synth_state_t *s, uint32_t len)
 {
     synth_state1_t old;
     synth_part_t *a = &s->part[0];
     uint32_t i, sum;
     if (len == sizeof *s && s->magic == SYN_MAGIC) return 1;
+    if (len == sizeof(synth_state2_t) && s->magic == SYN_MAGIC2) {
+        const synth_state2_t *o = (const synth_state2_t *)s;
+        if (o->size != len || o->sum != syn_hash(o, len - 4u)) return 0;
+        parts_upgrade(s->part, (const uint8_t *)o->part, NPART);
+        s->magic = SYN_MAGIC;
+        s->size = sizeof *s;
+        s->sum = syn_hash(s, sizeof *s - 4u);
+        return 1;
+    }
     if (len != sizeof old && len != SYN_SIZE_V1) return 0;
     memcpy(&old, s, len);
     if (old.magic != SYN_MAGIC1 || old.size != len) return 0;
@@ -197,6 +234,7 @@ static int state_upgrade(synth_state_t *s, uint32_t len)
     memcpy(a->fm6, old.fm6, sizeof a->fm6);
     memcpy(a->fm6_fn, old.fm6_fn, sizeof a->fm6_fn);
     a->cz = old.cz; a->p5 = old.p5; a->j106 = old.j106;
+    hy_patch_init(&a->hy);
     state_parts_default(s);
     s->sum = syn_hash(s, sizeof *s - 4u);
     return 1;

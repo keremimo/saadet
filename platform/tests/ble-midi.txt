@@ -1,5 +1,5 @@
 wait 1200
-expect engines 4
+expect engines 5
 ble connect
 wait 30
 expect ble 1

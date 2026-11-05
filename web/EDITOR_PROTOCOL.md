@@ -13,8 +13,9 @@ INFO identifies `SAADET`, two parts, zero steps, synth marker `53 01` (hex), nat
 engine capabilities, and shared-library marker `55 01` with a two-byte total of
 384 slots. Engine identities remain Prophet 19, FM6 12, CZ-1 15 and SID 3;
 JUNO-106 is 21. After the shared-library marker, `4A 01 15 16 60 1A` announces
-JUNO-106: engine 21, favourites namespace 22, command 96 and 26 fields. Engine 20
-is reserved (the Prophet's user namespace). Reserved identities do not expose
+JUNO-106: engine 21, favourites namespace 22, command 96 and 26 fields. `48 01 19 1A 61 10 01`
+announces HYDRA: engine 25, favourites namespace 26, command 97 and a patch of 144 bytes (two digits, low first). Engine 20
+is reserved (the Prophet's user namespace), as are 22 (the JUNO-106's) and 23 and 24. Reserved identities do not expose
 additional engines or parts. Globals 10, 11 and 24 are the parts mode (0 ONE, 1 MULTI, 2 SPLIT, 3 LAYER), the split note
 and part B's MIDI channel. With the mode at ONE, only part zero can be selected.
 
@@ -34,6 +35,7 @@ and part B's MIDI channel. With the mode at ONE, only part zero can be selected.
 | 75–77 | Native CZ transfers and legacy bank metadata where applicable |
 | 95 | Native Prophet transfers |
 | 96 | Native JUNO-106 transfers |
+| 97 | Native HYDRA transfers |
 
 Command 72 answers on both builds with the same layout (`tools/usb_audio_stats.py`
 reads it; flag 1 resets the maxima, 2 adds voices, 4 the second core, 8 memory,
@@ -67,7 +69,7 @@ are 0–383; displayed slots are 1–384.
 Operations are list (0, at most 16 entries), get (1), put (2), store current sound
 (3), load (4), erase (5) and rename (6). Store/load accept only part zero.
 Native payload kinds are FM6 (1, 128 bytes), CZ-1 (2, 144 bytes), Prophet
-(3, 138 bytes) and JUNO-106 (4, 31 bytes). Native data is grouped in seven-byte chunks preceded by the
+(3, 138 bytes), JUNO-106 (4, 31 bytes) and HYDRA (5, 144 bytes). Native data is grouped in seven-byte chunks preceded by the
 chunk's high-bit mask. Legacy phrase fields in the numeric wire layout remain
 reserved; no phrase is applied or recorded.
 
@@ -95,6 +97,21 @@ playing JUNO-106 tone. Only USB delivers SysEx; TRS MIDI input drops it.
 Favourites use namespace 21 for the presets (INIT, Roland's factory patches
 A11–B88 as presets 1–128) and 22 for user slots.
 
+## HYDRA patches
+
+A patch is 144 bytes (`firmware/src/hydra_patch.h`), its last twelve a space-padded name. Command 97 takes operation, part,
+payload and replies operation (GET and PUT reply 1), result, part:
+
+- 0 GET: the patch as low-first nibble pairs (288 bytes).
+- 1 PUT: the same; the part plays the patch.
+- 2 byte edit: byte, value as two seven-bit digits, low first (the raw byte: value - the field's minimum; KEY reaches 200).
+- 3 name: 1-12 printable characters.
+- 4 send: the device sends the patch's message.
+
+Its message is Saadet's own, `F0 7D 48 59 01`, the nibble pairs, `F7`: outside the editor header it auditions the patch and
+waits in SAVE for its slots, as other native dumps do. Favourites use namespace 25 for the presets (INIT, 16 factory sounds)
+and 26 for user slots.
+
 ## Backups
 
 Archives are `saadet-backup` version 1. The ordered object identities are
@@ -113,6 +130,7 @@ staged data. See `web/fm1backup.js` for the client-side framing and validation.
 
 Saadet state uses `SDS1` and an internal size/FNV checksum. It gained the
 JUNO-106 tone at its end; a shorter state from before it still loads and
-restores, with the INIT tone. Its flash pair is
+restores, with the INIT tone. Each part also holds a HYDRA patch; a state or performance object from before HYDRA restores
+with its INIT patch. Its flash pair is
 `0xA0000/0xA1000`, formerly part of Melodee project A; saving Saadet can replace
 that project's data. Melodee backups and project files are not Saadet archives.

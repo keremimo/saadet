@@ -220,8 +220,8 @@ Measured on the Elite, 2026-11-05 (the render counter of ED_AUDIO_STATS; `sd_xru
 
 | What | Missed renders |
 | --- | --- |
-| Idle, 8 voices held, fast notes, on all four engines | 0 |
-| 8 sound loads under 8 held notes, on all four engines | 0 |
+| Idle, 8 voices held, fast notes, on all four engines of the time | 0 |
+| 8 sound loads under 8 held notes, on all four engines of the time | 0 |
 | The autosave at rest | 0 |
 | A settings flash write under 8 held notes, before the fix | 3 for each write |
 | The same write, after the fix | 0 |

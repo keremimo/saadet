@@ -44,7 +44,7 @@ static struct {
     uint32_t delete_t, delete_gen;
 } lib;
 
-static uint32_t lib_engine(uint32_t src) { return eng_vis(src - LIB_P5); }   /* LIB_P5..LIB_J106 -> P5, FM6, CZ-1, JUNO-106 */
+static uint32_t lib_engine(uint32_t src) { return eng_vis(src - LIB_P5); }   /* LIB_P5..LIB_HY -> P5, FM6, CZ-1, JUNO-106, HYDRA */
 /* one pass over list src: its count; the sounds from .. from + nw - 1 into w (w[i].eng 255: none) */
 static uint32_t lib_scan(uint32_t src, int32_t from, lib_item_t *w, uint32_t nw)
 {

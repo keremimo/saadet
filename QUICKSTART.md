@@ -1,7 +1,7 @@
 # Saadet quick start
 
-Saadet turns the M-VAVE FM-1 into a polyphonic synthesizer of one or two parts with four engines: P5 (Prophet-5), FM6 (DX7),
-CZ-1 and J106 (JUNO-106). This page gets you from a stock FM-1 to playing and saving sounds.
+Saadet turns the M-VAVE FM-1 into a polyphonic synthesizer of one or two parts with five engines: P5 (Prophet-5), FM6 (DX7),
+CZ-1, J106 (JUNO-106) and HYDRA (wave scanning). This page gets you from a stock FM-1 to playing and saving sounds.
 
 ## 1. Install (about 5 minutes)
 

@@ -3,6 +3,7 @@
 
 #define MELODEE_FAVORITES 1
 #define J106_STAR_CAP 224u
+#define HY_STAR_CAP 224u                         /* row 2 (PHASE, retired) bytes 0..27, tagged in 28..31 */
 #define SCALE_FAV_CAP 96u
 
 typedef struct {
@@ -49,11 +50,12 @@ static int star_tagged_put(uint8_t *row, uint32_t offset, uint32_t cap,
 }
 static const uint8_t star_juno_tag[4] = {'J', '6', 'F', 2};
 static const uint8_t star_scale_tag[4] = {'S', 'C', 'L', 1};
+static const uint8_t star_hydra_tag[4] = {'H', 'Y', 'F', 1};
 
 static int star_user_namespace(uint32_t engine)
 {
     return engine == USER_GENERAL || engine == USER_NATIVE_P5 || engine == USER_NATIVE_FM ||
-           engine == USER_NATIVE_CZ || engine == USER_NATIVE_J106;
+           engine == USER_NATIVE_CZ || engine == USER_NATIVE_J106 || engine == USER_NATIVE_HYDRA;
 }
 static int favorite_has(uint32_t engine, uint32_t preset)
 {
@@ -61,6 +63,8 @@ static int favorite_has(uint32_t engine, uint32_t preset)
     if (star_user_namespace(engine)) return preset < UP_SLOTS && !!up_favorite(preset);
     if (engine == ENGI_J106)
         return star_tagged_get(favorites.factory[3], 0, J106_STAR_CAP, star_juno_tag, preset);
+    if (engine == ENGI_HYDRA)
+        return star_tagged_get(favorites.factory[2], 0, HY_STAR_CAP, star_hydra_tag, preset);
     return engine < NENGINES && engine < 16u && preset < 256u &&
            star_bit_get(favorites.factory[engine], preset);
 }
@@ -71,6 +75,8 @@ static int favorite_set(uint32_t engine, uint32_t preset, int on)
     if (star_user_namespace(engine)) return preset < UP_SLOTS ? up_favorite_set(preset, on) : 0;
     if (engine == ENGI_J106)
         return star_tagged_put(favorites.factory[3], 0, J106_STAR_CAP, star_juno_tag, preset, on);
+    if (engine == ENGI_HYDRA)
+        return star_tagged_put(favorites.factory[2], 0, HY_STAR_CAP, star_hydra_tag, preset, on);
     return engine < NENGINES && engine < 16u && preset < 256u ?
            star_bit_put(favorites.factory[engine], preset, on) : 0;
 }

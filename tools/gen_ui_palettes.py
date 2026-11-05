@@ -19,7 +19,7 @@ tag. Every token is stored (RGB565); only text and edges are blended at run time
   OFF    a page dot not shown, beat ticks
   LINE   a bar's track, rules
   WELL   an unlit key, an empty slot
-  ENG    the engines' colours: PROPHET, FM6, CZ-1, JUNO-106 (retired SID's)
+  ENG    the engines' colours: PROPHET, FM6, CZ-1, JUNO-106 (retired SID's), HYDRA
 Outside the theme: the crash screen's fixed red.
 GRAY (R = G = B in every token) is compiled into the host tests only (UI_TEST_PALETTE): a screen drawn in it must stay
 gray, which proves the drawing takes every colour from the tokens.
@@ -35,11 +35,11 @@ TOKENS = ("bg", "text", "mid", "dim", "faint", "fill", "lit", "off", "line", "we
 PALETTES = [
     ("STAGE", ((5, 5, 6), (255, 255, 255), (163, 163, 171), (122, 122, 132), (85, 85, 94), (92, 92, 102),
                (74, 74, 84), (58, 58, 66), (34, 34, 39), (28, 28, 33)),
-     ((255, 107, 61), (82, 168, 255), (242, 201, 76), (185, 150, 255))),
+     ((255, 107, 61), (82, 168, 255), (242, 201, 76), (185, 150, 255), (72, 214, 160))),
 ]
 TEST_GRAY = ("GRAY", ((6, 6, 6), (255, 255, 255), (164, 164, 164), (123, 123, 123), (86, 86, 86), (93, 93, 93),
                       (75, 75, 75), (59, 59, 59), (35, 35, 35), (29, 29, 29)),
-             ((180, 180, 180), (190, 190, 190), (230, 230, 230), (200, 200, 200)))
+             ((180, 180, 180), (190, 190, 190), (230, 230, 230), (200, 200, 200), (210, 210, 210)))
 PAL_TAG = 96                       # stored id = PAL_TAG + index (ids below: earlier firmware, read as the default)
 CRASH_BG, CRASH_INK = (160, 0, 0), (255, 255, 255)
 # (fg, bg, minimum contrast): what is read on the screen. ENG stands for each engine's colour

@@ -222,6 +222,7 @@ static int ed_flash_stop(void) { return transport_busy(); }
 #include "editor_library.c"
 #include "editor_prophet.c"
 #include "editor_j106.c"
+#include "editor_hydra.c"
 
 static int ed_args_ok(uint32_t cmd, const uint8_t *a, uint32_t n)
 {
@@ -264,6 +265,7 @@ static __attribute__((minsize)) void ed_handle(const uint8_t *f, uint32_t n)   /
     ed_begin(cmd);
     if(ed_prophet_handle(cmd,a,na)){ed_send();return;}
     if(ed_j106_handle(cmd,a,na)){ed_send();return;}
+    if(ed_hydra_handle(cmd,a,na)){ed_send();return;}
 
     if (ed_ui_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_library_handle(cmd,a,na)) { ed_send(); return; }
@@ -472,6 +474,7 @@ static __attribute__((minsize)) void ed_handle(const uint8_t *f, uint32_t n)   /
         ed_b(0x4e); ed_b(1); ed_b(NATIVE_FM_SLOTS); ed_b(0); ed_b(NATIVE_CZ_SLOTS&127u); ed_b(NATIVE_CZ_SLOTS>>7); /* native user pools, command 78 */
         ed_b(0x55);ed_b(1);ed_b(UP_SLOTS&127u);ed_b(UP_SLOTS>>7); /* shared library */
         ed_b(0x4a);ed_b(1);ed_b(ENGI_J106);ed_b(USER_NATIVE_J106);ed_b(ED_J106);ed_b(J106_FIELDS); /* JUNO-106: command 96 */
+        ed_b(0x48);ed_b(1);ed_b(ENGI_HYDRA);ed_b(USER_NATIVE_HYDRA);ed_b(ED_HYDRA);ed_b(HY_BYTES&127u);ed_b(HY_BYTES>>7); /* HYDRA: command 97 */
         break;
     case ED_GET:
     case ED_SET:
@@ -766,6 +769,7 @@ static void ed_service(void)
     if(general_sysex_frame(p,n)){ota_frame_done();return;}
     if(p5_native_frame(p,n)){ota_frame_done();return;}
     if(j106_native_frame(p,n)){ota_frame_done();return;}
+    if(hy_native_frame(p,n)){ota_frame_done();return;}
     if (n < 4u || p[0] != ED_HDR0 || p[1] != ED_HDR1 || p[2] != ED_HDR2)
         return;
     ed_w.last_ms = fm1_ms;                                 /* any request keeps WATCH alive */

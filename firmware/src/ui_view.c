@@ -116,8 +116,8 @@ static void vm_cols(const ui_vm_t *v)
         if (!c->on)
             continue;
         cv_text(x, 184, TY_LB, c->label, c->dim ? T_DIM : T_MID);
-        if (text_w(f, c->val) > 54)                 /* a long name: the row face, cut if need be */
-            f = TY_RW;
+        if (text_w(f, c->val) > 54)                 /* a long name: the row face, the label's, cut if need be */
+            f = text_w(TY_RW, c->val) > 54 ? TY_LB : TY_RW;
         w = cv_text_fit(x, 199 + TY_VL->asc - f->asc, f, c->val, ink, T_BG, 54) - x;
         if (c->unit[0] && w + 2 + text_w(TY_LB, c->unit) <= 54)
             cv_text(x + w + 2, 199 + TY_VL->asc - TY_LB->asc, TY_LB, c->unit, T_MID);

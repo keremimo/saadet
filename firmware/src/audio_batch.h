@@ -35,6 +35,7 @@ static uint8_t audio_batch_active;
 static const uint32_t audio_batch_cost[AP_COUNT] __attribute__((section(".dsp_tables"),aligned(32)))={
     [AP_PROPHET]=3100,[AP_FM6]=1250,[AP_CZ]=2100,
     [AP_J106]=2100,                            /* provisional, CZ-1's: not yet measured on hardware */
+    [AP_HYDRA]=2600,                           /* its RAM kernel alone (CPU0 prepares the block); Melodee measured 325 us a block for five INIT voices */
     [AP_SID]=2000,[AP_808]=1150,[AP_909]=1900
 };
 #if defined(FM1_IRQ_TARGET) && MELODEE_DUAL_CORE

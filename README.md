@@ -15,7 +15,7 @@ A two-part synthesizer fork of Melodee for the **M-VAVE FM-1**, with Bluetooth M
 
 ## Play and shape sounds
 
-Choose **Prophet, FM6, CZ-1 or JUNO-106**, one engine at a time. Edit sounds on the
+Choose **Prophet, FM6, CZ-1, JUNO-106 or HYDRA**, one engine at a time. Edit sounds on the
 panel or in the browser, with factory libraries and native SysEx import/export.
 
 - **Perform:** arpeggiator, HOLD, chords, strum, scales and microtonal tuning.

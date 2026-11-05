@@ -13,7 +13,7 @@ Saadet's public repository is [keremimo/saadet](https://github.com/keremimo/saad
 [Releases and downloads](https://github.com/keremimo/saadet/releases) ·
 [Web editor](https://keremimo.github.io/saadet/editor.html)
 
-- Up to two polyphonic synth parts, each Prophet, FM6, CZ-1 or JUNO-106: one part, or both by MIDI channel (MULTI), split
+- Up to two polyphonic synth parts, each Prophet, FM6, CZ-1, JUNO-106 or HYDRA: one part, or both by MIDI channel (MULTI), split
   or layered. They share one voice budget, each guaranteed an equal share of it. With one part, part B costs nothing.
 - 12 named performances: both parts' sounds and how they are played.
 - Arpeggiator, HOLD, chords, strum, scales, microtonal tuning, modulation and MIDI performance.
@@ -85,6 +85,12 @@ kept as Roland's data ([assets/j106-factory](../assets/j106-factory/README.md)).
 Times and ranges are engineering estimates;
 neither the sound nor its CPU cost has been measured against an instrument or
 on an FM-1. See [LICENSING.md](../LICENSING.md#juno-106-engine-mpl-20).
+HYDRA (engine 25) is a wave-scanning engine after the ASM Hydrasynth, brought from Melodee, where it was cancelled for room:
+OSC 1 and 2 play one of 56 single-cycle waves (`tools/gen_hy_waves.py`, our own) or scan a list of eight, each through two
+mutants in series; OSC 3 plays one wave; ring and noise join them in the mixer, which feeds a filter of eleven types and a morphing
+state variable, in series or side by side. One ENV moves the filters, the scans and a mutant; the common ADSR is the amplitude.
+A patch is 144 bytes (`firmware/src/hydra_patch.h`). Oscillators run at twice the rate from F4 up while the block has room for
+it. Polyphony follows the patch's measured cost, and it is bound before a note starts ([the measurements](VALIDATION.md)).
 SID is retired with its stored engine ID reserved. FM6 uses the MSFA renderer;
 legacy MARK I/OPL settings load through it and can sound different. CZ-1 is
 independent of the removed PHASE/CrispyZebra engine. BLE/platform migration

@@ -183,6 +183,11 @@ static void pic_build(ui_vm_t *v, const ui_stop_t *st)
             v->pv[0] = j[J106_ENV_A]; v->pv[1] = j[J106_ENV_D]; v->pv[2] = j[J106_ENV_S]; v->pv[3] = j[J106_ENV_R];
             break;
         }
+        if (st->arg == 3u) {                              /* (arg 3: HYDRA's ENV 1) */
+            const uint8_t *h = hy_patch_of(t)->raw;
+            v->pv[0] = h[HY_E1_ATK]; v->pv[1] = h[HY_E1_DEC]; v->pv[2] = h[HY_E1_SUS]; v->pv[3] = h[HY_E1_REL];
+            break;
+        }
         const uint8_t *p = p5_patch_of(t)->raw;
         uint32_t a = st->arg ? P5_ATTACK_AMP : P5_ATTACK_FILTER;
         v->pv[0] = p[a]; v->pv[1] = p[a + 2u]; v->pv[2] = p[a + 4u];
@@ -192,6 +197,8 @@ static void pic_build(ui_vm_t *v, const ui_stop_t *st)
     case PIC_FILTER:                                      /* the cut 0..127 and the resonance 0..127 (SID: arg 1) */
         if (st->arg == 2u) {                              /* (JUNO-106) */
             v->pv[0] = j106_patch_of(t)->raw[J106_VCF_FREQ]; v->pv[1] = j106_patch_of(t)->raw[J106_VCF_RES];
+        } else if (st->arg == 3u) {                       /* (HYDRA's FILTER 1) */
+            v->pv[0] = hy_patch_of(t)->raw[HY_F1_CUT]; v->pv[1] = hy_patch_of(t)->raw[HY_F1_RES];
         } else if (st->arg) {
             v->pv[0] = t->p[P_E4]; v->pv[1] = (int16_t)(t->p[P_E5] * 127 / 15);
         } else {

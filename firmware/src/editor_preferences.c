@@ -110,12 +110,13 @@ static uint32_t prefs_native_engine(uint32_t space)
     case USER_NATIVE_FM: return ENGI_FM6;
     case USER_NATIVE_CZ: return ENGI_CZ;
     case USER_NATIVE_J106: return ENGI_J106;
+    case USER_NATIVE_HYDRA: return ENGI_HYDRA;
     default: return NENGINES;
     }
 }
 static uint32_t prefs_capacity(uint32_t space)
 {
-    if (space > USER_NATIVE_J106) return 0;
+    if (space > USER_NATIVE_HYDRA) return 0;
     if (space == USER_GENERAL) return UP_SLOTS;
     uint32_t engine = prefs_native_engine(space);
     if (engine != NENGINES) return native_limit(engine);
@@ -145,15 +146,15 @@ static void prefs_fav_set(const uint8_t *args, uint32_t count)
     }
     int before = favorite_has(space, (uint32_t)index);
     int changed = favorite_set(space, (uint32_t)index, on);
-    int separate_store = space == ENGI_PROPHET || space == ENGI_J106 ||
-                         engine == ENGI_PROPHET || engine == ENGI_J106;
+    int separate_store = space == ENGI_PROPHET || space == ENGI_J106 || space == ENGI_HYDRA ||
+                         engine == ENGI_PROPHET || engine == ENGI_J106 || engine == ENGI_HYDRA;
     uint32_t status;
     if (separate_store && !changed && before != (int)on) {
         status = transport_busy() ? 4u : 3u;
         on = (uint32_t)before;
     } else {
         ui.force = 1;
-        status = engine == ENGI_PROPHET || engine == ENGI_J106 ? 0u : prefs_save_status();
+        status = engine == ENGI_PROPHET || engine == ENGI_J106 || engine == ENGI_HYDRA ? 0u : prefs_save_status();
     }
     ed_b(status); ed_b(space); ed_v(index); ed_b(on);
 }

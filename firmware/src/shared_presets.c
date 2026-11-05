@@ -30,14 +30,14 @@ static int up_favorite_set(uint32_t k,int on)
 }
 static uint32_t native_limit(uint32_t e)
 {
-    return e==ENGI_PROPHET || e==ENGI_FM6 || e==ENGI_CZ || e==ENGI_J106 ? UP_SLOTS : 0u;
+    return e==ENGI_PROPHET || e==ENGI_FM6 || e==ENGI_CZ || e==ENGI_J106 || e==ENGI_HYDRA ? UP_SLOTS : 0u;
 }
 static void shared_native_record(up_rec_t *r,uint32_t e,const uint8_t *raw)
 {
     memset(r,0,sizeof *r);r->used=UP_USED;r->engine=(uint8_t)e;
-    r->ver=e==ENGI_FM6?UP_VER_FM:e==ENGI_PROPHET?UP_VER_P5:e==ENGI_J106?UP_VER_J106:UP_VER_NATIVE_CZ;
+    r->ver=e==ENGI_FM6?UP_VER_FM:e==ENGI_PROPHET?UP_VER_P5:e==ENGI_J106?UP_VER_J106:e==ENGI_HYDRA?UP_VER_HY:UP_VER_NATIVE_CZ;
     memcpy(r->packed,raw,native_size(e));
-    uint32_t off=e==ENGI_FM6?118u:e==ENGI_PROPHET?P5_NAME:e==ENGI_J106?J106_NAME:128u,len=e==ENGI_FM6?10u:12u,n=0;
+    uint32_t off=e==ENGI_FM6?118u:e==ENGI_PROPHET?P5_NAME:e==ENGI_J106?J106_NAME:e==ENGI_HYDRA?HY_NAME:128u,len=e==ENGI_FM6?10u:12u,n=0;
     for(uint32_t i=0;i<len;i++){uint8_t c=raw[off+i];r->name[i]=c>=32u&&c<=126u?(char)c:' ';if(r->name[i]!=' ')n=i+1u;}
     if(!n)memcpy(r->name,"UNTITLED",8u);
 }

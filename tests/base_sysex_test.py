@@ -90,6 +90,7 @@ static uint32_t playing_raw(uint32_t e,uint8_t *raw){
     else if(e==ENGI_CZ)memcpy(raw,cz_patch[0].raw,CZ_BYTES);
     else if(e==ENGI_PROPHET)memcpy(raw,p5_patch_of(TSEL),sizeof(p5_patch_t));
     else if(e==ENGI_J106)memcpy(raw,j106_patch_of(TSEL),sizeof(j106_patch_t));
+    else if(e==ENGI_HYDRA)memcpy(raw,hy_patch_of(TSEL),sizeof(hy_patch_t));
     else assert(0);
     return native_size(e);
 }
@@ -171,7 +172,10 @@ int main(void){
     n=j106_patch_encode(&juno,0,framebuf,sizeof framebuf);assert(n);
     j106_patch_t decoded;assert(j106_patch_decode(&decoded,framebuf,n));
     feed(framebuf,n,1);imported(ENGI_J106,(const uint8_t *)&decoded,1,sizeof decoded);
-    puts("base SysEx: CZ-1, Prophet and JUNO-106 native imports passed");
+    hy_patch_t hydra;hy_factory(3u,&hydra);
+    n=hy_patch_encode(&hydra,framebuf,sizeof framebuf);assert(n);
+    feed(framebuf,n,2);imported(ENGI_HYDRA,(const uint8_t *)&hydra,1,sizeof hydra);
+    puts("base SysEx: CZ-1, Prophet, JUNO-106 and HYDRA native imports passed");
     /* Native preset export round-trips through the generic framed dispatcher. */
     uint32_t slot=user_of(TSEL);up_rec_t record=*up_rec(slot);
     so_r=so_w;sent_n=0;assert(!general_sysex_send(slot));drain();
@@ -205,6 +209,7 @@ int main(void){
         }
         host_preset(TSEL,e,1);panic_req=0;
         if(e==ENGI_J106)j106_patch_of(TSEL)->raw[J106_VCF_FREQ]=29;
+        else if(e==ENGI_HYDRA)hy_patch_of(TSEL)->raw[HY_F1_CUT]=29;
         else if(e==ENGI_PROPHET)p5_patch_of(TSEL)->raw[P5_CUTOFF]=29;
         else if(e==ENGI_FM6)fm6_patch[0][FP_NAME]='X';
         else cz_patch[0].raw[128]='X';
@@ -229,6 +234,7 @@ int main(void){
         uint32_t e=eng_vis(visible);host_preset(TSEL,e,0);sx_drop();press(B_HOME);
         so_r=so_w;sent_n=0;assert(!library_sysex_send(e,0,0,1));drain();
         if(e==ENGI_J106)sent[5+J106_VCF_FREQ]=29;
+        else if(e==ENGI_HYDRA){sent[5+2*HY_F1_CUT]=29u&15u;sent[6+2*HY_F1_CUT]=29u>>4;}
         else if(e==ENGI_PROPHET){
             p5_patch_t patch;assert(p5_patch_decode(&patch,sent,sent_n));patch.raw[P5_CUTOFF]=29;
             sent_n=p5_patch_encode(&patch,sent,sizeof sent);assert(sent_n);
@@ -240,6 +246,7 @@ int main(void){
         assert(TSEL->eng_req==e&&!panic_req&&gates()&&erases==writes&&sx_staged());
         mix_block(stereo,CTL);assert(gates());
         if(e==ENGI_J106)assert(j106_patch_of(TSEL)->raw[J106_VCF_FREQ]==29);
+        else if(e==ENGI_HYDRA)assert(hy_patch_of(TSEL)->raw[HY_F1_CUT]==29);
         else if(e==ENGI_PROPHET)assert(p5_patch_of(TSEL)->raw[P5_CUTOFF]==29);
         else if(e==ENGI_FM6)assert(fm6_patch[0][FP_ALG]==2);
         else assert(cz_patch[0].raw[3]==12);

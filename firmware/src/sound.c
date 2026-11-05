@@ -71,6 +71,7 @@ static void apply_preset_to(track_t *t, uint32_t pi)
     t->p[P_VOICE] = pr->mono ? V_LEGATO : V_POLY;   /* mono presets keep the legato feel */
     if(t->eng_req==ENGI_PROPHET)p5_preset_loaded(t,pi);
     if(t->eng_req==ENGI_J106)j106_preset_loaded(t,pi);
+    if(t->eng_req==ENGI_HYDRA)hy_preset_loaded(t,pi);
     cz_factory_loaded(t);
     cz_track_accept(t);
     fm6_track_loaded(t);                              /* FM6: the preset's patch */
@@ -93,7 +94,7 @@ static void engine_load_of(track_t *t, uint32_t ei, uint32_t pi)
  * A11, not INIT) */
 static void set_engine_of(track_t *t, uint32_t ei)
 {
-    engine_load_of(t, ei, ei % NENGINES == ENGI_PROPHET || ei % NENGINES == ENGI_J106 ? 1u : 0u);
+    engine_load_of(t, ei, ei % NENGINES == ENGI_PROPHET || ei % NENGINES == ENGI_J106 || ei % NENGINES == ENGI_HYDRA ? 1u : 0u);
 }
 
 static void apply_preset(uint32_t pi) { apply_preset_to(TSEL, pi); }

@@ -20,6 +20,7 @@
 #endif
 #include "eng_fm6.c"            /* FM6: 6-operator FM rendered as Dexed renders it (fm6_core.c) */
 #include "eng_j106.c"           /* JUNO-106 (MPL-2.0) */
+#include "eng_hydra.c"          /* HYDRA: wave scanning, mutants, two filters (hydra_patch.h, tools/gen_hy_waves.py) */
 #if MELODEE_SLICE
 #include "eng_slice.c"
 #else
@@ -49,6 +50,7 @@ _Static_assert(sizeof(cz_part_t) <= 16384u, "CZ state exceeds the linker engine 
 _Static_assert(sizeof(p5_part_t) <= 16384u, "Prophet state exceeds the linker engine budget");
 #endif
 _Static_assert(sizeof(j106_part_t) <= 16384u, "JUNO-106 state exceeds the linker engine budget");
+_Static_assert(HY_BYTES_OF(HY_ROWS) <= 16384u, "HYDRA state exceeds the linker engine budget");
 static uint32_t eng_state_size(uint32_t e)
 {
     switch (e) {
@@ -65,6 +67,7 @@ static uint32_t eng_state_size(uint32_t e)
     case ENGI_CZ: return sizeof(cz_part_t);
     case ENGI_FM6: return sizeof(fm6_part_t);
     case ENGI_J106: return sizeof(j106_part_t);
+    case ENGI_HYDRA: return HY_BYTES_OF(HY_ROWS);   /* (the most: both oscillators scanning; hy_bytes the patch's) */
 #if MELODEE_SLICE
     case ENGI_SLICE: return sizeof(slc_rb_t);
 #endif
@@ -76,8 +79,11 @@ static void eng_state_clear(uint32_t part)
     if (part < NPART) resource_release(RES_ENGINE0 + part);
 }
 static void eng_state_reset(void) { for (uint32_t k = 0; k < NPART; k++) eng_state_clear(k); }
+static int hy_prepare(const track_t *t);
 static int eng_state_prepare(const track_t *t)
 {
+    if (t->engine == ENGI_HYDRA)
+        return hy_prepare(t);
     uint32_t size = eng_state_size(t->engine);
     return !size || resource_get(RES_ENGINE0 + (uint32_t)(t - trk), size) != 0;
 }
@@ -86,6 +92,40 @@ static drw_part_t *drw_of(const track_t *t) { return resource_get(RES_ENGINE0 + 
 static fm6_part_t *fm6_part(uint32_t part) { return resource_get(RES_ENGINE0 + part % NPART, sizeof(fm6_part_t)); }
 static cz_part_t *cz_part(uint32_t part) { return resource_get(RES_ENGINE0 + part % NPART, sizeof(cz_part_t)); }
 static j106_part_t *j106_part(uint32_t part) { return resource_get(RES_ENGINE0 + part % NPART, sizeof(j106_part_t)); }
+/* HYDRA's state: the patch's size (hy_bytes) when the arena has room; else it keeps what it holds (at least the
+ * HY_ROWS_MIN wave copies, which play each oscillator's first wave: hy_base's fallback) and asks for a refused size
+ * again every 64 blocks (~46 ms; a failed ask is a search of the arena). A new size is asked at once, as is a shrink */
+static uint8_t hy_retry[NPART];
+static uint16_t hy_refused[NPART];                     /* the size the arena last refused (asked again on the beat) */
+static uint32_t hy_held(uint32_t part)
+{
+    uint32_t have = resource[RES_ENGINE0 + part % NPART].size, base = HY_BYTES_OF(0);
+    return have > base ? (have - base) / (uint32_t)(HY_PTS * sizeof(int16_t)) : 0u;
+}
+static int hy_prepare(const track_t *t)
+{
+    uint32_t part = (uint32_t)(t - trk) % NPART, id = RES_ENGINE0 + part, want = (hy_bytes(t) + 3u) & ~3u, have = resource[id].size;
+    if (have == want)
+        return 1;
+    if (have < HY_BYTES_OF(HY_ROWS_MIN) || want < have || want != hy_refused[part] || !hy_retry[part]) {
+        hy_retry[part] = 64;
+        if (resource_get(id, want)) {
+            hy_refused[part] = 0;
+            return 1;
+        }
+        hy_refused[part] = (uint16_t)want;
+        if (!resource[id].size && resource_get(id, HY_BYTES_OF(HY_ROWS_MIN)))
+            return 1;
+    } else {
+        hy_retry[part]--;
+    }
+    return resource[id].size >= HY_BYTES_OF(HY_ROWS_MIN);
+}
+static hy_part_t *hy_part(uint32_t part)               /* (the state as held: hy_prepare sizes it) */
+{
+    uint32_t id = RES_ENGINE0 + part % NPART;
+    return resource[id].size >= HY_BYTES_OF(HY_ROWS_MIN) ? resource[id].ptr : 0;
+}
 #if MELODEE_PROPHET
 static p5_part_t *p5_part(uint32_t part) { return resource_get(RES_ENGINE0 + part % NPART, sizeof(p5_part_t)); }
 #endif
@@ -143,6 +183,9 @@ static const engine_t *const ENGINES[NENGINES] = {
     &ENG_P5_TEST,                /* 19: Prophet (ANALOG's ID 0 stays reserved) */
     &ENG_RETIRED,                /* 20: reserved: the Prophet's user namespace (USER_NATIVE_P5) */
     &ENG_J106,                   /* 21: JUNO-106 */
+    &ENG_RETIRED,                /* 22: reserved: the JUNO-106's user namespace (USER_NATIVE_J106) */
+    &ENG_RETIRED, &ENG_RETIRED,  /* 23, 24 reserved */
+    &ENG_HYDRA,                  /* 25: HYDRA */
 };
 
 /* a track's engine number as an index (the audio paths: a compare, cheaper than % NENGINES; a bad number: 0) */
@@ -172,12 +215,13 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
     ENGI_PROPHET,                /* Prophet replaces ANALOG in new-sound browsing */
     12,                          /* FM6 */
 #if MELODEE_LEGACY_EXTRAS
-    ENGI_CZ, ENGI_J106, 5,        /* CZ-1 JUNO-106 VOICE */
+    ENGI_CZ, ENGI_J106, ENGI_HYDRA, 5,   /* CZ-1 JUNO-106 HYDRA VOICE */
     6, 7, 9,
     11,                          /* NOISE */
 #else
     ENGI_CZ,                      /* CZ-1 */
     ENGI_J106,                    /* JUNO-106 (the library's lists follow this order: ui_pages.c eng_tint) */
+    ENGI_HYDRA,                   /* HYDRA */
 #endif
 #if MELODEE_SLICE
     13,                          /* SLICE */
@@ -197,7 +241,7 @@ static int eng_extra_retired(uint32_t e)
  * eng_vis(n), e's place among them eng_rank(e), the next / previous one eng_step(e, dir) (wraps) */
 static int eng_ok(uint32_t e)
 {
-    return e != ENGI_DRUM && e < NENGINES && !(e >= 16u && e <= 18u) && e != USER_NATIVE_P5 && !eng_extra_retired(e) && e != 4u && e != 8u && e != 14u && (MELODEE_SLICE || e != ENGI_SLICE);
+    return e != ENGI_DRUM && e < NENGINES && !(e >= 16u && e <= 18u) && e != USER_NATIVE_P5 && !(e >= USER_NATIVE_J106 && e <= 24u) && !eng_extra_retired(e) && e != 4u && e != 8u && e != 14u && (MELODEE_SLICE || e != ENGI_SLICE);
 }
 static uint32_t eng_sound_idx(uint32_t e)
 {

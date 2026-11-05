@@ -1,6 +1,6 @@
 # The Saadet panel
 
-Saadet is an instrument of one or two parts with four engines: P5 (Prophet-5), FM6 (DX7), CZ-1 and J106 (JUNO-106). The
+Saadet is an instrument of one or two parts with five engines: P5 (Prophet-5), FM6 (DX7), CZ-1, J106 (JUNO-106) and HYDRA. The
 screen takes on the colour of the engine of the part you are on. Every button opens a place, and each place stays where you left it.
 
 ## Controls
@@ -23,11 +23,11 @@ exception: holding it is the sustain pedal, and the keys play.
 | Button | Place | Inside |
 | --- | --- | --- |
 | HOME | HOME | The sound's name, engine and slot. Under the name, the chord you're playing and its notes (a slash chord when the lowest note isn't the root); after you let go it stays, faded, until you play again. Before you play anything it shows the key. A keyboard from C2 to B5 marks the scale, with the sounding notes lit. The status line shows the arp, chord keys, latch and sustain. Turn K1–K4 to change the macros. Hold HOME to list your favourites on the keys; pressing a key plays that favourite. |
-| FX | LIBRARY | Lists: FAVOURITES, USER, P5, FM6, CZ-1, J106. K1 picks a sound (it loads at rest), K2 stars it as a favourite. User sounds also have K4 DELETE. |
+| FX | LIBRARY | Lists: FAVOURITES, USER, P5, FM6, CZ-1, J106, HYDRA. K1 picks a sound (it loads at rest), K2 stars it as a favourite. User sounds also have K4 DELETE. |
 | SEL | SCALE | Scale, root, key mode, shift; the MPC degree. |
-| ENV | ENV | The engine's own envelopes (P5 filter and amp; FM6 pitch EG; the CZ-1's six 8-stage envelopes; the J106's one ADSR with its VCA mode, VCF amount and polarity), then the common MOD ENV. |
-| LFO | LFO | The engine's own LFO (P5 LFO, FM LFO, CZ-1 vibrato, J106 LFO rate, delay and its DCO and VCF depths), the common LFO, and the four-route matrix. |
-| EDIT | EDIT | The engine's own panel. P5: oscillators, mixer, filter, poly mod, wheel mod, play. FM6: voice and algorithm, OP1–OP6, macros, function settings. CZ-1: tone, detune, line 1 and line 2. J106: DCO waves and modulation, VCF cutoff and modulation (with the HPF), VCA mode, level and chorus. A value that has no effect on the sound as it stands is shown dim, but you can still edit it. |
+| ENV | ENV | The engine's own envelopes (P5 filter and amp; FM6 pitch EG; the CZ-1's six 8-stage envelopes; the J106's one ADSR with its VCA mode, VCF amount and polarity; HYDRA's ENV 1 and what it moves), then the common MOD ENV (on HYDRA, AMP ENV: the voice's amplitude). |
+| LFO | LFO | The engine's own LFO (P5 LFO, FM LFO, CZ-1 vibrato, J106 LFO rate, delay and its DCO and VCF depths; HYDRA has the common one alone), the common LFO, and the four-route matrix. |
+| EDIT | EDIT | The engine's own panel. P5: oscillators, mixer, filter, poly mod, wheel mod, play. FM6: voice and algorithm, OP1–OP6, macros, function settings. CZ-1: tone, detune, line 1 and line 2. J106: DCO waves and modulation, VCF cutoff and modulation (with the HPF), VCA mode, level and chorus. HYDRA: OSC 1 with mutants 1 and 2, OSC 2 with mutants 3 and 4, OSC 3, the mixer, FILTER 1, FILTER 2. A value that has no effect on the sound as it stands is shown dim, but you can still edit it. |
 | GLO | GLOBAL | Tempo, output, the parts, tuning, MIDI channels and thru, voice budget, display, erase everything. |
 | SAVE | SAVE | Choose a slot, set the name letter by letter (CURSOR, LETTER), and star it if you like. Press SAVE again to store. |
 | ARP | ARP | Pattern and feel. Its LED flashes with the arp's notes. Tap ARP to open it or turn its page. Hold ARP as a sustain pedal that latches, a drone: the notes you play or let go of while it is down keep sounding after you let go of ARP, and the keys play over them, until you press ARP again. That press ends them instead of opening the page, and what you play while still holding it becomes the new drone. Striking a kept note again restarts it, and it stays. With the arp on, the arp keeps playing the kept notes. While notes are kept, HOME shows SUSTAIN and the LED stays lit (with the arp on, it flashes with the arp). Loading another sound ends them. |
@@ -111,7 +111,7 @@ address has changed: forget Saadet on the phone or computer once and connect aga
 
 ## Importing SysEx
 
-Send a dump to Saadet over USB-MIDI: a DX7 voice or a 32-voice bank, a CZ-1 tone, a Prophet-5 program, a JUNO-106 tone, or a Saadet
+Send a dump to Saadet over USB-MIDI: a DX7 voice or a 32-voice bank, a CZ-1 tone, a Prophet-5 program, a JUNO-106 tone, a HYDRA patch, or a Saadet
 user preset. Saadet opens SAVE and shows the sounds and the slots they will go into. Turn K1 to pick the first slot,
 then press SAVE to import. Single native tones also select their engine and
 play immediately from RAM, so a librarian can audition and edit without a
@@ -128,7 +128,7 @@ when you press SAVE. Normal idle recall still remembers the playing state.
 
 In any LIBRARY list, select a sound with K1 and turn **K3 SEND clockwise**.
 `SOUND SENT` confirms that its SysEx was sent over USB-MIDI. The selected
-sound uses its native Prophet, DX7, CZ-1 or JUNO-106 format; a saved sound
+sound uses its native Prophet, DX7, CZ-1, JUNO-106 or HYDRA format; a saved sound
 without native data uses Saadet's preset format. When the selected sound is
 the one playing, the dump includes its current native edits. Sending does
 not save or load a sound. Empty lists have no SEND control.

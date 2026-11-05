@@ -229,6 +229,14 @@
         <button id="j106export">Export tone .syx</button><button id="j106exportbank">Export imported library .syx</button><button id="j106library">Add to library</button></p>
       <label>Name <input id="j106name" maxlength="12"></label><div id="j106controls" class="groups"></div>
     </div>
+    <div id="hypanel" class="group" hidden>
+      <h2>HYDRA native patches</h2>
+      <p class="dim">Three wave-scanning oscillators, four mutants, two filters. Read the sound before editing; Send to track plays the edited patch. Save patches in the shared user bank.</p>
+      <p class="bar"><button id="hyimport">Import .syx</button><input id="hyfile" type="file" accept=".syx" hidden>
+        <select id="hyvoices" aria-label="Imported HYDRA patch"></select><button id="hyread">Read track</button><button id="hysend">Send to track</button>
+        <button id="hyexport">Export patch .syx</button><button id="hyexportbank">Export imported library .syx</button><button id="hylibrary">Add to library</button></p>
+      <label>Name <input id="hyname" maxlength="12"></label><div id="hycontrols" class="groups"></div>
+    </div>
     <div id="czpanel" class="group" hidden>
       <h2>CZ-1 native patches</h2>
       <p class="dim">Import Casio .syx tones or banks. Native mode uses the original two lines and six eight-point envelopes. Read the selected track before editing it.</p>
@@ -398,7 +406,7 @@ const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 
   TRACK_PARAM: 31, TRACK_CHANGED: 32, SONG: 33, PATTERN: 73, BANK_SONG: 74,
   UI_STATE: 34, UI_SET: 35, UI_PALETTES: 36, FAV_GET: 37, FAV_SET: 38,
   MOTION: 64, BACKUP_LIST: 65, BACKUP_GET: 66, BACKUP_PUT: 67,
-  FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71, CZ_GET: 75, CZ_PUT: 76, CZ_BANK: 77, NATIVE: 78, LIBRARY:80, PROPHET:95, J106:96 };
+  FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71, CZ_GET: 75, CZ_PUT: 76, CZ_BANK: 77, NATIVE: 78, LIBRARY:80, PROPHET:95, J106:96, HYDRA:97 };
 /* frames the device sends on its own (while WATCH is on); never replies */
 
 /*P5-FACTORY-BEGIN*/
@@ -449,6 +457,48 @@ const J106 = {
   nibbles(b) { if(!J106.valid(b))throw Error("Invalid JUNO-106 tone");return b.flatMap(x=>[x&15,x>>4]); },
   bytes(a) { if(a.length!==62||a.some(x=>x>15))throw Error("Invalid JUNO-106 record");const b=Array.from({length:31},(_,i)=>a[i*2]|a[i*2+1]<<4);if(!J106.valid(b))throw Error("Invalid JUNO-106 record");return b; }
 };
+
+/* HYDRA patches (firmware/src/hydra_patch.h): 144 bytes, the name in the last twelve. A field's raw byte is its value - min.
+   Its message is Saadet's own: F0 7D 48 59 01, two nibbles a byte (low first), F7. */
+const HY = (() => {
+  const WAVES=["SINE","TRI","SAW","SQR","PULSE25","PULSE10","SOFTSW","HALFSIN","OCTAVE","FIFTHS","ODD 5","EVEN","DRAWBR","ORGAN 2","BRIGHT","HOLLOW","VOX A","VOX E","VOX I","VOX O","VOX U","VOX AE","CHOIR","NASAL","BELL","CHIME","GLASS","TINE","MALLET","STEEL","GONG","KALIMBA","SYNC 2","SYNC 3","SYNC 5","PM 1","PM 2","PM 3","BITS","STEPS","COMB","NOTCH","RAMP UP","THIN","BUZZ","FORMNT","TWIN PK","AIR","GRIT","DUST","FUZZ","CRUSH","WIRE","REED","BRASS","STRING"],SLOTS=["EMPTY",...WAVES];
+  const fields=[],f=(id,label,min,max,names)=>{fields.push({id,label,min,max,...(names?{names}:{})});};
+  const osc=(b,n)=>{f(b,`${n} mode`,0,1,["Single","Scan"]);f(b+1,`${n} wave`,0,55,WAVES);for(let i=0;i<8;i++)f(b+2+i,`${n} slot ${i+1}`,0,56,SLOTS);
+    f(b+10,`${n} scan`,0,127);f(b+11,`${n} semitones`,-36,36);f(b+12,`${n} cents`,-50,50);f(b+13,`${n} key tracking %`,0,200);};
+  const MUT=["Off","FM-LIN","Stack","Sync","PW","Squeeze","Warp","Harmonic"],SRC=["OSC 1","OSC 2","OSC 3","Ring","Noise"],OSCS=["OSC 1","OSC 2","OSC 3"];
+  const mut=(b,n)=>{f(b,`Mutant ${n} mode`,0,7,MUT);f(b+1,`Mutant ${n} FM source`,0,4,SRC);f(b+2,`Mutant ${n} ratio`,0,127);f(b+3,`Mutant ${n} depth`,0,127);f(b+4,`Mutant ${n} feedback / window`,0,127);f(b+5,`Mutant ${n} wet`,0,127);};
+  osc(0,"OSC 1");osc(14,"OSC 2");f(28,"OSC 3 wave",0,55,WAVES);f(29,"OSC 3 semitones",-36,36);f(30,"OSC 3 cents",-50,50);f(31,"OSC 3 key tracking %",0,200);
+  mut(32,1);mut(38,2);mut(44,3);mut(50,4);
+  f(56,"Ring A",0,2,OSCS);f(57,"Ring B",0,2,OSCS);f(58,"Noise colour",0,2,["White","Pink","Brown"]);
+  ["OSC 1","OSC 2","OSC 3","Ring","Noise"].forEach((n,i)=>{f(59+i,`${n} level`,0,127);f(64+i,`${n} to filter 2`,0,127);});
+  f(69,"Filter route",0,1,["Series","Parallel"]);
+  f(70,"Filter 1 type",0,10,["Ladder 12","Ladder 24","Fat 12","Fat 24","MS-20 LP","MS-20 HP","LPG","3-pole LP","3-pole BP","3-pole HP","Vowel"]);
+  f(71,"Filter 1 cutoff",0,127);f(72,"Filter 1 resonance",0,127);f(73,"Filter 1 drive",0,127);f(74,"Filter 1 drive order",0,1,["Pre","Post"]);
+  f(75,"Filter 1 ENV 1",-63,63);f(76,"Filter 1 key tracking %",0,200);f(77,"Filter 1 velocity",0,127);
+  f(79,"Filter 2 type",0,1,["Band","Notch"]);f(80,"Filter 2 pass",0,127);f(81,"Filter 2 cutoff",0,127);f(82,"Filter 2 resonance",0,127);f(83,"Filter 2 ENV 1",-63,63);f(84,"Filter 2 key tracking %",0,200);
+  f(85,"Level",0,127);f(86,"ENV 1 to scan 1",-63,63);f(87,"ENV 1 to scan 2",-63,63);f(88,"ENV 1 to mutant 1",-63,63);
+  f(100,"ENV 1 delay",0,127);f(101,"ENV 1 attack",0,127);f(102,"ENV 1 hold",0,127);f(103,"ENV 1 decay",0,127);f(104,"ENV 1 sustain",0,127);f(105,"ENV 1 release",0,127);
+  const HY={ENGINE:25,RECORD:144,NAME:132,WAVES,FIELDS:fields,
+    GROUPS:[['OSC 1',0,14],['OSC 2',14,28],['OSC 3',28,32],['Mutants 1, 2 (OSC 1)',32,44],['Mutants 3, 4 (OSC 2)',44,56],['Mixer',56,70],['Filter 1',70,79],['Filter 2',79,85],['ENV 1 and level',85,106]],
+    get(b,id) { const d=fields.find(x=>x.id===id);return b[id]+d.min; },
+    set(b,id,v) { const d=fields.find(x=>x.id===id);b[id]=v-d.min; },
+    valid(b) { return Array.isArray(b)&&b.length===144&&b.every(x=>Number.isInteger(x)&&x>=0&&x<=255)&&fields.every(d=>b[d.id]<=d.max-d.min)&&b.slice(132).every(x=>x>=32&&x<=126); },
+    name(b) { return String.fromCharCode(...b.slice(132,144)).trimEnd(); },
+    setName(b,name) { b.splice(132,12,...Array.from(String(name).replace(/[^ -~]/g," ").slice(0,12).padEnd(12," "),x=>x.charCodeAt(0))); },
+    init() { const b=[0,2,3,33,34,35,0,0,0,0,0,36,50,100,0,2,1,2,4,7,0,0,0,0,0,36,57,100,0,36,50,100,0,2,32,0,0,127,0,2,32,0,0,127,0,2,32,0,0,127,0,2,32,0,0,127,0,1,0,100,0,0,0,0,0,0,0,0,0,0,1,127,0,0,0,63,0,0,0,0,0,127,0,63,0,100,63,63,63,0,0,0,0,0,0,0,0,0,0,0,0,0,0,64,0,50,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];b.length=132;HY.setName(b,"INIT HYDRA");return b; },
+    sysex(b) { if(!HY.valid(b))throw Error("Invalid HYDRA patch");return new Uint8Array([240,0x7D,0x48,0x59,1,...HY.nibbles(b),247]); },
+    decode(f) { if(f.length!==294||f[0]!==240||f[1]!==0x7D||f[2]!==0x48||f[3]!==0x59||f[4]!==1||f[293]!==247)throw Error("Invalid HYDRA SysEx frame");return HY.bytes(f.slice(5,293)); },
+    read(bytes) {
+      const voices=[];
+      for(let i=0;i<bytes.length;){if(bytes[i]!==240)throw Error("Unexpected byte outside HYDRA SysEx");const end=bytes.indexOf(247,i+1);if(end<0)throw Error("Truncated HYDRA SysEx");
+        const raw=HY.decode(Array.from(bytes.slice(i,end+1)));i=end+1;voices.push({name:HY.name(raw),raw});}
+      if(!voices.length)throw Error("Empty HYDRA library");return {voices};
+    },
+    nibbles(b) { if(!HY.valid(b))throw Error("Invalid HYDRA patch");return b.flatMap(x=>[x&15,x>>4]); },
+    bytes(a) { if(a.length!==288||a.some(x=>x>15))throw Error("Invalid HYDRA record");const b=Array.from({length:144},(_,i)=>a[i*2]|a[i*2+1]<<4);if(!HY.valid(b))throw Error("Invalid HYDRA record");return b; }
+  };
+  return HY;
+})();
 
 const P5 = {
   ENGINE:19, RECORD:138, NAME:65, FIELDS:[],
@@ -610,12 +660,13 @@ const parse = {
     if(!o.rc&&a.length>3){o.raw=J106.decode([240,...a.slice(3,25),247]);const end=a.indexOf(0,25);J106.setName(o.raw,String.fromCharCode(...a.slice(25,end<0?a.length:end)));}
     return o;
   },
+  [CMD.HYDRA](a) { if(a.length<3)throw Error("Short HYDRA reply");const o={op:a[0],rc:a[1],track:a[2]};if(!o.rc&&a.length>3)o.raw=HY.bytes(a.slice(3));return o; },
   [CMD.PROPHET](a) { if(a.length<3)throw Error("Short Prophet reply");const o={op:a[0],rc:a[1],track:a[2]};if(!o.rc&&a.length>3)o.raw=P5.decode([240,...a.slice(3),247]);return o; },
   [CMD.NATIVE](a) {
     const r=new Reader(a),o={engine:r.b(),op:r.b(),index:r.b(),rc:r.b()};
     if(o.rc)return o;
     if(o.op===0){o.count=r.b();o.total=r.b()|r.b()<<7;o.slots=Array.from({length:o.count},(_,i)=>({slot:o.index+i,engine:o.engine,used:!!r.b(),name:r.s()}));}
-    if(o.op===1)o.raw=o.engine===15?CZ.bytes(a.slice(4)):o.engine===19?P5.bytes(a.slice(4)):o.engine===21?J106.bytes(a.slice(4)):Array.from(a.slice(4));
+    if(o.op===1)o.raw=o.engine===15?CZ.bytes(a.slice(4)):o.engine===19?P5.bytes(a.slice(4)):o.engine===21?J106.bytes(a.slice(4)):o.engine===25?HY.bytes(a.slice(4)):Array.from(a.slice(4));
     if(o.op===7)o.user=r.b()|r.b()<<7;
     return o;
   },
@@ -650,6 +701,9 @@ const parse = {
       const jp=trailer.findIndex((x,i)=>i>=(shared>=0?shared+4:29)&&x===0x4a&&trailer[i+1]===1&&trailer[i+2]===J106.ENGINE);
       o.juno=jp>=0&&trailer[jp+4]===CMD.J106?{engine:trailer[jp+2],namespace:trailer[jp+3],fields:trailer[jp+5]}:null;   /* JUNO-106, command 96 */
       if(o.juno)o.namespace[J106.ENGINE]=o.juno.namespace;
+      const hp=trailer.findIndex((x,i)=>i>=(shared>=0?shared+4:29)&&x===0x48&&trailer[i+1]===1&&trailer[i+2]===HY.ENGINE);
+      o.hydra=hp>=0&&trailer[hp+4]===CMD.HYDRA?{engine:trailer[hp+2],namespace:trailer[hp+3]}:null;   /* HYDRA, command 97 */
+      if(o.hydra)o.namespace[HY.ENGINE]=o.hydra.namespace;
       return o;
     }
     if (o.uiCaps && trailer[4] === 0x4d && [1,2].includes(trailer[5]) && trailer[6] === 64) {
@@ -836,6 +890,10 @@ const req = {
   j106Put: (track,raw) => [CMD.J106,[1,track,...J106.sysex(raw).slice(1,-1)]],
   j106Edit: (track,id,value) => [CMD.J106,[2,track,id,value]],
   j106Name: (track,name) => [CMD.J106,[3,track,...Array.from(String(name).replace(/[^ -~]/g," ").trim().slice(0,12)||"TONE",x=>x.charCodeAt(0))]],
+  hyGet: track => [CMD.HYDRA,[0,track]],
+  hyPut: (track,raw) => [CMD.HYDRA,[1,track,...HY.nibbles(raw)]],
+  hyEdit: (track,id,raw) => [CMD.HYDRA,[2,track,id,raw&127,raw>>7]],
+  hyName: (track,name) => [CMD.HYDRA,[3,track,...Array.from(String(name).replace(/[^ -~]/g," ").trim().slice(0,12)||"PATCH",x=>x.charCodeAt(0))]],
   native: (engine,op,index,...args) => [CMD.NATIVE,[engine,op,index,...args]],
   czBank: bank => [CMD.CZ_BANK,[bank]],
   czGet: (target,index) => [CMD.CZ_GET,[target,index]],
@@ -1217,6 +1275,7 @@ function cleanPatch(pt) {
   if(pt.drum!=null || pt.engine===10)throw Error("Drum sounds are not supported by Saadet");
   if(pt.p5!=null){if(pt.engine!==19||!P5.valid(pt.p5))throw Error("Invalid native Prophet patch");o.p5=pt.p5.slice();}
   if(pt.j106!=null){if(pt.engine!==J106.ENGINE||!J106.valid(pt.j106))throw Error("Invalid native JUNO-106 tone");o.j106=pt.j106.slice();}
+  if(pt.hy!=null){if(pt.engine!==HY.ENGINE||!HY.valid(pt.hy))throw Error("Invalid native HYDRA patch");o.hy=pt.hy.slice();}
   if (pt.cz != null) { if(!CZ.valid(pt.cz))throw new Error("Invalid native CZ patch");o.cz=pt.cz.slice(); }
   if (Array.isArray(pt.fm6) && pt.fm6.length === FM6.PACKED) o.fm6 = pt.fm6.map((x) => (x | 0) & 127);   /* (a converted */
   if (Array.isArray(pt.fm4)) o.fm4 = pt.fm4.map((v) => (Number.isFinite(v) ? Math.round(v) : null));    /* DIGITAL sound) */
@@ -1235,6 +1294,7 @@ function libraryFile(kind, patches, ctx) {
         params: c.p, tags: c.tags, created: c.created, modified: c.modified };
       if(c.p5)o.p5=c.p5;
       if(c.j106)o.j106=c.j106;
+      if(c.hy)o.hy=c.hy;
       if (c.cz) o.cz=c.cz;
       if (c.fm6) { o.fm6 = c.fm6; o.fm4 = c.fm4; }   /* a DIGITAL sound converted: its FM6 patch, the DIGITAL values */
       if (Number.isInteger(x.slot)) o.slot = x.slot;
@@ -1246,6 +1306,7 @@ function czLibraryPatch(v,ctx={}) {
   const p=Array(ctx.keys?.length||92).fill(null);p[(ctx.pe0??84)+7]=2;
   return cleanPatch({name:v.name,engine:15,engineName:"CZ-1",p,cz:v.raw,tags:["CZ-1","SysEx"]});
 }
+function hyLibraryPatch(v,ctx={}) {return cleanPatch({name:v.name,engine:HY.ENGINE,engineName:"HYDRA",p:Array(ctx.keys?.length||ctx.pcount||92).fill(null),hy:v.raw,tags:["HYDRA","SysEx"]});}
 function j106LibraryPatch(v,ctx={}) {return cleanPatch({name:v.name,engine:J106.ENGINE,engineName:"JUNO-106",p:Array(ctx.keys?.length||ctx.pcount||92).fill(null),j106:v.raw,tags:["JUNO-106","SysEx"]});}
 function p5LibraryPatch(v,ctx={}) {return cleanPatch({name:v.name,engine:19,engineName:"PROPHET",p:Array(ctx.keys?.length||ctx.pcount||92).fill(null),p5:v.raw,tags:["PROPHET","SysEx"]});}
 /* Library imports work offline too: dispatch by the file's manufacturer, never the selected engine. */
@@ -1254,6 +1315,7 @@ function readSysexLibrary(bytes, filename, ctx={}) {
   if (maker === 0x44) return CZ.read(bytes, filename).voices.map(v => czLibraryPatch(v, ctx));
   if (maker === 0x01) return P5.read(bytes).voices.map(v => p5LibraryPatch(v, ctx));
   if (maker === 0x41) return J106.read(bytes).voices.map(v => j106LibraryPatch(v, ctx));
+  if (maker === 0x7D && bytes[start + 2] === 0x48) return HY.read(bytes.slice(start)).voices.map(v => hyLibraryPatch(v, ctx));
   if (maker !== 0x43) throw new Error("Unknown SysEx manufacturer");
   const imported = FM6.parseSysex(bytes);
   if (!imported.voices.length || imported.badSum) throw new Error("Invalid Yamaha DX7 SysEx file");
@@ -1283,7 +1345,7 @@ function readLibraryFile(obj, ctx) {
     const p = ctx.keys && ctx.pe0 && obj.p.length !== ctx.keys.length ? tailParams(obj.p, ctx.keys.length, ctx.pe0)
       : obj.p.slice(0, ctx.keys ? ctx.keys.length : obj.p.length);
     const pt = fm4({ name: obj.presetName || obj.engineName || "PATCH", engine: e, engineName: obj.engineName, p,
-      p5:obj.p5, j106:obj.j106, cz:obj.cz, cz1:obj.cz1, tags: ["file"] }, obj.engineName,
+      p5:obj.p5, j106:obj.j106, hy:obj.hy, cz:obj.cz, cz1:obj.cz1, tags: ["file"] }, obj.engineName,
       ctx.keys && ctx.pe0 ? ctx.pe0 : p.length - 8);
     return pt ? { patches: [cleanPatch(pt)], skipped: 0, keys: null } : { patches: [], skipped: 1, keys: null };
   }
@@ -1331,15 +1393,15 @@ const nativeBank = {
     if(info.shared){const p=await bank.get(rq,info,slot);return p.engine===engine?p:{used:false,engine,slot};}
     const r=parse[CMD.NATIVE](await rq(req.native(engine,1,slot)));if(r.rc===2)return {used:false,engine,slot};if(r.rc)throw Error("Cannot read native preset");
     const p=Array(info.pcount).fill(null);if(engine===15)p[info.pe0+7]=2;
-    return {used:true,engine,slot,name:engine===19?P5.name(r.raw):engine===21?J106.name(r.raw):engine===15?CZ.name(r.raw):FM6.name(FM6.unpack(r.raw)),p,pattern:null,grid:null,...(engine===19?{p5:r.raw}:engine===21?{j106:r.raw}:engine===15?{cz:r.raw}:{fm6:r.raw})};
+    return {used:true,engine,slot,name:engine===19?P5.name(r.raw):engine===21?J106.name(r.raw):engine===25?HY.name(r.raw):engine===15?CZ.name(r.raw):FM6.name(FM6.unpack(r.raw)),p,pattern:null,grid:null,...(engine===19?{p5:r.raw}:engine===21?{j106:r.raw}:engine===25?{hy:r.raw}:engine===15?{cz:r.raw}:{fm6:r.raw})};
   },
   async put(rq,engine,slot,pt) {
-    let raw=engine===19?pt.p5:engine===21?pt.j106:engine===15?pt.cz:pt.fm6;
+    let raw=engine===19?pt.p5:engine===21?pt.j106:engine===25?pt.hy:engine===15?pt.cz:pt.fm6;
     if(pt.engine!==engine || !raw)throw Error("Choose a preset for this native collection");
-    raw=Array.from(raw);if(engine===21){if(!J106.valid(raw))throw Error("Invalid JUNO-106 tone");}else if(engine===19){if(!P5.valid(raw))throw Error("Invalid Prophet patch");}else if(engine===15){if(!CZ.valid(raw))throw Error("Invalid CZ tone");}else if(raw.length!==128 || raw.some(x=>!Number.isInteger(x)||x<0||x>127))throw Error("Invalid DX7 voice");
-    if(pt.name){const clean=String(pt.name).replace(/[^ -~]/g," ").trim();if(engine===21){if(clean!==J106.name(raw).trim())J106.setName(raw,clean);}else if(engine===19){if(clean!==P5.name(raw).trim())P5.setName(raw,clean);}else if(engine===15){if(clean!==CZ.name(raw).trim())CZ.setName(raw,clean);}else {if(clean!==FM6.name(FM6.unpack(raw)).replace(/[^ -~]/g," ").trim()){const name=clean.slice(0,10).padEnd(10," ");raw.splice(118,10,...Array.from(name,x=>x.charCodeAt(0)));}}}
-    const info=parse[CMD.INFO](await rq(req.info()));if(info.shared)return bank.put(rq,slot,{...pt,[engine===19?"p5":engine===21?"j106":engine===15?"cz":"fm6"]:raw},info);
-    return parse[CMD.NATIVE](await rq(req.native(engine,2,slot,...(engine===19?P5.nibbles(raw):engine===21?J106.nibbles(raw):engine===15?CZ.nibbles(raw):raw)),FLASH_OPT)).rc;
+    raw=Array.from(raw);if(engine===21){if(!J106.valid(raw))throw Error("Invalid JUNO-106 tone");}else if(engine===25){if(!HY.valid(raw))throw Error("Invalid HYDRA patch");}else if(engine===19){if(!P5.valid(raw))throw Error("Invalid Prophet patch");}else if(engine===15){if(!CZ.valid(raw))throw Error("Invalid CZ tone");}else if(raw.length!==128 || raw.some(x=>!Number.isInteger(x)||x<0||x>127))throw Error("Invalid DX7 voice");
+    if(pt.name){const clean=String(pt.name).replace(/[^ -~]/g," ").trim();if(engine===21){if(clean!==J106.name(raw).trim())J106.setName(raw,clean);}else if(engine===25){if(clean!==HY.name(raw).trim())HY.setName(raw,clean);}else if(engine===19){if(clean!==P5.name(raw).trim())P5.setName(raw,clean);}else if(engine===15){if(clean!==CZ.name(raw).trim())CZ.setName(raw,clean);}else {if(clean!==FM6.name(FM6.unpack(raw)).replace(/[^ -~]/g," ").trim()){const name=clean.slice(0,10).padEnd(10," ");raw.splice(118,10,...Array.from(name,x=>x.charCodeAt(0)));}}}
+    const info=parse[CMD.INFO](await rq(req.info()));if(info.shared)return bank.put(rq,slot,{...pt,[engine===19?"p5":engine===21?"j106":engine===25?"hy":engine===15?"cz":"fm6"]:raw},info);
+    return parse[CMD.NATIVE](await rq(req.native(engine,2,slot,...(engine===19?P5.nibbles(raw):engine===21?J106.nibbles(raw):engine===25?HY.nibbles(raw):engine===15?CZ.nibbles(raw):raw)),FLASH_OPT)).rc;
   },
   async store(rq,engine,slot,track,name="") {
     const info=parse[CMD.INFO](await rq(req.info()));if(info.shared)return bank.store(rq,slot,name,info,track);
@@ -1375,21 +1437,21 @@ const sharedBank = {
     for(let i=0;i<16;i++)p.pattern.push([r.b(),r.b()]);
     const kind=r.b();
     if(kind){const size=r.b()|r.b()<<7,raw=czBkUnpack(r.a.slice(r.i));
-      const key={1:"fm6",2:"cz",3:"p5",4:"j106"}[kind],engine={1:12,2:15,3:19,4:21}[kind];
-      if(!key||p.engine!==engine||raw.length!==size||size!==({1:128,2:144,3:138,4:31}[kind]))throw Error("Invalid shared native voice");
-      p[key]=raw;const fullName=kind===1?FM6.name(FM6.unpack(raw)):kind===2?CZ.name(raw):kind===3?P5.name(raw):kind===4?J106.name(raw):p.name;
+      const key={1:"fm6",2:"cz",3:"p5",4:"j106",5:"hy"}[kind],engine={1:12,2:15,3:19,4:21,5:25}[kind];
+      if(!key||p.engine!==engine||raw.length!==size||size!==({1:128,2:144,3:138,4:31,5:144}[kind]))throw Error("Invalid shared native voice");
+      p[key]=raw;const fullName=kind===1?FM6.name(FM6.unpack(raw)):kind===2?CZ.name(raw):kind===3?P5.name(raw):kind===4?J106.name(raw):kind===5?HY.name(raw):p.name;
       if(p.name.trim()===fullName.slice(0,12).trim())p.name=fullName;
     }
     return p;
   },
   async put(rq,info,slot,pt) {
-    const kind=pt.fm6?1:pt.cz?2:pt.p5?3:pt.j106?4:0,raw=kind?(pt.fm6||pt.cz||pt.p5||pt.j106):null;
+    const kind=pt.fm6?1:pt.cz?2:pt.p5?3:pt.j106?4:pt.hy?5:0,raw=kind?(pt.fm6||pt.cz||pt.p5||pt.j106||pt.hy):null;
     if(pt.drum || pt.engine===10)throw Error("Drum sounds are not supported by Saadet");
     if(kind && pt.engine!==({1:12,2:15,3:19,4:21}[kind]))throw Error("Native voice does not match its engine");
-    if(kind===1 && (raw.length!==128||raw.some(x=>!Number.isInteger(x)||x<0||x>127)) || kind===2&&!CZ.valid(raw) || kind===3&&!P5.valid(raw) || kind===4&&!J106.valid(raw))throw Error("Invalid native voice");
+    if(kind===1 && (raw.length!==128||raw.some(x=>!Number.isInteger(x)||x<0||x>127)) || kind===2&&!CZ.valid(raw) || kind===3&&!P5.valid(raw) || kind===4&&!J106.valid(raw) || kind===5&&!HY.valid(raw))throw Error("Invalid native voice");
     const name=String(pt.name||"PATCH").replace(/[^ -~]/g," ").trim().slice(0,kind?20:12)||"PATCH";
     const values=Array.from({length:info.pcount},(_,i)=>pt.p?.[i]??0),defaults=!pt.p;
-    const nativeName=kind===1?FM6.name(FM6.unpack(raw)):kind===2?CZ.name(raw):kind===3?P5.name(raw):kind===4?J106.name(raw):"";
+    const nativeName=kind===1?FM6.name(FM6.unpack(raw)):kind===2?CZ.name(raw):kind===3?P5.name(raw):kind===4?J106.name(raw):kind===5?HY.name(raw):"";
     const preserveName=kind && kind<=4 && name===nativeName.replace(/[^ -~]/g," ").trim();
     const args=[pt.engine,...strEnc(name),...values.flatMap(v14enc),...Array(32).fill(0),kind|(kind&&defaults?64:0)|(preserveName?32:0)];
     if(kind)args.push(raw.length&127,raw.length>>7,...czBkPack(new Uint8Array(raw)));
@@ -1437,12 +1499,14 @@ async function capturePatch(rq, info, name) {
   if(dump.engine===19){const r=parse[CMD.PROPHET](await rq(req.prophetGet(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0)));if(r.rc)throw Error("Cannot read Prophet patch");p5=r.raw;}
   let j106=null;
   if(dump.engine===J106.ENGINE&&info.juno){const r=parse[CMD.J106](await rq(req.j106Get(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0)));if(r.rc)throw Error("Cannot read JUNO-106 tone");j106=r.raw;}
+  let hy=null;
+  if(dump.engine===HY.ENGINE&&info.hydra){const r=parse[CMD.HYDRA](await rq(req.hyGet(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0)));if(r.rc)throw Error("Cannot read HYDRA patch");hy=r.raw;}
   let cz=null;
   if(dump.engine===15 && dump.p[info.pe0+7]===2) { if(!info.cz)throw new Error("Firmware lacks native CZ support");const r=parse[CMD.CZ_GET](await rq(req.czGet(0,info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0)));if(r.rc)throw new Error("Cannot read CZ patch");cz=r.raw; }
   let fm6=null;
   if(info.engines[dump.engine]==="FM6") { const r=parse[CMD.FM6_GET](await rq(req.fm6Get(FM6.TARGET.TRACK,info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0)));if(r.rc)throw new Error("Cannot read FM6 voice");fm6=Array.from(r.packed); }
   const p=dump.p.map((v,i)=>info.pe0>=100&&i>=96&&i<Math.min(info.pe0,108)?[0,0,60,64][(i-96)%4]:info.pe0>=114&&i>=111&&i<=113?0:v);
-  return { patch: cleanPatch({ p5, j106, cz, fm6, name, engine: dump.engine, engineName: info.engines[dump.engine], p }), dump };
+  return { patch: cleanPatch({ p5, j106, hy, cz, fm6, name, engine: dump.engine, engineName: info.engines[dump.engine], p }), dump };
 }
 
 /* Dedicated CZ user banks: eight atomic A/B objects, ids 9..16. */
@@ -1487,9 +1551,11 @@ const trackOwn = (i, pe0) => TRACK_OWN.has(i) || (pe0 >= 83 && P_CHORD.includes(
 async function auditionPatch(rq, info, pt, opt = {}) {
   if(pt.p5&&!info.prophet)throw Error("Install firmware with Prophet support first");
   if(pt.j106&&!info.juno)throw Error("Install firmware with JUNO-106 support first");
+  if(pt.hy&&!info.hydra)throw Error("Install firmware with HYDRA support first");
   if(pt.cz && !info.cz)throw new Error("Install firmware with native CZ support first");
   if(pt.p5){const r=parse[CMD.PROPHET](await rq(req.prophetPut(opt.track??(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0),pt.p5)));if(r.rc)throw Error("Prophet patch rejected");}
   else if(pt.j106){const track=opt.track??(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0),r=parse[CMD.J106](await rq(req.j106Put(track,pt.j106)));if(r.rc)throw Error("JUNO-106 tone rejected");await rq(req.j106Name(track,J106.name(pt.j106)));}
+  else if(pt.hy){const track=opt.track??(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0),r=parse[CMD.HYDRA](await rq(req.hyPut(track,pt.hy)));if(r.rc)throw Error("HYDRA patch rejected");}
   else if(pt.cz) { const r=parse[CMD.CZ_PUT](await rq(req.czPut(0,opt.track??(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0),pt.cz)));if(r.rc)throw new Error("CZ patch rejected"); }
   else await rq(req.set(1, opt.gEng ?? 20, pt.engine));
   const dump = parse[CMD.DUMP](await rq(req.dump()), info);
@@ -1876,7 +1942,7 @@ function aliasOf(names, i) { const k = names ? names.indexOf(names[i]) : -1; ret
 /* the order the device shows its engines in (src/engines.c ENGINE_ORDER): the lists here follow it, the protocol keeps
    the engine numbers. engineOrder(names): the indices of names in that order, "-" (a reserved number) left out; a name
    the list does not know (another firmware) follows in index order */
-const ENGINE_ORDER = ["PROPHET", "ANALOG", "FM6", "DIGITAL", "PHASE", "CZ-1", "JUNO-106", "SID", "VOICE", "NOISE",
+const ENGINE_ORDER = ["PROPHET", "ANALOG", "FM6", "DIGITAL", "PHASE", "CZ-1", "JUNO-106", "HYDRA", "SID", "VOICE", "NOISE",
   "DRUM"];
 function engineOrder(names) {
   const rank = (n) => { const k = ENGINE_ORDER.indexOf(n); return k < 0 ? ENGINE_ORDER.length : k; };
@@ -2369,6 +2435,7 @@ async function getDump(d = dev) {
   if(d.info.native?.[out.engine]){const r=parse[CMD.NATIVE](await sessionRequest(d,req.native(out.engine,7,d.sel||0)));if(!r.rc)out.user=r.user;}
   if(out.engine===19 && d.info.prophet){const r=parse[CMD.PROPHET](await sessionRequest(d,req.prophetGet(d.sel||0)));if(r.rc)throw Error("Cannot read Prophet program");out.p5=r.raw;}
   if(out.engine===J106.ENGINE && d.info.juno){const r=parse[CMD.J106](await sessionRequest(d,req.j106Get(d.sel||0)));if(r.rc)throw Error("Cannot read JUNO-106 tone");out.j106=r.raw;}
+  if(out.engine===HY.ENGINE && d.info.hydra){const r=parse[CMD.HYDRA](await sessionRequest(d,req.hyGet(d.sel||0)));if(r.rc)throw Error("Cannot read HYDRA patch");out.hy=r.raw;}
   return out;
 }
 
@@ -2403,6 +2470,7 @@ async function load(d) {
     d.dump = await getDump(d);
     if(d.dump.p5){p5Tone=d.dump.p5.slice();p5Render();}
     if(d.dump.j106){j106Tone=d.dump.j106.slice();j106Render();}
+    if(d.dump.hy){hyTone=d.dump.hy.slice();hyRender();}
     buildUI();
     renderPanels();
     /* protocol v2: live pushes and the user bank; older firmware: DUMP polling, no bank */
@@ -2492,7 +2560,8 @@ function updateBrowser() {
   const ps = $("preset");
   const names = dev.names[e] || [];
   const currentNative=e===19 && !dev.dump.user && dev.dump.p5 && P5.name(dev.dump.p5)!==names[dev.dump.preset] ? P5.name(dev.dump.p5) :
-    e===J106.ENGINE && !dev.dump.user && dev.dump.j106 && J106.name(dev.dump.j106)!==names[dev.dump.preset] ? J106.name(dev.dump.j106) : null;
+    e===J106.ENGINE && !dev.dump.user && dev.dump.j106 && J106.name(dev.dump.j106)!==names[dev.dump.preset] ? J106.name(dev.dump.j106) :
+    e===HY.ENGINE && !dev.dump.user && dev.dump.hy && HY.name(dev.dump.hy)!==names[dev.dump.preset] ? HY.name(dev.dump.hy) : null;
   const pool=dev.info.shared?{slots:dev.bank?.slots.filter(x=>x.engine===e)}:dev.nativePools?.[e],sig=JSON.stringify([e,pool,currentNative]);
   if(ps.dataset.engine!==sig){
     ps.replaceChildren(...names.map((n,i)=>el("option",{value:i,text:n,hidden:aliasOf(names,i)!==i})),...(pool?.slots||[]).filter(x=>x.used).map(x=>el("option",{value:`u:${x.slot}`,text:`${slotName(x.slot,e)} ${x.name}`})));
@@ -2557,6 +2626,7 @@ function buildGroups() {
   for (const [id, divs] of Object.entries(groups)) $(id).replaceChildren(...divs);
   $("p5panel").hidden=!(dev?.info.prophet&&dev?.dump.engine===19);
   $("j106panel").hidden=!(dev?.info.juno&&dev?.dump.engine===J106.ENGINE);
+  $("hypanel").hidden=!(dev?.info.hydra&&dev?.dump.engine===HY.ENGINE);
   $("czpanel").hidden = !dev.info.cz || dev.dump.engine!==15;
   $("czbankpanel").hidden = !dev.info.czBanks;
   if(dev.info.czBanks && !$("czbank").options.length)$("czbank").replaceChildren(...Array.from({length:8},(_,i)=>el("option",{value:i},`Bank ${String.fromCharCode(65+i)}`)));
@@ -2743,6 +2813,7 @@ async function afterSoundChange(msg = "ready", d = dev) {
   d.dump = await getDump(d);
   if(d.dump.p5){p5Tone=d.dump.p5.slice();p5Render();}
   if(d.dump.j106){j106Tone=d.dump.j106.slice();j106Render();}
+  if(d.dump.hy){hyTone=d.dump.hy.slice();hyRender();}
   await rereadEngineDesc(d);
   await rereadMpcDesc(d);
   updateBrowser();
@@ -2997,6 +3068,30 @@ $("j106export").addEventListener("click",()=>downloadBytes(`${fileSlug(J106.name
 $("j106exportbank").addEventListener("click",()=>{if(!j106Voices.length){say("Import a library first");return;}const voices=j106Voices.map(v=>v.raw);voices[+$("j106voices").value]=j106Tone;downloadBytes(`juno106-library-${today()}.syx`,new Uint8Array(voices.flatMap(v=>Array.from(J106.sysex(v)))));});
 $("j106library").addEventListener("click",()=>libAdd([j106LibraryPatch({name:J106.name(j106Tone),raw:j106Tone},libCtx())]).then(()=>say("JUNO-106 tone added to library")).catch(e=>say(e.message)));
 j106Render();
+let hyVoices=[],hyTone=HY.init();
+function hyRender(){
+  $("hyname").value=HY.name(hyTone);const root=$("hycontrols");root.replaceChildren();
+  for(const [name,from,to] of HY.GROUPS){
+    const g=el("fieldset",{},el("legend",{},name));
+    for(const f of HY.FIELDS.filter(f=>f.id>=from&&f.id<to)){
+      const input=f.names?el("select",{},...f.names.map((name,i)=>el("option",{value:i},name))):el("input",{type:"number",min:f.min,max:f.max,step:1});
+      input.value=HY.get(hyTone,f.id);
+      input.addEventListener("change",()=>{const value=+input.value;if(!Number.isInteger(value)||value<f.min||value>f.max){input.value=HY.get(hyTone,f.id);return;}HY.set(hyTone,f.id,value);});
+      g.append(el("p",{},el("label",{},f.label+" ",input)));
+    }
+    root.append(g);
+  }
+}
+$("hyname").addEventListener("change",()=>HY.setName(hyTone,$("hyname").value));
+$("hyimport").addEventListener("click",()=>$("hyfile").click());
+$("hyfile").addEventListener("change",async()=>{const f=$("hyfile").files[0];if(!f)return;try{const imported=HY.read(new Uint8Array(await f.arrayBuffer()));hyVoices=imported.voices;$("hyvoices").replaceChildren(...hyVoices.map((v,i)=>el("option",{value:i},`${i+1}. ${v.name}`)));hyTone=hyVoices[0].raw.slice();hyRender();say(`Imported ${hyVoices.length} HYDRA patches`);}catch(e){say(e.message);}finally{$("hyfile").value="";}});
+$("hyvoices").addEventListener("change",()=>{hyTone=hyVoices[+$("hyvoices").value].raw.slice();hyRender();});
+$("hyread").addEventListener("click",()=>op(async()=>{const r=parse[CMD.HYDRA](await rq(req.hyGet(dev.sel||0)));if(r.rc)throw Error("Cannot read HYDRA patch");hyTone=r.raw;hyRender();say("HYDRA patch read from track");}));
+$("hysend").addEventListener("click",()=>op(async()=>{const d=dev,r=parse[CMD.HYDRA](await rq(req.hyPut(d.sel||0,hyTone)));if(r.rc)throw Error("HYDRA patch rejected");await afterSoundChange("ready",d);}));
+$("hyexport").addEventListener("click",()=>downloadBytes(`${fileSlug(HY.name(hyTone))}.syx`,HY.sysex(hyTone)));
+$("hyexportbank").addEventListener("click",()=>{if(!hyVoices.length){say("Import a library first");return;}const voices=hyVoices.map(v=>v.raw);voices[+$("hyvoices").value]=hyTone;downloadBytes(`hydra-library-${today()}.syx`,new Uint8Array(voices.flatMap(v=>Array.from(HY.sysex(v)))));});
+$("hylibrary").addEventListener("click",()=>libAdd([hyLibraryPatch({name:HY.name(hyTone),raw:hyTone},libCtx())]).then(()=>say("HYDRA patch added to library")).catch(e=>say(e.message)));
+hyRender();
 let czVoices=[{name:"INIT",raw:CZ.init()}],czTone=czVoices[0].raw.slice();
 function czRender() {
   const root=$("czcontrols");root.replaceChildren();
@@ -3047,6 +3142,7 @@ $("savefile").addEventListener("click", () => op(async () => {
     engine, preset, p: dev.dump.p.slice(), g: dev.dump.g.slice() };
   if(data.engine===19){const r=parse[CMD.PROPHET](await rq(req.prophetGet(dev.sel||0)));if(r.rc)throw Error("Cannot read Prophet program");data.p5=r.raw;}
   if(data.engine===J106.ENGINE&&dev.info.juno){const r=parse[CMD.J106](await rq(req.j106Get(dev.sel||0)));if(r.rc)throw Error("Cannot read JUNO-106 tone");data.j106=r.raw;}
+  if(data.engine===HY.ENGINE&&dev.info.hydra){const r=parse[CMD.HYDRA](await rq(req.hyGet(dev.sel||0)));if(r.rc)throw Error("Cannot read HYDRA patch");data.hy=r.raw;}
   if(data.engine===15 && data.p[dev.info.pe0+7]===2) { const r=parse[CMD.CZ_GET](await rq(req.czGet(0,dev.sel||0)));if(r.rc)throw new Error("Cannot read native CZ patch");data.cz=r.raw; }
   if(data.engineName === "FM6") { const r=parse[CMD.FM6_GET](await rq(req.fm6Get(FM6.TARGET.TRACK,dev.sel||0)));if(r.rc)throw new Error("Cannot read FM6 voice");data.fm6=Array.from(r.packed); }
   download(`saadet-${fileSlug(data.engineName || "patch")}-${fileSlug(data.presetName || preset)}.json`, data);
@@ -3064,6 +3160,8 @@ $("file").addEventListener("change", async () => {
     if(data.engine===19&&!data.p5)throw Error("Prophet sound file is missing native program data");
     if(data.j106!=null&&(!J106.valid(data.j106)||data.engine!==J106.ENGINE||!session.info.juno))throw Error("Invalid JUNO-106 tone or unsupported firmware");
     if(data.engine===J106.ENGINE&&!data.j106)throw Error("JUNO-106 sound file is missing native tone data");
+    if(data.hy!=null&&(!HY.valid(data.hy)||data.engine!==HY.ENGINE||!session.info.hydra))throw Error("Invalid HYDRA patch or unsupported firmware");
+    if(data.engine===HY.ENGINE&&!data.hy)throw Error("HYDRA sound file is missing native patch data");
     if(data.cz != null && (!CZ.valid(data.cz)||!session.info.cz))throw new Error("Invalid CZ patch or unsupported firmware");
     if(data.fm6 != null && (!Array.isArray(data.fm6) || data.fm6.length !== FM6.PACKED || data.fm6.some(v=>!Number.isInteger(v)||v<0||v>127) || data.engine !== 12 || !session.info.fm6))throw new Error("Invalid FM6 voice or unsupported firmware");
     if (!Number.isInteger(data.engine) || !Number.isInteger(data.preset) || !Array.isArray(data.p)) throw new Error("engine / preset / p");
@@ -3074,6 +3172,7 @@ $("file").addEventListener("change", async () => {
     selfLoad();
     if(data.p5){const r=parse[CMD.PROPHET](await rq(req.prophetPut(dev.sel||0,data.p5)));if(r.rc)throw Error("Prophet program rejected");}
     else if(data.j106){const r=parse[CMD.J106](await rq(req.j106Put(dev.sel||0,data.j106)));if(r.rc)throw Error("JUNO-106 tone rejected");await rq(req.j106Name(dev.sel||0,J106.name(data.j106)));}
+    else if(data.hy){const r=parse[CMD.HYDRA](await rq(req.hyPut(dev.sel||0,data.hy)));if(r.rc)throw Error("HYDRA patch rejected");}
     else if(data.cz) { const r=parse[CMD.CZ_PUT](await rq(req.czPut(0,dev.sel||0,data.cz)));if(r.rc)throw new Error("CZ patch rejected"); }
     else await rq(req.preset(data.engine, data.preset));
     dev.dump = await getDump();
@@ -3410,9 +3509,10 @@ $("libren").addEventListener("click", () => {
   if (!p) return;
   const v = prompt(t("promptName"), p.name);
   if (v == null || !v.trim()) return;
-  p.name = v.trim().slice(0, p.p5?20:p.j106?12:32);
+  p.name = v.trim().slice(0, p.p5?20:p.j106||p.hy?12:32);
   if(p.p5)P5.setName(p.p5,p.name);
   if(p.j106)J106.setName(p.j106,p.name);
+  if(p.hy)HY.setName(p.hy,p.name);
   libUpdate(p);
 });
 $("libtags").addEventListener("click", () => {
@@ -3507,7 +3607,7 @@ function bankGet(slot) {
   libOp(async (d, rqf) => {
     const u=engine?await nativeBank.get(rqf,d.info,engine,slot):await bank.get(rqf,d.info,slot);
     if (!u.used) { sayK("emptySlot", slotName(slot)); return; }
-    const pt = { name: u.name, engine: u.engine, engineName: dev.info.engines[u.engine], p: u.p, p5:u.p5, j106:u.j106, cz:u.cz, fm6:u.fm6, drum:u.drum, pattern: u.pattern, grid: u.grid, tags: ["device"] };
+    const pt = { name: u.name, engine: u.engine, engineName: dev.info.engines[u.engine], p: u.p, p5:u.p5, j106:u.j106, hy:u.hy, cz:u.cz, fm6:u.fm6, drum:u.drum, pattern: u.pattern, grid: u.grid, tags: ["device"] };
     await libAdd([reservedFm4(dev.info.engines, u.engine) ? fromDigital(pt, dev.info.engines, dev.info.pe0) : pt]);
     sayK("copiedLib", u.name);
   });
@@ -3535,11 +3635,12 @@ $("bkexport").addEventListener("click", () => libOp(async (d, rqf) => {
     if (!x.used) continue;
     sayK("readingBank", ` ${slotName(x.slot)}`);
     const u=engine?await nativeBank.get(rqf,d.info,engine,x.slot):await bank.get(rqf,d.info,x.slot);
-    if (u.used) out.push({ name: u.name, engine: u.engine, p: u.p, p5:u.p5, j106:u.j106, cz:u.cz, fm6:u.fm6, drum:u.drum, pattern: u.pattern, grid: u.grid, slot: x.slot,
+    if (u.used) out.push({ name: u.name, engine: u.engine, p: u.p, p5:u.p5, j106:u.j106, hy:u.hy, cz:u.cz, fm6:u.fm6, drum:u.drum, pattern: u.pattern, grid: u.grid, slot: x.slot,
       engineName: reservedFm4(dev.info.engines, u.engine) ? "DIGITAL" : dev.info.engines[u.engine] });   /* (DIGITAL's values) */
   }
   if(engine===19)downloadBytes(`prophet-presets-${today()}.syx`,new Uint8Array(out.flatMap(x=>Array.from(P5.sysex(x.p5)))));
   else if(engine===J106.ENGINE)downloadBytes(`juno106-presets-${today()}.syx`,new Uint8Array(out.flatMap(x=>Array.from(J106.sysex(x.j106)))));
+  else if(engine===HY.ENGINE)downloadBytes(`hydra-presets-${today()}.syx`,new Uint8Array(out.flatMap(x=>Array.from(HY.sysex(x.hy)))));
   else if(engine===12){for(let i=0;i<out.length;i+=32)downloadBytes(`fm6-presets-${i/32+1}.syx`,FM6.bankSysex(out.slice(i,i+32).map(x=>FM6.unpack(x.fm6))));}
   else if(engine===15)downloadBytes(`cz1-presets-${today()}.syx`,new Uint8Array(out.flatMap(x=>Array.from(CZ.sysex(x.cz)))));
   else download(`saadet-bank-${today()}.json`,libraryFile("bank",out,libCtx()));
@@ -3550,9 +3651,9 @@ $("bknativeimport").addEventListener("click",()=>$("bknativefile").click());
 $("bknativefile").addEventListener("change",async()=>{
   const file=$("bknativefile").files[0];let engine=poolEngine();$("bknativefile").value="";if(!file||(!engine&&!dev?.info.shared))return;
   try{
-    const bytes=new Uint8Array(await file.arrayBuffer());if(dev.info.shared)engine=bytes[1]===0x43?12:bytes[1]===0x44?15:bytes[1]===1?19:bytes[1]===0x41&&dev.info.juno?J106.ENGINE:0;if(!engine)throw Error("Unknown SysEx manufacturer");const parsed=engine===19?P5.read(bytes):engine===J106.ENGINE?J106.read(bytes):engine===15?CZ.read(bytes,file.name):FM6.parseSysex(bytes);
+    const bytes=new Uint8Array(await file.arrayBuffer());if(dev.info.shared)engine=bytes[1]===0x43?12:bytes[1]===0x44?15:bytes[1]===1?19:bytes[1]===0x41&&dev.info.juno?J106.ENGINE:bytes[1]===0x7D&&bytes[2]===0x48&&dev.info.hydra?HY.ENGINE:0;if(!engine)throw Error("Unknown SysEx manufacturer");const parsed=engine===19?P5.read(bytes):engine===J106.ENGINE?J106.read(bytes):engine===HY.ENGINE?HY.read(bytes):engine===15?CZ.read(bytes,file.name):FM6.parseSysex(bytes);
     if(!parsed.voices.length || parsed.badSum)throw Error("Invalid SysEx file");
-    const tones=parsed.voices.map(v=>({engine,name:v.name,...(engine===19?{p5:v.raw}:engine===J106.ENGINE?{j106:v.raw}:engine===15?{cz:v.raw}:{fm6:Array.from(FM6.pack(v.v))})}));
+    const tones=parsed.voices.map(v=>({engine,name:v.name,...(engine===19?{p5:v.raw}:engine===J106.ENGINE?{j106:v.raw}:engine===HY.ENGINE?{hy:v.raw}:engine===15?{cz:v.raw}:{fm6:Array.from(FM6.pack(v.v))})}));
     const {targets,overwrite}=nativeImportTargets(bankView().slots,tones.length,bankSel??0);
     if(overwrite && !confirm(overwrite.from===overwrite.to?t("confirmOverwrite").replace("{n}",slotName(overwrite.from)).replace("{name}",targets[0].name||"")
       :t("confirmOverwriteRange").replace("{n}",tones.length).replace("{from}",slotName(overwrite.from)).replace("{to}",slotName(overwrite.to)).replace("{used}",overwrite.used)))return;

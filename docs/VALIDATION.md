@@ -1127,3 +1127,65 @@ identity `FM-1_900`, SHA-256 `365af9e3363826dd8095d4681764dc93c364721b96980f1d62
 Physical audio, control behavior and sustained hardware deadlines remain
 unverified. Build/test logs: `build/migration-build.log`,
 `build/migration-tests.log`, `build/host/log/`.
+
+## 5 November 2026: HYDRA on the SMK-37 Elite
+
+Built on the own Bluetooth stack (`own-ble-stack`, a snapshot of its uncommitted worktree). Package
+`build/saadet-smk37-elite.fwsc`, SHA-256 `05cf4f62f4ba027f1f3c4c33c00050c3551250de9644526b69441fac0a7c13de`, flashed over USB with the base's installer. It was the first time that stack
+ran on a unit: it booted, USB MIDI and the installer worked, no Bluetooth peer connected. All numbers are this unit at 360 MHz
+with CPU1 online, from `ED_AUDIO_STATS` (`audio_max_us`, `audio_late`), and no Bluetooth traffic. The deadline is 2902 us.
+
+What a voice costs, per voice, from chords of 8 notes (the budget let 6 play with a mutant):
+
+| Patch over INIT | At the sample rate (MIDI 36-60) | At twice the rate (MIDI 72-96) |
+| --- | --- | --- |
+| OSC 1 | 155 us | 233 us |
+| OSC 1 + 2 | 180 us | 282 us |
+| OSC 1 + 2 + 3 | 192 us | 308 us |
+| FILTER 2 in use | 172 us | 248 us |
+| Ring and noise | 193 us | 308 us |
+| One PW, SQUEEZE or WARP | 231-234 us | 376-381 us |
+| One FM | 239 us | 396 us |
+| One STACK | 237 us | 389 us |
+| PW on both oscillators | 322 us | 556 us |
+| STACK on both oscillators | 333 us | 582 us |
+| STACK and PW on one oscillator | 416 us | 749 us |
+| Both scanning, STACK + FM and STACK + SYNC, all sources on | 1104 us | 1439 us |
+
+An idle block takes about 330 us. Melodee's rule, three units with any mutant, gave 3078 us and 706 missed renders in 4 s on
+SUPERSTACK and up to 8965 us on the last row. So `hy_cost` (`firmware/src/eng_hydra.c`) estimates a voice from these rows, and:
+
+- A voice takes `cost / 126 us` units of the 18, at least two, three with any mutant, so a full budget renders within 2600 us. The
+  last row plays two voices.
+- Twice the rate needs room: what the block has left once the part's whole budget plays at the sample rate is shared among the
+  voices that use it, in both parts. A plain patch has all eight; STACK on one oscillator, five of six; STACK on both, one.
+
+**Why:** overload cuts nothing here, so the budget is the only protection. A note beyond it takes a voice as any other does.
+
+With that rule, on the final code:
+
+| Test | Longest render | Missed renders |
+| --- | --- | --- |
+| All 17 sounds: 8 notes low, 8 notes high, 8 notes with the top one struck 5 times a second at changing velocities (51 runs) | 2722 us (SUPERSTACK, high) | 0 |
+| LAYER: 7 pairs of parts (HYDRA with itself, Prophet, FM6, JUNO-106, CZ-1), low, high, struck (21 runs) | under 2600 us | 0 |
+| USB capture running, 5 heavy sounds, high and struck (10 runs) | 2738 us (SUPERSTACK, high) | 0 |
+| 33 sound loads under 8 notes, three times | 2771 us | 0 |
+
+A load releases what sounds, and a cheap patch's eight tails would then render at a heavy patch's cost: 2985 us and 4 missed renders
+in those 33 loads. `hy_tails_fit` fades the tails beyond what the block can carry, without their mutants for those 23 ms. Held notes
+are left alone, so adding heavy mutants from the panel over eight held notes can still run late until a note ends.
+
+For comparison on the same build: Prophet 8 voices 2282 us, FM6 1678 us, CZ-1 1732 us, JUNO-106 1299 us. An earlier run of the
+LAYER test counted one missed render as 16 notes started at once; the final runs did not repeat it.
+
+Audio over USB (sox, triad C4 E4 G4, velocity 100), peak and RMS while it sounds: P5 -3.9 / -11.7 dB, CZ-1 -3.6 / -14.2, J106
+-12.0 / -21.6, FM6 -14.6 / -28.8; HYDRA's sustained sounds run from -5.5 / -16.3 (PWM STRINGS, INIT) to -23.1 / -27.2 (MS-20 ACID). Eight re-presses at
+velocities from 30 to 127 on four sounds show no step above the waveform's own: the largest ones repeat with the wave. Nobody
+has heard it yet. Upgrade on the unit: the last state from before HYDRA (`SDS2`, 1536 B) restored through the backup path and
+came back as `SDS3`, 1824 B, with its sounds and parts mode; settings and the user bank kept their CRCs.
+
+Flash on this build: Elite 495,808 B of 622,524 (126,716 free), FM-1 483,404 B of 581,564 (98,160 free), about 58 KB for HYDRA.
+Resident audio 107,956 B and the engine arena 102,816 B on the Elite; a part's state takes 5.4 KB, 9 KB or 12.5 KB by its wave copies.
+
+Not checked: the FM-1 (built, not run), HYDRA under Bluetooth traffic, the panel's pages and knobs on the unit itself (host
+renders only), and the sound by ear.

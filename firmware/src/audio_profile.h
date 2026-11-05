@@ -16,6 +16,7 @@ enum {
     AP_INPUT_KEYS, AP_INPUT_ENCODERS, AP_INPUT_DIAGNOSTICS,
     AP_BATCH_PREPARE, AP_BATCH_MERGE, AP_BATCH_CPU0, AP_BATCH_CPU1,
     AP_J106,                                   /* appended: the tools read the spans above by position */
+    AP_HYDRA,
     AP_COUNT
 };
 #if MELODEE_AUDIO_PROFILE

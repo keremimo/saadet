@@ -14,6 +14,7 @@ static int library_sysex_send(uint32_t e, uint32_t index, int user, int live)
     uint8_t raw[CZ_BYTES], frame[7u + 2u * CZ_BYTES];
     uint32_t n = 0, ch = trk_midi_ch(song.sel % NTRK) & 15u;
     _Static_assert(sizeof raw >= sizeof(p5_patch_t) && sizeof raw >= sizeof(j106_patch_t) &&
+                   sizeof raw >= sizeof(hy_patch_t) && sizeof frame >= HY_FRAME &&
                    sizeof raw >= FM6_PACKED, "native export scratch");
     if (e == ENGI_PROPHET) {
         p5_patch_t patch;
@@ -28,6 +29,13 @@ static int library_sysex_send(uint32_t e, uint32_t index, int user, int live)
         else if (user) memcpy(&patch, native_raw(e, index), sizeof patch);
         else j106_tone(index, &patch);
         n = j106_patch_encode(&patch, ch, frame, sizeof frame);
+    } else if (e == ENGI_HYDRA) {
+        hy_patch_t patch;
+        if (live) patch = *hy_patch_of(TSEL);
+        else if (user) memcpy(&patch, native_raw(e, index), sizeof patch);
+        else if (index) hy_factory(index - 1u, &patch);
+        else hy_patch_init(&patch);
+        n = hy_patch_encode(&patch, frame, sizeof frame);
     } else if (e == ENGI_FM6) {
         uint8_t voice[FP_SIZE + 1u];
         if (live) memcpy(voice, fm6_patch[song.sel % NTRK], FP_SIZE);
@@ -70,6 +78,8 @@ static void sysex_native_apply(uint32_t e, const uint8_t *raw)
     for (uint32_t i = 0; i < 8u; i++) t->p[P_E0 + i] = ENGINES[e]->edit[i].def;
     if (e == ENGI_J106) {
         memcpy(&j106_patch[tr], raw, sizeof(j106_patch_t)); j106_ready[tr] = 1;
+    } else if (e == ENGI_HYDRA) {
+        memcpy(&hy_patch[tr], raw, sizeof(hy_patch_t)); hy_ready[tr] = 1;
     } else if (e == ENGI_PROPHET) {
         uint32_t mode = t->p[P_VOICE];
         memcpy(&p5_patch[tr], raw, sizeof(p5_patch_t)); p5_ready[tr] = 1;

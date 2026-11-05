@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Kerem Kilic (Ellic Studio) */
 /* A field: one value a knob edits, wherever it lives (the selected part's parameters, the song's, an engine's own panel:
- * a Prophet's, an FM6 operator's or voice's, a CZ-1 tone's, a JUNO-106 tone's; the device's settings; the library and
+ * a Prophet's, an FM6 operator's or voice's, a CZ-1 tone's, a JUNO-106 tone's, a HYDRA patch's; the device's settings; the library and
  * SAVE, ui_lib.c). It
  * is read, stepped and written the way the web editor does it (editor.c SET, its native pages, its preferences), so a
  * change from the panel and one from the editor are the same change, and the editor sees it. */
-enum { FK_NONE, FK_TRACK, FK_GLOBAL, FK_P5, FK_FM6OP, FK_FM6V, FK_FM6FN, FK_CZ, FK_DEV, FK_LIB, FK_BLE, FK_J106 };
+enum { FK_NONE, FK_TRACK, FK_GLOBAL, FK_P5, FK_FM6OP, FK_FM6V, FK_FM6FN, FK_CZ, FK_DEV, FK_LIB, FK_BLE, FK_J106, FK_HY };
 typedef struct { uint8_t kind, id; const char *label; uint8_t sub; } ui_field_t;   /* label: 0 = the descriptor's own;
                                                                                      * sub: FM6's operator 0..5 (OP1..) */
 /* the device's settings (kept with the settings, not the sound): screen sleep, the LEDs' level, the voice budget,
@@ -64,6 +64,7 @@ static const param_desc_t *field_desc(const ui_field_t *f)
     case FK_FM6FN: if (e == ENGI_FM6 && f->id < FM6_NFN) d = &FM6_FD[f->id]; break;
     case FK_CZ: if (e == ENGI_CZ && f->id < LCZ_NP && CZ_PD[f->id].label) d = &CZ_PD[f->id]; break;
     case FK_J106: if (e == ENGI_J106 && f->id < J106_FIELDS) d = &J106_PANEL[f->id]; break;
+    case FK_HY: if (e == ENGI_HYDRA && f->id < NELEM(HY_PANEL) && HY_PANEL[f->id].label) d = hy_desc(TSEL, f->id); break;
     case FK_DEV: d = f->id < DEV_N && (f->id != DEV_PART || trk_n() > 1u) ? &DEV_D[f->id] : 0; break;
     case FK_LIB: d = lib_desc(f->id); break;
 #ifdef SAADET_FM1_BASE
@@ -99,6 +100,7 @@ static int32_t field_get(const ui_field_t *f)
         return p[f->id % LCZ_NP];
     }
     case FK_J106: return j106_get(TSEL, f->id);
+    case FK_HY: return hy_get(TSEL, f->id);
     case FK_DEV:
         if (f->id == DEV_PART) return song.sel;
 #ifdef SAADET_SMK37
@@ -125,6 +127,7 @@ static int field_active(const ui_field_t *f)
     case FK_P5: return p5_ed_active(TSEL, f->id);
     case FK_CZ: return cz_ed_active(cz_patch[ui_tr()].raw, f->id);
     case FK_J106: return j106_ed_active(TSEL, f->id);
+    case FK_HY: return hy_ed_active(TSEL, f->id);
     case FK_FM6OP: return f->id == FP_OP || ((fm6_on[ui_tr()] >> (5u - f->sub % 6u)) & 1u);
     case FK_GLOBAL:                                   /* (the parts' settings that do nothing in this mode) */
         return f->id == G_PSPLIT ? parts_mode() == PT_SPLIT : f->id == G_PCH2 ? parts_mode() != PT_ONE : 1;
@@ -190,6 +193,9 @@ static int field_step(const ui_field_t *f, int32_t steps)
     case FK_J106:                                     /* (an edit, not a load: the notes sounding follow it) */
         j106_edit_value(TSEL, f->id, v);
         break;
+    case FK_HY:                                       /* (an edit, not a load: the notes sounding follow it) */
+        hy_edit_value(TSEL, f->id, v);
+        break;
     case FK_FM6OP:                                    /* (an edit, not a load: the notes sounding follow it) */
         if (f->id == FP_OP) {
             fm6_on[tr] = (uint8_t)((fm6_on[tr] & ~(1u << (5u - f->sub % 6u))) | (uint32_t)v << (5u - f->sub % 6u));
@@ -252,6 +258,11 @@ static void field_text(const ui_field_t *f, const param_desc_t *d, char *val, ch
     }
     if (f->kind == FK_FM6OP)
         fm6_opsel = (uint8_t)(f->sub % 6u);           /* (an operator's frequency reads its own bytes, params.c) */
+    if (f->kind == FK_HY && hy_value_name(TSEL, f->id, d)) {
+        str_cpy(val, hy_value_name(TSEL, f->id, d), 16);
+        unit[0] = 0;
+        return;
+    }
     param_format(d, field_get(f), val, &u);
     if (u[0] == '%' && !u[1]) {
         str_cpy(val + str_len(val), "%", 2);

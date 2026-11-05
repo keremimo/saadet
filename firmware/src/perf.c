@@ -15,6 +15,13 @@ typedef struct {
     synth_part_t part[NPART];
 } perf_rec_t;
 typedef struct { uint32_t magic, rec_size; perf_rec_t r[PERF_PER_OBJ]; } perf_bank_t;
+/* a bank from before HYDRA: its parts have no patch */
+typedef struct {
+    uint8_t used, mode, split, ch2, sel;
+    char name[PERF_NAME];
+    synth_part2_t part[NPART];
+} perf_rec2_t;
+typedef struct { uint32_t magic, rec_size; perf_rec2_t r[PERF_PER_OBJ]; } perf_bank2_t;
 _Static_assert(sizeof(perf_bank_t) <= ST_PAYLOAD_MAX - 32u, "two performances fit their flash object");
 static perf_bank_t perf_buf __attribute__((section(".pool")));
 #if MELODEE_FLASH
@@ -54,6 +61,20 @@ static int perf_rec_valid(const perf_rec_t *r)
             return 0;
     return 1;
 }
+/* a bank of *len stored bytes from before HYDRA -> today's, in place (b holds a whole bank), each part with HYDRA's INIT
+ * patch. Any other bank stays as it is, for perf_bank_valid to judge */
+static void perf_bank_upgrade(perf_bank_t *b, uint32_t *len)
+{
+    const perf_bank2_t *o = (const perf_bank2_t *)b;
+    if (*len != sizeof *o || o->magic != PERF_MAGIC || o->rec_size != sizeof(perf_rec2_t))
+        return;
+    for (uint32_t i = PERF_PER_OBJ; i--;) {          /* (from the last back: nothing is overwritten before it moved) */
+        parts_upgrade(b->r[i].part, (const uint8_t *)o->r[i].part, NPART);
+        bytes_up(&b->r[i], &o->r[i], __builtin_offsetof(perf_rec2_t, part));
+    }
+    b->rec_size = sizeof(perf_rec_t);
+    *len = sizeof *b;
+}
 /* a stored bank: empty (len 0), or every slot in use valid. Backups and flash both pass here */
 static int perf_bank_valid(const perf_bank_t *b, uint32_t len)
 {
@@ -71,7 +92,9 @@ static int perf_bank_valid(const perf_bank_t *b, uint32_t len)
 static int perf_bank_load(uint32_t obj)
 {
     int n = perf_obj_load(obj);
-    if (n <= 0 || !perf_bank_valid(&perf_buf, (uint32_t)n)) {
+    uint32_t len = n > 0 ? (uint32_t)n : 0u;
+    perf_bank_upgrade(&perf_buf, &len);
+    if (n <= 0 || !perf_bank_valid(&perf_buf, len)) {
         memset(&perf_buf, 0, sizeof perf_buf);
         perf_buf.magic = PERF_MAGIC;
         perf_buf.rec_size = sizeof(perf_rec_t);

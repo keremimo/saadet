@@ -20,7 +20,7 @@ static void packet(uint32_t st,uint32_t note,uint32_t vel){midi_event(st&0xF0u,s
 static uint32_t held_count(void){uint32_t n=0;for(uint32_t i=0;i<4u;i++)n+=__builtin_popcount(live_held[0][i]);return n;}
 static void save_file(const char *name,const void *p,uint32_t n){FILE *f=fopen(name,"wb");assert(f);assert(fwrite(p,1,n,f)==n);fclose(f);}
 static void playing(void){
-    power_on();assert(NTRK==2 && NENG_SHOWN==4 && !eng_ok(3) && !eng_ok(ENGI_DRUM) && !eng_ok(USER_NATIVE_P5) && eng_ok(ENGI_J106));
+    power_on();assert(NTRK==2 && NENG_SHOWN==5 && !eng_ok(3) && !eng_ok(ENGI_DRUM) && !eng_ok(USER_NATIVE_P5) && !eng_ok(USER_NATIVE_J106) && eng_ok(ENGI_J106) && eng_ok(ENGI_HYDRA));
     for(uint32_t i=0;i<NENG_SHOWN;i++){
         host_preset(TSEL,ENGINE_ORDER[i],0);trk_note_on(TSEL,60,100);uint64_t energy=0;
         for(uint32_t b=0;b<160;b++){int32_t out[CTL*2];mix_block(out,CTL);for(uint32_t j=0;j<CTL*2;j++)energy+=labs(out[j]);}
@@ -41,7 +41,7 @@ static void playing(void){
     TSEL->p[P_AHOLD]=0;
     for(uint32_t i=0;i<400;i++)tick();               /* (an engine change completes in the audio blocks) */
     key_down(0);frame();assert(gates());key_up(0);frame();assert(!gates());   /* the keys still play */
-    puts("SYNTH: four audible engines, MIDI receive-channel ownership, sustain, strum, latch and the panel passed");
+    puts("SYNTH: five audible engines, MIDI receive-channel ownership, sustain, strum, latch and the panel passed");
 }
 static void persistence(void){
     power_on();memset(nor,255,sizeof nor);persist_boot();settings_init();
@@ -64,7 +64,7 @@ static void persistence(void){
     synth_state_t bad;state_capture(&bad);bad.part[0].engine=ENGI_DRUM;bad.sum=syn_hash(&bad,sizeof bad-4u);assert(!state_valid(&bad));
     bootguard.failed=1;power_on();state_boot();assert(TSEL->p[P_SPRD]!=63);bootguard.failed=0;
     for(uint32_t b=0;b<UP_BANKS;b++)for(uint32_t c=0;c<2;c++)assert(st_sector(up_obj(b),c)!=st_sector(OBJ_SYNTH,0) && st_sector(up_obj(b),c)!=st_sector(OBJ_SYNTH,1));
-    puts("STATE: four engines, slot 384, track/MIDI settings, unchanged saves, failed writes and boot-loop recovery passed");
+    puts("STATE: five engines, slot 384, track/MIDI settings, unchanged saves, failed writes and boot-loop recovery passed");
 }
 static void renderer_migration(void){
     for(uint32_t mode=1;mode<=2;mode++){

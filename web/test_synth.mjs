@@ -7,12 +7,12 @@ import vm from 'node:vm';
 import {BACKUP_IDS,bkManifest,bkU32,bkR32,bkPack,bkUnpack,bkCrc,readBackup,captureBackup,restoreBackup} from './fm1backup.js';
 const html=readFileSync(new URL('editor.html',import.meta.url),'utf8');
 const proto=html.split('/*PROTO-BEGIN*/')[1].split('/*PROTO-END*/')[0];
-const E=vm.runInNewContext(`${proto};({parse,CMD,engineOrder,FM6,CZ,P5,J106,bank,cleanPatch,libraryFile})`,{setTimeout,clearTimeout,setInterval,clearInterval,console});
+const E=vm.runInNewContext(`${proto};({parse,CMD,engineOrder,FM6,CZ,P5,J106,HY,bank,cleanPatch,libraryFile,readSysexLibrary})`,{setTimeout,clearTimeout,setInterval,clearInterval,console});
 const info=E.parse[E.CMD.INFO](Array.from(readFileSync('build/host/synth-info.bin')));
 assert(info.synthOnly && info.ntrk===2 && info.nstep===0);
 assert(info.fm6 && info.cz && info.prophet && info.backupCaps===3);
 assert.equal(info.uiCaps&16,0);assert.equal(info.shared.total,384);assert.equal(info.native,null);
-assert.equal(E.engineOrder(info.engines).map(i=>info.engines[i]).join(),'PROPHET,FM6,CZ-1,JUNO-106');
+assert.equal(E.engineOrder(info.engines).map(i=>info.engines[i]).join(),'PROPHET,FM6,CZ-1,JUNO-106,HYDRA');
 assert(info.juno&&info.juno.engine===21&&info.juno.namespace===22&&info.juno.fields===26&&info.namespace[21]===22);
 const jf=[240,65,48,2,9,...Array.from({length:16},(_,i)=>i*7),82,0x1f,247],jt=E.J106.decode(jf);
 assert.equal(E.J106.name(jt),'PATCH A22');assert.deepEqual(Array.from(E.J106.sysex(jt,2)),jf);
@@ -23,6 +23,20 @@ assert.deepEqual(E.J106.read(new Uint8Array([...jf,240,65,50,0,5,64,247,...jf]))
 const jfac=E.J106.read(new Uint8Array(readFileSync('assets/j106-factory/j106-factory.syx'))).voices;   /* Roland's factory bank imports */
 assert.deepEqual([jfac.length,jfac[0].name,jfac[127].name,jfac[0].raw[16]],[128,'PATCH A11','PATCH B88',0x51]);
 assert.throws(()=>E.J106.decode(jf.slice(0,-2).concat([247])));
+/* HYDRA: the patch, its message, its fields against the firmware's generator and layout */
+{
+  const h=E.HY.init();assert(E.HY.valid(h));assert.equal(E.HY.name(h),'INIT HYDRA');assert.equal(h.length,144);
+  const frame=E.HY.sysex(h);assert.equal(frame.length,294);assert.deepEqual(Array.from(frame.slice(0,5)),[240,0x7D,0x48,0x59,1]);assert.equal(frame[293],247);
+  assert.deepEqual(Array.from(E.HY.decode(Array.from(frame))),Array.from(h));assert.deepEqual(Array.from(E.HY.bytes(E.HY.nibbles(h))),Array.from(h));
+  assert.equal(E.HY.read(new Uint8Array([...frame,...frame])).voices.length,2);
+  const waves=[...readFileSync('tools/gen_hy_waves.py','utf8').matchAll(/\("([A-Z0-9 ]+)", (?:spectrum|series|shape|vowel|formants|seeded)\(/g)].map(m=>m[1]);
+  assert.equal(waves.length,56);assert.deepEqual(Array.from(E.HY.WAVES),waves);
+  assert.equal(E.HY.get(h,11),0);E.HY.set(h,11,-12);assert.equal(h[11],24);assert.equal(E.HY.get(h,11),-12);assert(E.HY.valid(h));
+  const over=h.slice();over[70]=11;assert(!E.HY.valid(over));
+  const hp=E.cleanPatch({name:'H',engine:25,p:[],hy:h});assert.deepEqual(Array.from(E.libraryFile("bank",[hp],{}).patches[0].hy),Array.from(h));
+  assert.throws(()=>E.cleanPatch({engine:19,p:[],hy:h}));
+  const lib=E.readSysexLibrary(frame,'x.syx',{});assert.equal(lib.length,1);assert.equal(lib[0].engine,25);
+}
 const jp=E.cleanPatch({name:'J',engine:21,p:[],j106:jt});assert.deepEqual(E.libraryFile('bank',[jp],{}).patches[0].j106,jt);
 assert.throws(()=>E.cleanPatch({engine:19,p:[],j106:jt}));
 assert(!info.motionMax && !info.patterns && !info.chainRows);

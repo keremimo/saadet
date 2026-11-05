@@ -290,7 +290,7 @@ void saadet_say(const char *a,const char *b){ui_say(a,b);ui.force=1;}
 int saadet_sysex(const uint8_t *p,uint32_t n)
 {
     if(n>=4&&p[0]==ED_HDR0&&p[1]==ED_HDR1&&p[2]==ED_HDR2){ed_w.last_ms=sd_ms();ed_handle(p,n);return 1;}
-    if(general_sysex_frame(p,n)||p5_native_frame(p,n)||j106_native_frame(p,n))return 1;
+    if(general_sysex_frame(p,n)||p5_native_frame(p,n)||j106_native_frame(p,n)||hy_native_frame(p,n))return 1;
     return 0;
 }
 int saadet_expect(const char *s,int *v)

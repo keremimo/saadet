@@ -1,5 +1,5 @@
 wait 100
-expect engines 4
+expect engines 5
 expect engine 19
 master 4096
 peakreset

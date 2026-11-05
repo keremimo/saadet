@@ -13,6 +13,10 @@ This is an experimental release; the outstanding hardware checks are listed belo
 - Bluetooth now runs on an open stack instead of JieLi's binary libraries, which frees about 150 KB of flash for new engines.
   There is one Bluetooth link at a time: a phone or computer, or one external device, not both. After installing, forget
   Saadet on your phone or computer once and connect again: the radio has a new address and old pairings are gone.
+- HYDRA, a fifth engine: three oscillators on 56 of our own waves, OSC 1 and 2 playing one or scanning a list of eight, four
+  mutants (FM, STACK, SYNC, PW, SQUEEZE, WARP, HARMONIC), ring and noise, two filters and 16 factory sounds. Its voices cost what
+  the patch asks: eight of a plain patch, six with a mutant, fewer with heavy stacks, and the budget is bound before a note
+  starts. A saved state and performances from before it keep their sounds and gain HYDRA's INIT.
 - Overload no longer cuts voices, whatever a stored Melodee SAFETY setting says.
 - The limiter now takes only what goes over -2 dBFS, up from -5 dBFS, so at about 70 % of MASTER's travel a triad no longer
   pushes a held note down, except on JUNO-106. At full MASTER it still takes 1 to 2 dB off a triad on average (about 5 on
@@ -98,7 +102,7 @@ Final acceptance of this exact 0.2.0 package on an FM-1 remains to be recorded:
 3. Install and confirm the release identity FM-1_9000200 and the on-screen version.
 4. Play and receive BLE notes, sustain and pitch bend; check that disconnect leaves no stuck notes.
 5. Reboot and test the remembered outgoing device, retries, manual Disconnect, Radio Off and Forget.
-6. Exercise USB/TRS/BLE together while playing all four engines, and check audio continuity under load.
+6. Exercise USB/TRS/BLE together while playing all five engines, and check audio continuity under load.
 7. Hold a note and add a chord on each engine, with one part and with two layered, at full and at lower MASTER; compare
    the engines' levels. The render time with the added dither has not been measured on a unit.
 7. Save/reopen sounds and settings, and check the normal update and recovery path.
@@ -106,7 +110,9 @@ Final acceptance of this exact 0.2.0 package on an FM-1 remains to be recorded:
    Record the longest render against the 2902 us deadline and missed renders. Overload cuts no voice now, so this is the only
    proof the budget is safe. Also: tap HOME, the PARTS pads on an SMK-37, a performance saved, power-cycled and loaded, and
    a saved state from 0.1.x coming back as one part.
-9. Record eight Prophet voices over USB on an FM-1 and count the repeated frames. So far measured only on an SMK-37 Elite
+9. HYDRA on an FM-1: its budget was measured on an SMK-37 Elite only (docs/VALIDATION.md), and with no Bluetooth traffic.
+   Its sound has been measured, not yet judged by ear.
+10. Record eight Prophet voices over USB on an FM-1 and count the repeated frames. So far measured only on an SMK-37 Elite
    (docs/VALIDATION.md).
 
 The preparation tools do not install or publish anything. BUILD_INFO.json and SHA256SUMS identify the exact

@@ -60,7 +60,7 @@ export function readBackup(file) {
     if(!o||o.id!==ids[i]||!Number.isInteger(o.size)||o.size<0||o.size>maxSize(o.id)||!Number.isInteger(o.crc)||o.crc<0||o.crc>0xffffffff||typeof o.data!=="string"||o.data.length!==4*Math.ceil(o.size/3)||!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(o.data))throw Error("Invalid backup object");
     const bytes=Uint8Array.from(atob(o.data),c=>c.charCodeAt(0));if(bytes.length!==o.size||bkCrc(bytes)!==o.crc)throw Error("Backup checksum mismatch");
     const v=new DataView(bytes.buffer);
-    if(o.id===32){if(o.size<512||(v.getUint32(0,true)!==0x31534453&&v.getUint32(0,true)!==0x32534453)||v.getUint32(4,true)!==o.size||v.getUint32(o.size-4,true)!==fnv(bytes.subarray(0,-4)))throw Error("Invalid synth state");}
+    if(o.id===32){if(o.size<512||(v.getUint32(0,true)!==0x31534453&&v.getUint32(0,true)!==0x32534453&&v.getUint32(0,true)!==0x33534453)||v.getUint32(4,true)!==o.size||v.getUint32(o.size-4,true)!==fnv(bytes.subarray(0,-4)))throw Error("Invalid synth state");}
     else if(o.id===1){if(o.size<604||v.getUint32(0,true)!==0x50455235)throw Error("Invalid settings record");}
     else if(o.id>=33){if(o.size&&(o.size<8||v.getUint32(0,true)!==0x31465053||8+2*v.getUint32(4,true)!==o.size))throw Error("Invalid performance bank");}
     else if(o.size&&(o.size!==3716||v.getUint32(0,true)!==0x32425055||v.getUint16(4,true)!==206||v.getUint16(6,true)!==18))throw Error("Invalid shared sound bank");

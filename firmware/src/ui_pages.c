@@ -5,7 +5,7 @@
  * SELECT moves along the row; the header names the object (or, in a place of one object, the page) and its dots count
  * the object's pages. Holding the button lists the objects (or the pages) on the keys. EDIT, ENV and LFO are the
  * engine's: its own panel (a Prophet's, the six operators, a CZ-1 tone's lines and envelopes, a JUNO-106's sliders and
- * switches) beside the common ones. */
+ * switches, a HYDRA's oscillators, mutants and filters) beside the common ones. */
 enum { PL_HOME, PL_LIB, PL_SCL, PL_ENV, PL_LFO, PL_EDIT, PL_GLO, PL_SAVE, PL_ARP, PL_SEQ, PL_PLAY, PL_N };
 /* the picture between the header and the values (ui_pics.c); a stop's arg says which envelope, operator or filter */
 enum { PIC_NONE, PIC_ENV, PIC_LFO, PIC_MATRIX, PIC_ARP, PIC_SCALE, PIC_CHORD, PIC_VOICES, PIC_READOUT, PIC_LIB,
@@ -21,12 +21,13 @@ typedef struct { const char *name; const ui_stop_t *stop; uint8_t n; } ui_place_
 #define FN(id, l) {FK_FM6FN, (uint8_t)(id), l, 0}
 #define FC(id, l) {FK_CZ, (uint8_t)(id), l, 0}
 #define FJ(id, l) {FK_J106, (uint8_t)(id), l, 0}
+#define FH(id, l) {FK_HY, (uint8_t)(id), l, 0}
 #define FD(id, l) {FK_DEV, (uint8_t)(id), l, 0}
 #define FL(id, l) {FK_LIB, (uint8_t)(id), l, 0}
 #define F0 {FK_NONE, 0, 0, 0}
 
 /* the library's lists (ui_lib.c); its fields, SAVE's and an import's */
-enum { LIB_FAV, LIB_USER, LIB_P5, LIB_FM6, LIB_CZ, LIB_J106, LIB_PERF, LIB_N };
+enum { LIB_FAV, LIB_USER, LIB_P5, LIB_FM6, LIB_CZ, LIB_J106, LIB_HY, LIB_PERF, LIB_N };
 enum { LF_SOUND, LF_FAV, LF_SLOT, LF_CURSOR, LF_LETTER, LF_SFAV, LF_FIRST, LF_DELETE, LF_ERASE, LF_SEND, LF_PSLOT, LF_N };
 static const ui_stop_t ST_LIB[LIB_N] = {
     {"", "FAVOURITES", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
@@ -35,6 +36,7 @@ static const ui_stop_t ST_LIB[LIB_N] = {
     {"", "FM6", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
     {"", "CZ-1", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
     {"", "J106", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
+    {"", "HYDRA", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
     {"", "PERFORM", PIC_LIB, {FL(LF_SOUND, "SETUP"), F0, F0, FL(LF_DELETE, "DELETE")}},
 };
 static const ui_stop_t ST_SAVE[] = {
@@ -67,6 +69,13 @@ static const ui_stop_t ST_ENV_J106[] = {           /* (one envelope: the filter'
     {"ENV", "ROUTING", PIC_P5ENV, {FJ(J106_VCA_MODE, "VCA"), FJ(J106_VCF_ENV, "VCF ENV"), FJ(J106_ENV_POL, "ENV POL"),
                                    F0}, 2},
     MOD_ENV("MOD ENV"),
+};
+static const ui_stop_t ST_ENV_HY[] = {             /* (ENV 1 moves the filters and the scans; the amp is the common envelope) */
+    {"ENV 1", "SHAPE", PIC_P5ENV, {FH(HY_E1_ATK, "ATTACK"), FH(HY_E1_DEC, "DECAY"), FH(HY_E1_SUS, "SUSTAIN"),
+                                   FH(HY_E1_REL, "RELEASE")}, 3},
+    {"ENV 1", "TIMING", PIC_P5ENV, {FH(HY_E1_DLY, "DELAY"), FH(HY_E1_HLD, "HOLD"), F0, F0}, 3},
+    {"ENV 1", "TARGETS", PIC_P5ENV, {FH(HY_E1_SC1, "SCAN 1"), FH(HY_E1_SC2, "SCAN 2"), FH(HY_E1_MU1, "MUTANT 1"), F0}, 3},
+    MOD_ENV("AMP ENV"),
 };
 static const ui_stop_t ST_ENV_FM6[] = {
     {"PITCH EG", "RATES", PIC_FMEG, {FV(FP_PR1, 0), FV(FP_PR1 + 1, 0), FV(FP_PR1 + 2, 0), FV(FP_PR1 + 3, 0)}, 6},
@@ -108,6 +117,9 @@ static const ui_stop_t ST_LFO_P5[] = {
 static const ui_stop_t ST_LFO_J106[] = {
     {"J106 LFO", "RATE", PIC_FADERS, {FJ(J106_LFO_RATE, "RATE"), FJ(J106_LFO_DELAY, "DELAY"), FJ(J106_DCO_LFO, "DCO"),
                                       FJ(J106_VCF_LFO, "VCF")}},
+    LFO_COMMON,
+};
+static const ui_stop_t ST_LFO_HY[] = {
     LFO_COMMON,
 };
 static const ui_stop_t ST_LFO_FM6[] = {
@@ -229,14 +241,38 @@ static const ui_stop_t ST_ARP[] = {
 static const ui_stop_t ST_SEQ[] = {
     {"", "CHORD", PIC_CHORD, {FT(P_CHRD, "CHORD"), FT(P_VOIC, "VOICING"), FT(P_STRUM, "STRUM"), FT(P_STROKE, "STROKE")}},
 };
+#define HY_OSC_STOPS(n, b) \
+    {n, "WAVE", PIC_FADERS, {FH(b + HO_MODE, "MODE"), FH(b + HO_WAVE, "WAVE"), FH(b + HO_SCAN, "SCAN"), FH(b + HO_SEMI, "SEMI")}}, \
+    {n, "TUNE", PIC_FADERS, {FH(b + HO_CENT, "CENT"), FH(b + HO_KEY, "KEYS"), F0, F0}}, \
+    {n, "SLOTS 1-4", PIC_FADERS, {FH(b + HO_L0, "SLOT 1"), FH(b + HO_L0 + 1, "SLOT 2"), FH(b + HO_L0 + 2, "SLOT 3"), FH(b + HO_L0 + 3, "SLOT 4")}}, \
+    {n, "SLOTS 5-8", PIC_FADERS, {FH(b + HO_L0 + 4, "SLOT 5"), FH(b + HO_L0 + 5, "SLOT 6"), FH(b + HO_L0 + 6, "SLOT 7"), FH(b + HO_L0 + 7, "SLOT 8")}}
+#define HY_MUT_STOPS(n, b) \
+    {n, "MODE", PIC_FADERS, {FH(b + HM_MODE, "MODE"), FH(b + HM_DEPTH, "DEPTH"), FH(b + HM_RATIO, 0), FH(b + HM_WET, "WET")}}, \
+    {n, "SOURCE", PIC_FADERS, {FH(b + HM_SRC, "FROM"), FH(b + HM_AUX, 0), F0, F0}}
+static const ui_stop_t ST_EDIT_HY[] = {
+    HY_OSC_STOPS("OSC 1", HY_O1), HY_MUT_STOPS("MUTANT 1", HY_M1), HY_MUT_STOPS("MUTANT 2", HY_M2),
+    HY_OSC_STOPS("OSC 2", HY_O2), HY_MUT_STOPS("MUTANT 3", HY_M3), HY_MUT_STOPS("MUTANT 4", HY_M4),
+    {"OSC 3", "WAVE", PIC_FADERS, {FH(HY_O3_WAVE, "WAVE"), FH(HY_O3_SEMI, "SEMI"), FH(HY_O3_CENT, "CENT"), FH(HY_O3_KEY, "KEYS")}},
+    {"MIXER", "LEVELS", PIC_FADERS, {FH(HY_LVL, "OSC 1"), FH(HY_LVL + 1, "OSC 2"), FH(HY_LVL + 2, "OSC 3"), FH(HY_AMP, "LEVEL")}},
+    {"MIXER", "RING", PIC_FADERS, {FH(HY_LVL + 3, "RING"), FH(HY_RING_A, "RING A"), FH(HY_RING_B, "RING B"), F0}},
+    {"MIXER", "NOISE", PIC_FADERS, {FH(HY_LVL + 4, "NOISE"), FH(HY_NOISE, "COLOR"), F0, F0}},
+    {"MIXER", "TO FILTER 2", PIC_FADERS, {FH(HY_BAL, "OSC 1"), FH(HY_BAL + 1, "OSC 2"), FH(HY_BAL + 2, "OSC 3"), FH(HY_BAL + 3, "RING")}},
+    {"MIXER", "ROUTE", PIC_FADERS, {FH(HY_BAL + 4, "NOISE"), FH(HY_ROUTE, "ROUTE"), F0, F0}},
+    {"FILTER 1", "CUTOFF", PIC_FILTER, {FH(HY_F1_TYPE, "TYPE"), FH(HY_F1_CUT, "CUTOFF"), FH(HY_F1_RES, "RES"), FH(HY_F1_ENV, "ENV 1")}, 3},
+    {"FILTER 1", "DRIVE", PIC_FILTER, {FH(HY_F1_DRIVE, "DRIVE"), FH(HY_F1_DPOS, "ORDER"), FH(HY_F1_KEY, "KEYS"), FH(HY_F1_VEL, "VEL")}, 3},
+    {"FILTER 2", "MORPH", PIC_FADERS, {FH(HY_F2_TYPE, "TYPE"), FH(HY_F2_MORPH, "PASS"), FH(HY_F2_CUT, "CUTOFF"), FH(HY_F2_RES, "RES")}},
+    {"FILTER 2", "MOD", PIC_FADERS, {FH(HY_F2_ENV, "ENV 1"), FH(HY_F2_KEY, "KEYS"), F0, F0}},
+};
+#undef HY_OSC_STOPS
+#undef HY_MUT_STOPS
 static const ui_stop_t ST_PLAY[] = {
     {"", "VOICE", PIC_VOICES, {FT(P_VOICE, "MODE"), FT(P_GLIDE, "GLIDE"), FT(P_GLMODE, "GLIDE BY"), FT(P_PRIO, "PRIORITY")}},
     {"", "UNISON", PIC_VOICES, {FT(P_DETUNE, "DETUNE"), FT(P_ALLOC, "ASSIGN"), F0, F0}},
 };
 
-/* the engine's place in the colours and the tags: 0 PROPHET, 1 FM6, 2 CZ-1, 3 JUNO-106 */
-static uint32_t eng_tint(uint32_t e) { return e == ENGI_FM6 ? 1u : e == ENGI_CZ ? 2u : e == ENGI_J106 ? 3u : 0u; }
-static const char *const ENG_TAG[4] = {"P5", "FM6", "CZ-1", "J106"};
+/* the engine's place in the colours and the tags: 0 PROPHET, 1 FM6, 2 CZ-1, 3 JUNO-106, 4 HYDRA */
+static uint32_t eng_tint(uint32_t e) { return e == ENGI_FM6 ? 1u : e == ENGI_CZ ? 2u : e == ENGI_J106 ? 3u : e == ENGI_HYDRA ? 4u : 0u; }
+static const char *const ENG_TAG[5] = {"P5", "FM6", "CZ-1", "J106", "HYDRA"};
 static int sx_staged(void);                             /* sound.c: a dump waits for its slots */
 
 static ui_place_t place_of(uint32_t p)
@@ -254,13 +290,13 @@ static ui_place_t place_of(uint32_t p)
         break;
     case PL_SCL: SET(ST_SCL); break;
     case PL_ENV:
-        if (e == 0u) SET(ST_ENV_P5); else if (e == 1u) SET(ST_ENV_FM6); else if (e == 2u) SET(ST_ENV_CZ); else SET(ST_ENV_J106);
+        if (e == 0u) SET(ST_ENV_P5); else if (e == 1u) SET(ST_ENV_FM6); else if (e == 2u) SET(ST_ENV_CZ); else if (e == 3u) SET(ST_ENV_J106); else SET(ST_ENV_HY);
         break;
     case PL_LFO:
-        if (e == 0u) SET(ST_LFO_P5); else if (e == 1u) SET(ST_LFO_FM6); else if (e == 2u) SET(ST_LFO_CZ); else SET(ST_LFO_J106);
+        if (e == 0u) SET(ST_LFO_P5); else if (e == 1u) SET(ST_LFO_FM6); else if (e == 2u) SET(ST_LFO_CZ); else if (e == 3u) SET(ST_LFO_J106); else SET(ST_LFO_HY);
         break;
     case PL_EDIT:
-        if (e == 0u) SET(ST_EDIT_P5); else if (e == 1u) SET(ST_EDIT_FM6); else if (e == 2u) SET(ST_EDIT_CZ); else SET(ST_EDIT_J106);
+        if (e == 0u) SET(ST_EDIT_P5); else if (e == 1u) SET(ST_EDIT_FM6); else if (e == 2u) SET(ST_EDIT_CZ); else if (e == 3u) SET(ST_EDIT_J106); else SET(ST_EDIT_HY);
         break;
     case PL_GLO: SET(ST_GLO); break;
     case PL_ARP: SET(ST_ARP); break;
@@ -272,11 +308,12 @@ static ui_place_t place_of(uint32_t p)
 }
 
 /* HOME's four macros, the engine's (a turn shows the name and value over the whole screen) */
-static const ui_field_t HOME_F[4][4] = {
+static const ui_field_t HOME_F[5][4] = {
     {FP(P5_CUTOFF, "CUTOFF"), FP(P5_RESONANCE, "RESONANCE"), FP(P5_ENV_FILTER, "ENV AMOUNT"), FP(P5_RELEASE_AMP, "RELEASE")},
     {FT(P_E2, "MOD LEVEL"), FT(P_E3, "MOD RATIO"), FT(P_E4, "MOD EG"), FT(P_E6, "DETUNE")},
     {FT(P_LD_PIT, "VIBRATO"), FT(P_LRATE, "LFO RATE"), FT(P_GLIDE, "GLIDE"), FT(P_LEVEL, "LEVEL")},
     {FJ(J106_VCF_FREQ, "CUTOFF"), FJ(J106_VCF_RES, "RESONANCE"), FJ(J106_VCF_ENV, "ENV AMOUNT"), FJ(J106_ENV_R, "RELEASE")},
+    {FH(HY_O1 + HO_SCAN, "SCAN"), FH(HY_M1 + HM_DEPTH, "MUTANT"), FH(HY_F1_CUT, "CUTOFF"), FH(HY_F1_RES, "RESONANCE")},
 };
 
 /* the buttons' places (panel.c B_*); REC is no place (it latches). FX opens the library */

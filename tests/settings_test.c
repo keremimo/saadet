@@ -6,12 +6,14 @@
 #include <assert.h>
 #include "../firmware/src/tuning.h"
 #define __attribute__(x)
-#define NENGINES 22u
+#define NENGINES 26u
 #define USER_GENERAL 16u
 #define USER_NATIVE_P5 20u
 #define ENGI_PROPHET 19u
 #define ENGI_J106 21u
 #define USER_NATIVE_J106 22u
+#define ENGI_HYDRA 25u
+#define USER_NATIVE_HYDRA 26u
 static int p5_favorite_has(uint32_t slot,int factory){(void)slot;(void)factory;return 0;}
 static int p5_favorite_set(uint32_t slot,int on,int factory){(void)slot;(void)on;(void)factory;return 0;}
 #define UP_SLOTS 64u

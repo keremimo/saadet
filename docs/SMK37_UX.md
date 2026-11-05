@@ -36,7 +36,7 @@ OCTAVE -/+); the keybed (the middle 27 as the FM-1's, the outer 10 more notes); 
 names fit Saadet's places better than they fit Melodee's: CHORD opens the envelopes and SEQ the chords, which is
 odd, so the screen names the place as it always did and the manual gives the map once.
 
-The one hue: the engine's colour (`T_THEME`: coral P5, blue FM6, yellow CZ-1, lilac J106). The screen already takes
+The one hue: the engine's colour (`T_THEME`: coral P5, blue FM6, yellow CZ-1, lilac J106, green HYDRA). The screen already takes
 it on; the pads say the same thing the screen says.
 
 ## 2. Pads
@@ -80,7 +80,7 @@ modes ONE, MULTI, SPLIT and LAYER, the current FILLED; the bottom row the first 
 one loaded FILLED. An empty slot, or part B with one part, is dark and does nothing.
 
 **SOUNDS** and **FAVS** (`library_sounds`, `patch_held_favs`): 16 sounds. In LIBRARY, of the list on the screen (FAVOURITES,
-USER, P5, FM6, CZ-1, J106). Elsewhere SOUNDS is the engine playing's own list and FAVS the favourites, opening on the page of
+USER, P5, FM6, CZ-1, J106, HYDRA). Elsewhere SOUNDS is the engine playing's own list and FAVS the favourites, opening on the page of
 the sound playing. A page of 16, pad 1 top left to pad 16 bottom right; `<` `>` turn the list's page
 of 16 and the screen's chosen sound follows, without loading it. SELECT still turns LIBRARY's lists, as on the FM-1. A tap loads the sound at once (no rest wait: a tap is a
 choice). Lights: a slot with a sound ON (FAVOURITES and USER: in its engine's hue), the sound playing FILLED, a pad
@@ -145,6 +145,9 @@ edits follow with no new path:
 | ARP | ARP > PATTERN: MODE RATE OCTAVES GATE | | | |
 | CHORD | CHORD: CHORD VOICING STRUM STROKE | | | |
 | MIX | GLOBAL > OUTPUT: LEVEL PAN SPREAD, and MASTER as K4 (the virtual master, section 6) | | | |
+
+HYDRA's banks: MACROS SCAN MUTANT CUTOFF RESONANCE; FILTER is EDIT > FILTER 1 > CUTOFF: TYPE CUTOFF RES ENV 1; ENV is ENV > ENV 1:
+ATTACK DECAY SUSTAIN RELEASE; LFO is the common LFO > WAVE.
 
 LIBRARY, SAVE and GLOBAL keep their own four whatever bank is picked, with no tag: what they edit is not the sound. On every
 other page, opening or turning it shows its own four, so its controls can always be reached: the bank takes over only when it is

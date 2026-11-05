@@ -144,7 +144,7 @@ static void browse_turn(int engine, int32_t s)  /* PRESETS: the engine's list; A
     if (engine) {
         uint32_t e = eng_step(lib_engine(uix.br.src), s);
         uix.br.src = (uint8_t)(LIB_P5 + eng_tint(e));
-        lib.at[uix.br.src] = e == ENGI_PROPHET || e == ENGI_J106 ? 1u : 0u;   /* (set_engine_of: the first program or tone) */
+        lib.at[uix.br.src] = e == ENGI_PROPHET || e == ENGI_J106 || e == ENGI_HYDRA ? 1u : 0u;   /* (set_engine_of: the first program or tone) */
         lib_move(uix.br.src, 0);
     } else {
         lib_move(uix.br.src, s);
@@ -499,7 +499,7 @@ static void vm_state(char *b, uint32_t n)        /* what changes the notes now: 
 /* the list's five sounds around the one chosen (an empty list: its word in name); the count */
 static uint32_t vm_list_of(ui_vm_t *v, uint32_t src)
 {
-    static const char *const EMPTY[LIB_N] = {"NO FAVOURITES YET", "NO USER SOUNDS YET", "", "", "", "", "NO SETUPS YET"};
+    static const char *const EMPTY[LIB_N] = {"NO FAVOURITES YET", "NO USER SOUNDS YET", "", "", "", "", "", "NO SETUPS YET"};
     lib_item_t w[5];
     uint32_t n = lib_count(src), i, at = n ? lib.at[src] % n : 0u;
     lib_scan(src, (int32_t)at - 2, w, 5u);
