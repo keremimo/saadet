@@ -56,7 +56,8 @@ static uint8_t settings_pad_bank;                    /* what the pads are on HOM
 static uint8_t settings_boot;
 static int16_t settings_budget = VOICE_BUDGET_DEFAULT;
 /* GLO > WEIGHTS: budget points per sounding voice of PROPHET, CZ-1 and FM6 (legacy positions stay reserved) (0 AUTO: voice.c's
- * built-in rule) and SAFETY (0: overload never cuts voices, audio.c). Device settings (settings_persist.c). */
+ * built-in rule). Device settings (settings_persist.c). SAFETY is Melodee's stored choice, kept so the record round-trips:
+ * the fm1-base build never cuts a voice for overload (platform/deadline.h); only the retired platform's audio.c reads it. */
 #define VOICE_KINDS 5u
 static int16_t settings_vpoints[VOICE_KINDS];
 static int16_t settings_safety;

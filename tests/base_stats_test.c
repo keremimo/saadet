@@ -89,8 +89,13 @@ int main(void)
     trk_note_on(TSEL, 60, 100); trk_note_on(TSEL, 64, 100);
     int32_t out[CTL];
     for (uint32_t b = 0; b < 8u; b++) track_render(TSEL, out, CTL);
+    /* a sustained overload is measured, never answered: a stored SAFETY ON (Melodee's) changes nothing */
+    uint32_t kills = voice_kills;
+    settings_safety = 1;
+    for (uint32_t b = 0; b < 64u; b++) { saadet_deadline(2901, 2902); track_render(TSEL, out, CTL); }
+    settings_safety = 0;
     /* the base's deadline hook after each render: 1234 us the longest of a 2902 us budget */
-    host_xruns = 3; song.cpu_q8 = 0;
+    sd_render_max_us = 0; host_xruns = 3; song.cpu_q8 = 0;
     saadet_deadline(800, 2902); saadet_deadline(1234, 2902); saadet_deadline(900, 2902);
     uint32_t load = song.cpu_q8;
 
@@ -100,6 +105,7 @@ int main(void)
     ok("the base's USB audio fields read 0", !usb && !field(17));
     ok("missed renders, longest render, load", field(16) == 3u && field(18) == 1234u && field(19) == load && load > 0u);
     ok("voices sounding and held", field(20) == 2u && field(21) == 2u);
+    ok("a sustained overload cuts no voice", voice_kills == kills && !field(24));
     ok("CPU1 offline here", !field(26));
     audio_worker_online = 1; audio_worker.jobs = 7; fm1_core1_fault.count = 2;   /* (no render while set) */
     stats(4);

@@ -237,7 +237,6 @@ void saadet_init(void)
 void saadet_render(int32_t *out,uint32_t n,uint32_t gain)
 {
     fm1_ms=sd_ms();song.master_q12=(int32_t)gain;
-    if(sd_shed_pending){sd_shed_pending=0;if(settings_safety)shed_voice();}
 #if MELODEE_DUAL_CORE
     audio_worker_check();
 #endif
