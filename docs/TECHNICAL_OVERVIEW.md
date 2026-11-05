@@ -89,8 +89,10 @@ HYDRA (engine 25) is a wave-scanning engine after the ASM Hydrasynth, brought fr
 OSC 1 and 2 play one of 56 single-cycle waves (`tools/gen_hy_waves.py`, our own) or scan a list of eight, each through two
 mutants in series; OSC 3 plays one wave; ring and noise join them in the mixer, which feeds a filter of eleven types and a morphing
 state variable, in series or side by side. One ENV moves the filters, the scans and a mutant; the common ADSR is the amplitude.
-A patch is 144 bytes (`firmware/src/hydra_patch.h`). Oscillators run at twice the rate from F4 up while the block has room for
-it. Polyphony follows the patch's measured cost, and it is bound before a note starts ([the measurements](VALIDATION.md)).
+A patch is 144 bytes (`firmware/src/hydra_patch.h`), eight macros after the Hydrasynth's among them: a name each and a pool of 14
+assignments (macro, one of 31 destinations, a depth), applied once a block; the part's E1..E8 are their values, so the knobs, CC
+74/71 and the matrix move them. Oscillators run at twice the rate from F4 up while the block has room for it. Polyphony follows
+the patch's measured cost with every macro where it costs most, and it is bound before a note starts ([the measurements](VALIDATION.md)).
 SID is retired with its stored engine ID reserved. FM6 uses the MSFA renderer;
 legacy MARK I/OPL settings load through it and can sound different. CZ-1 is
 independent of the removed PHASE/CrispyZebra engine. BLE/platform migration

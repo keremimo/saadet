@@ -130,6 +130,12 @@ cancelled it before release; its copies there read GPL-3.0-only, and their autho
 
 It follows the published design of the ASM Hydrasynth. No ASM code, wavetable or sound data is used.
 
+The web editor's Hydrasynth import (`HYS` in `web/editor.html`, GPL-3.0-only as the editor) is our own code. It reads the
+Hydrasynth's SysEx framing and patch layout as Sean Luke's Edisyn documents them from its reverse engineering
+(`edisyn/synth/asmhydrasynth`, Apache-2.0): the facts of the format (offsets, ranges, list indices, the checksum) were
+taken from those notes and that source, no Edisyn code. The patches it reads are the user's; none are included here, and
+the tests build their own.
+
 ## Retained Hügelton Instruments material
 
 The following original material is by Hügelton Instruments (Leo Kuroshita).

@@ -26,7 +26,7 @@ exception: holding it is the sustain pedal, and the keys play.
 | FX | LIBRARY | Lists: FAVOURITES, USER, P5, FM6, CZ-1, J106, HYDRA. K1 picks a sound (it loads at rest), K2 stars it as a favourite. User sounds also have K4 DELETE. |
 | SEL | SCALE | Scale, root, key mode, shift; the MPC degree. |
 | ENV | ENV | The engine's own envelopes (P5 filter and amp; FM6 pitch EG; the CZ-1's six 8-stage envelopes; the J106's one ADSR with its VCA mode, VCF amount and polarity; HYDRA's ENV 1 and what it moves), then the common MOD ENV (on HYDRA, AMP ENV: the voice's amplitude). |
-| LFO | LFO | The engine's own LFO (P5 LFO, FM LFO, CZ-1 vibrato, J106 LFO rate, delay and its DCO and VCF depths; HYDRA has the common one alone), the common LFO, and the four-route matrix. |
+| LFO | LFO | The engine's own LFO (P5 LFO, FM LFO, CZ-1 vibrato, J106 LFO rate, delay and its DCO and VCF depths; HYDRA has the common one alone), the common LFO, and the four-route matrix. HYDRA's macros follow it: MACRO 1–8, each a NAME, its VALUE and up to three destinations with their depths. |
 | EDIT | EDIT | The engine's own panel. P5: oscillators, mixer, filter, poly mod, wheel mod, play. FM6: voice and algorithm, OP1–OP6, macros, function settings. CZ-1: tone, detune, line 1 and line 2. J106: DCO waves and modulation, VCF cutoff and modulation (with the HPF), VCA mode, level and chorus. HYDRA: OSC 1 with mutants 1 and 2, OSC 2 with mutants 3 and 4, OSC 3, the mixer, FILTER 1, FILTER 2. A value that has no effect on the sound as it stands is shown dim, but you can still edit it. |
 | GLO | GLOBAL | Tempo, output, the parts, tuning, MIDI channels and thru, voice budget, display, erase everything. |
 | SAVE | SAVE | Choose a slot, set the name letter by letter (CURSOR, LETTER), and star it if you like. Press SAVE again to store. |
@@ -118,6 +118,12 @@ play immediately from RAM, so a librarian can audition and edit without a
 save. Repeated native dumps update that sound and retain the chosen SAVE
 destination. DX7 voice-parameter and JUNO-106 single-control messages edit
 their active engine directly, including the pending tone in SAVE.
+
+The web editor also reads ASM Hydrasynth patches: a SysEx dump (.syx), an ASM Manager bank (.hydra) or one patch (.patch).
+It converts each into a HYDRA sound, as near as HYDRA goes: the oscillators (the waves by family), mutants, ring, noise,
+mixer, both filters, ENV 1, the level and the eight macros with their names, destinations and depths; ENV 2 becomes the amp
+envelope. LFOs, ENV 3–5, most of the matrix, the arpeggiator and the effects are left out, so a sound played from the ribbon,
+the wheels or an LFO alone may be silent. Import them on the HYDRA panel, into the library, or straight into the bank's slots.
 
 Banks wait for import and do not replace the playing sound. A Saadet preset
 starts playing after import. Opening another place cancels the pending import;

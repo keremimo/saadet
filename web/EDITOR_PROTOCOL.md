@@ -99,8 +99,11 @@ A11–B88 as presets 1–128) and 22 for user slots.
 
 ## HYDRA patches
 
-A patch is 144 bytes (`firmware/src/hydra_patch.h`), its last twelve a space-padded name. Command 97 takes operation, part,
-payload and replies operation (GET and PUT reply 1), result, part:
+A patch is 144 bytes (`firmware/src/hydra_patch.h`), its last twelve a space-padded name. Bytes 95..102 name its eight macros
+(an index into `HY_MACRO_NAMES`, 0 AUTO); 103..130 are 14 assignments of two bytes, the macro (high three bits) and its
+destination (low five, an index into `HY_TARGETS`, 0 free) then the depth + 127. The macros' values are the part's parameters
+E1..E8 (`P_E0..P_E7`, -64..63), read and set as any parameter; a PUT or a native message sets them to 0. Command 97 takes
+operation, part, payload and replies operation (GET and PUT reply 1), result, part:
 
 - 0 GET: the patch as low-first nibble pairs (288 bytes).
 - 1 PUT: the same; the part plays the patch.

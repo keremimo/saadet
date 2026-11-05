@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Kerem Kilic (Ellic Studio) */
-/* Controllers mapped to sound parameters (CC5 glide, CC7 level, CC10 pan, CC71/74 the engine's macros, CC72/73/75
+/* Controllers mapped to sound parameters (CC5 glide, CC7 level, CC10 pan, CC71/74 the engine's macros (HYDRA: its macros 4 and 3), CC72/73/75
  * release/attack/decay, the native engines' own envelopes included). Included by seq.c before midi_input.c. */
 /* Native envelope loops run only for their CC, outside the audio IRQ's hot loops. */
 static __attribute__((noinline)) void midi_parameter(track_t *t,uint32_t cc,uint32_t value)
@@ -9,7 +9,7 @@ static __attribute__((noinline)) void midi_parameter(track_t *t,uint32_t cc,uint
     switch(cc){case 5:id=P_GLIDE;break;case 7:id=P_LEVEL;break;case 10:id=P_PAN;break;
     case 72:id=P_REL;break;case 73:id=P_ATK;break;case 75:id=P_DEC;break;
     case 74:case 71:{
-        static const uint8_t map[NENGINES]={0,0,0x30,0x56,0,0x07,0,0,0,0,0x30,0x34,0x30,0,0,0,0,0,0,0x12,0,0x12,0,0,0,0x56};
+        static const uint8_t map[NENGINES]={0,0,0x30,0x56,0,0x07,0,0,0,0,0x30,0x34,0x30,0,0,0,0,0,0,0x12,0,0x12,0,0,0,0x34};
         uint32_t macro=(map[t->eng_req%NENGINES]>>(cc==74?4:0))&15u;
         if(macro)id=P_E0+macro-1u;else if(cc==74 && t->eng_req==ENGI_CZ)id=P_ED_FLT;
         break; }default:return;}

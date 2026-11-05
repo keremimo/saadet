@@ -16,10 +16,16 @@ This is an experimental release; the outstanding hardware checks are listed belo
 - HYDRA, a fifth engine: three oscillators on 56 of our own waves, OSC 1 and 2 playing one or scanning a list of eight, four
   mutants (FM, STACK, SYNC, PW, SQUEEZE, WARP, HARMONIC), ring and noise, two filters and 16 factory sounds. Its voices cost what
   the patch asks: eight of a plain patch, six with a mutant, fewer with heavy stacks, and the budget is bound before a note
-  starts. A saved state and performances from before it keep their sounds and gain HYDRA's INIT.
+  starts. A saved state and performances from before it keep their sounds and gain HYDRA's INIT. Its eight macros are the
+  Hydrasynth's kind: each sound names them and routes them to its own destinations with depths (LFO > MACRO 1–8), and a voice
+  is budgeted with every macro at its costliest, so no turn makes the sound late.
+- The web editor converts ASM Hydrasynth patches into HYDRA sounds: SysEx dumps, ASM Manager .hydra banks and .patch files,
+  into the library or straight into the bank. It is approximate: the waves are matched by family, and the LFOs, the other
+  envelopes, most of the matrix and the effects are left out. Of the 2,304 patches tried (ASM's banks and two
+  third-party packs) all converted; 7 played only from the ribbon, wheels or LFOs are silent at rest.
 - Every sound has eight macros, in two rows of four. Turn SELECT on HOME for the second row on K1–K4. On an SMK-37, the new
   8 KNOBS bank puts all eight on K1–K8 at once; while it is picked, K5–K8 are not MASTER, SELECT, ALGORITHM and PRESETS. On
-  HYDRA the eight are its macros: SCAN 1, MUTANT 1, CUTOFF, RESONANCE, SCAN 2, MUTANT 3, DRIVE and PASS.
+  HYDRA the eight are the sound's own macros, by the names it gives them.
 - Overload no longer cuts voices, whatever a stored Melodee SAFETY setting says.
 - The limiter now takes only what goes over -2 dBFS, up from -5 dBFS, so at about 70 % of MASTER's travel a triad no longer
   pushes a held note down, except on JUNO-106. At full MASTER it still takes 1 to 2 dB off a triad on average (about 5 on

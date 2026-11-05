@@ -293,7 +293,7 @@ static void the_sound(void)
         hy_play(t, 57, 8192, 0);
         check("ENV 1 moves SCAN 1", hy_hash(8192) != still && hy_ed_active(t, HY_E1_SC1));
     }
-    /* the macros: E4 (FILTER 1 CUT) darkens a bright saw */
+    /* the macros: INIT's third (CUTOFF) darkens a bright saw */
     {
         double e_open = 0.0, e_shut = 0.0;
         t = hy_fresh(0);
@@ -302,10 +302,34 @@ static void the_sound(void)
         for (k = 4096; k < 8192; k++) e_open += fabs((double)hbuf[k] - hbuf[k - 1]);
         t = hy_fresh(0);
         hy_raw(t)[HY_F1_CUT] = 100;
-        t->p[P_E4] = -63;
+        t->p[P_E2] = -64;
         hy_play(t, 45, 8192, 0);
         for (k = 4096; k < 8192; k++) e_shut += fabs((double)hbuf[k] - hbuf[k - 1]);
-        check("macro CUT (E4) closes FILTER 1", e_shut < e_open * 0.5);
+        check("a macro routed to CUTOFF (INIT's third) closes FILTER 1", e_shut < e_open * 0.5);
+    }
+    /* the macros as the patch routes them: a depth of a destination's range, several adding up, clamped */
+    {
+        uint8_t r[HY_BYTES], eff[HY_BYTES];
+        int16_t e[HY_MACROS] = {0};
+        t = hy_fresh(0);
+        memcpy(r, hy_raw(t), HY_BYTES);
+        memset(r + HY_MNAME, 0, HY_MACROS + 2u * HY_MSLOTS);
+        r[HY_F1_CUT] = 60; r[HY_F1_RES] = 20;
+        r[HY_MA] = HY_SLOT(0, HT_CUT); r[HY_MA + 1] = HY_DEPTH0 + 127;
+        r[HY_MA + 2] = HY_SLOT(0, HT_RES); r[HY_MA + 3] = HY_DEPTH0 - 64;
+        r[HY_MA + 4] = HY_SLOT(5, HT_CUT); r[HY_MA + 5] = HY_DEPTH0 + 64;
+        hy_macros(r, e, eff);
+        ok = !memcmp(r, eff, HY_BYTES);
+        e[0] = 16;
+        hy_macros(r, e, eff);
+        ok &= eff[HY_F1_CUT] == 60 + 32 && eff[HY_F1_RES] == 20 - 16;   /* (16/64 of 127; of -64/127 of 127) */
+        e[0] = 63; e[5] = 63;
+        hy_macros(r, e, eff);
+        ok &= eff[HY_F1_CUT] == 127;
+        e[0] = -64; e[5] = 0;
+        hy_macros(r, e, eff);
+        ok &= eff[HY_F1_CUT] == 0 && eff[HY_F1_RES] == 20 + 64;
+        check("a macro moves each of its destinations by its depth, several adding up, clamped; at 0 the sound as stored", ok);
     }
     /* aliasing: a plain SAW, the filters open; energy off the harmonics */
     {
@@ -365,15 +389,45 @@ static void the_sound(void)
         hy_raw(t)[HY_O1 + HO_MODE] = hy_raw(t)[HY_O2 + HO_MODE] = 1;
         hy_raw(t)[HY_M2 + HM_MODE] = MU_FM; hy_raw(t)[HY_M4 + HM_MODE] = MU_SYNC;
         hy_raw(t)[HY_LVL + 1] = 80;
-        check("the heaviest patch takes most of the budget", hy_units(t) >= 9u && 18u / hy_units(t) * hy_cost(hy_raw(t)).c1 <= HY_BLOCK_US);
+        check("the heaviest patch takes most of the budget", hy_units(t) >= 9u && 18u / hy_units(t) * hy_cost_most(hy_raw(t)).c1 <= HY_BLOCK_US);
         check("every factory sound's full budget fits the block", ({
             int all = 1;
             for (pi = 1; pi < ENG_HYDRA.npresets; pi++) {
                 t = hy_fresh(pi);
-                all &= 18u / hy_units(t) * hy_cost(hy_raw(t)).c1 <= HY_BLOCK_US;
+                all &= 18u / hy_units(t) * hy_cost_most(hy_raw(t)).c1 <= HY_BLOCK_US;
             }
             all;
         }));
+        /* a macro that can open what costs is costed open: OSC 3's level, FILTER 2 */
+        t = hy_fresh(0);
+        {
+            uint8_t *r = hy_raw(t);
+            hy_cost_t c0 = hy_cost(r), c;
+            memset(r + HY_MA, 0, 2u * HY_MSLOTS);
+            r[HY_MA] = HY_SLOT(3, HT_OSC3); r[HY_MA + 1] = HY_DEPTH0 - 20;
+            c = hy_cost_most(r);
+            ok = c.c1 == c0.c1 + 12u && hy_cost(r).c1 == c0.c1;
+            r[HY_MA + 2] = HY_SLOT(7, HT_F2CUT); r[HY_MA + 3] = HY_DEPTH0 + 1;
+            ok &= hy_cost_most(r).c1 == c0.c1 + 12u + 17u;
+            check("a macro that can open OSC 3 or FILTER 2 is budgeted with them open", ok);
+        }
+        /* no turn of any macro, the matrix's included, costs more than the budget took: every factory sound, every macro
+         * at either end */
+        ok = 1;
+        for (pi = 0; pi < ENG_HYDRA.npresets; pi++) {
+            uint8_t eff[HY_BYTES];
+            hy_cost_t most;
+            t = hy_fresh(pi);
+            most = hy_cost_most(hy_raw(t));
+            for (k = 0; k < 256u; k++) {
+                int16_t e[HY_MACROS];
+                for (uint32_t m = 0; m < HY_MACROS; m++) e[m] = (int16_t)((k >> m) & 1u ? 63 : -64);
+                hy_macros(hy_raw(t), e, eff);
+                if (hy_cost(eff).c1 > most.c1 || hy_cost(eff).os > most.os) { printf("  preset %u, macros %02x: over\n", pi, k); ok = 0; }
+            }
+            ok &= hy_cost_most(hy_raw(t)).c1 == hy_cost(hy_raw(t)).c1;   /* (the factory's macros open nothing that costs) */
+        }
+        check("every macro at either end stays within the budget; the factory's open nothing that costs", ok);
     }
     /* a heavier sound loaded over eight notes: the surplus of their tails fades; nothing held is touched */
     {
@@ -458,9 +512,12 @@ static void the_panel(void)
     hy_raw(t)[HY_O1 + HO_SEMI] = HY_SEMI0 - 12;
     check("signed fields show their value (SEMI -12)", hy_get(t, HY_O1 + HO_SEMI) == -12);
     /* every field of the place reads and every range holds a stored byte */
+#define HY_STOPS (NELEM(ST_EDIT_HY) + NELEM(ST_ENV_HY) + NELEM(ST_LFO_HY))
+#define HY_STOP(i) ((i) < NELEM(ST_EDIT_HY) ? &ST_EDIT_HY[i] : (i) < NELEM(ST_EDIT_HY) + NELEM(ST_ENV_HY) ? \
+                    &ST_ENV_HY[(i) - NELEM(ST_EDIT_HY)] : &ST_LFO_HY[(i) - NELEM(ST_EDIT_HY) - NELEM(ST_ENV_HY)])
     ok = 1;
-    for (i = 0; i < NELEM(ST_EDIT_HY) + NELEM(ST_ENV_HY); i++) {
-        const ui_stop_t *st = i < NELEM(ST_EDIT_HY) ? &ST_EDIT_HY[i] : &ST_ENV_HY[i - NELEM(ST_EDIT_HY)];
+    for (i = 0; i < HY_STOPS; i++) {
+        const ui_stop_t *st = HY_STOP(i);
         for (k = 0; k < 4u; k++) {
             const param_desc_t *d;
             if (st->f[k].kind != FK_HY) continue;
@@ -469,18 +526,67 @@ static void the_panel(void)
         }
     }
     check("every field of HYDRA's pages reads", ok);
-    /* every value of the patch has a page */
+    /* every value of the patch has a page (the macros' slots: through their macros' destinations) */
     ok = 1;
     for (i = 0; i < NELEM(HY_PANEL); i++) {
-        int seen = 0;
+        int seen = i >= HY_MA && i < HY_SPARE;
         if (!HY_PANEL[i].label) continue;
-        for (uint32_t s = 0; s < NELEM(ST_EDIT_HY) + NELEM(ST_ENV_HY); s++) {
-            const ui_stop_t *st = s < NELEM(ST_EDIT_HY) ? &ST_EDIT_HY[s] : &ST_ENV_HY[s - NELEM(ST_EDIT_HY)];
+        for (uint32_t s = 0; s < HY_STOPS; s++) {
+            const ui_stop_t *st = HY_STOP(s);
             for (k = 0; k < 4u; k++) seen |= st->f[k].kind == FK_HY && st->f[k].id == i;
         }
         if (!seen) { printf("  byte %u (%s) has no page\n", i, HY_PANEL[i].label); ok = 0; }
     }
+    for (uint32_t m = 0; m < HY_MACROS; m++)
+        for (uint32_t j = 0; j < HY_MDESTS; j++) {
+            int seen = 0;
+            for (uint32_t s = 0; s < HY_STOPS; s++)
+                for (k = 0; k < 4u; k++) seen |= HY_STOP(s)->f[k].kind == FK_HY && HY_STOP(s)->f[k].id == HYV_DEST(m, j);
+            ok &= seen;
+        }
     check("every value of the patch has a page", ok);
+    /* the macros' pages: a destination added takes a free slot, NONE gives it back; a full pool lights no new one */
+    {
+        const uint8_t *r;
+        ui_field_t d2 = {FK_HY, HYV_DEST(0, 1), 0, 0}, dp2 = {FK_HY, HYV_DEPTH(0, 1), 0, 0}, d3 = {FK_HY, HYV_DEST(0, 2), 0, 0};
+        uint32_t free0 = 0;
+        t = hy_fresh(0);
+        r = hy_raw(t);
+        for (k = 0; k < HY_MSLOTS; k++) free0 += !HY_SLOT_TGT(r[HY_MA + 2u * k]);
+        ok = hy_get(t, HYV_DEST(0, 0)) == (int32_t)HT_SCAN1 && hy_get(t, HYV_DEPTH(0, 0)) == 64 && !hy_ed_active(t, HYV_DEST(0, 2)) &&
+             hy_ed_active(t, HYV_DEST(0, 1)) && !hy_ed_active(t, HYV_DEPTH(0, 1)) && !strcmp(hy_macro_desc(t, 2)->label, "CUTOFF");
+        hy_edit_value(t, HYV_DEST(0, 1), HT_DRIVE);
+        ok &= hy_get(t, HYV_DEST(0, 1)) == (int32_t)HT_DRIVE && hy_get(t, HYV_DEPTH(0, 1)) == 64 && hy_ed_active(t, HYV_DEPTH(0, 1)) &&
+              hy_ed_active(t, HYV_DEST(0, 2)) && hy_slots_used(r, 0) == 2u;
+        field_step(&dp2, -10);
+        ok &= hy_get(t, HYV_DEPTH(0, 1)) == 54 && field_get(&d2) == (int32_t)HT_DRIVE && field_get(&d3) == 0;
+        hy_edit_value(t, HYV_DEST(0, 0), HT_NONE);
+        ok &= hy_slots_used(r, 0) == 1u && hy_get(t, HYV_DEST(0, 0)) == (int32_t)HT_DRIVE;
+        for (uint32_t m = 0; m < HY_MACROS; m++)       /* (the pool fills before every page does: 14 of 24) */
+            while (hy_slots_used(r, m) < HY_MDESTS && hy_slot_free(r) >= 0)
+                hy_edit_value(t, HYV_DEST(m, hy_slots_used(r, m)), HT_LEVEL);
+        ok &= free0 == 6u && hy_slot_free(r) < 0 && hy_slots_used(r, 7) == 1u && !hy_ed_active(t, HYV_DEST(7, 1)) &&
+              hy_patch_valid(hy_patch_of(t));
+        hy_edit_value(t, HYV_DEST(7, 1), HT_CUT);
+        ok &= hy_slots_used(r, 7) == 1u;
+        hy_raw(t)[HY_MNAME + 2] = HN_BRIGHT;
+        ok &= !strcmp(hy_macro_desc(t, 2)->label, "BRIGHT") && !strcmp(track_desc(t, P_E2)->label, "BRIGHT");
+        check("a macro's page: NAME, destinations from the pool (a free slot, NONE back), the knobs' label its name", ok);
+    }
+    /* every factory sound names all eight and routes each somewhere */
+    ok = 1;
+    for (uint32_t pi = 1; pi < ENG_HYDRA.npresets; pi++) {
+        t = hy_fresh(pi);
+        for (uint32_t m = 0; m < HY_MACROS; m++)
+            if (!hy_slots_used(hy_raw(t), m) || !hy_raw(t)[HY_MNAME + m]) { printf("  preset %u: macro %u\n", pi, m + 1u); ok = 0; }
+    }
+    check("every factory sound's eight macros have a name and a destination", ok);
+    /* CC74 / CC71: the third and the fourth */
+    t = hy_fresh(1);
+    midi_parameter(t, 74, 127);
+    midi_parameter(t, 71, 0);
+    check("CC74 and CC71 turn macros 3 and 4", t->p[P_E2] == 63 && t->p[P_E3] == -64);
+    t = hy_fresh(1);
     /* a list's name is shown whole (param_format keeps five letters, the wave lists hold seven) */
     {
         char val[16], unit[6];
@@ -498,7 +604,7 @@ static void the_panel(void)
         p = *hy_patch_of(t);
         p.raw[i] = (uint8_t)(HY_PANEL[i].max - HY_PANEL[i].min);
         ok &= hy_patch_valid(&p);
-        if (i != HY_O3_WAVE && i != HY_O1 + HO_WAVE && i != HY_O2 + HO_WAVE) {
+        if (i != HY_O3_WAVE && i != HY_O1 + HO_WAVE && i != HY_O2 + HO_WAVE && HY_PANEL[i].max - HY_PANEL[i].min < 255) {
             p.raw[i]++;
             if (hy_patch_valid(&p)) { printf("  byte %u: past its range is valid\n", i); ok = 0; }
         }
@@ -651,9 +757,9 @@ static void the_editor(void)
         uint8_t over[] = {2, 0, HY_F1_TYPE, 100, 0};
         request(ED_HYDRA, over, sizeof over);
         check(".. refuses one past its range", hy_raw(t)[HY_F1_TYPE] < F1_N);
-        uint8_t reserved[] = {2, 0, HY_RSV, 65, 0}, before = hy_raw(t)[HY_RSV];
+        uint8_t reserved[] = {2, 0, HY_SPARE, 65, 0}, before = hy_raw(t)[HY_SPARE];
         request(ED_HYDRA, reserved, sizeof reserved);
-        check(".. and what is no field", hy_raw(t)[HY_RSV] == before);
+        check(".. and what is no field", hy_raw(t)[HY_SPARE] == before);
         uint8_t name[] = {3, 0, 'G', 'L', 'A', 'S', 'S'};
         request(ED_HYDRA, name, sizeof name);
         check("97 names the patch", !memcmp(hy_raw(t) + HY_NAME, "GLASS       ", HY_NAME_LEN));
@@ -679,6 +785,12 @@ static void the_editor(void)
             if (wire[i] == 0x48u && wire[i + 1u] == 1u && wire[i + 2u] == ENGI_HYDRA && wire[i + 3u] == USER_NATIVE_HYDRA && wire[i + 4u] == ED_HYDRA)
                 found = 1;
         check("INFO announces HYDRA", found);
+    }
+    {   /* the editor's parameter list names the macros as the sound does */
+        uint8_t q[2] = {0, P_E2};
+        t = hy_fresh(1);
+        request(ED_DESC, q, sizeof q);
+        check("the editor's E3 is the sound's third macro, by its name (WAVESCAN: BRIGHT)", wire_n > 16u && memmem(wire, wire_n, "BRIGHT", 6) != 0);
     }
     hy_quiet(t);
 }

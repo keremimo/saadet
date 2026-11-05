@@ -146,7 +146,7 @@ edits follow with no new path:
 | CHORD | CHORD: CHORD VOICING STRUM STROKE | | | |
 | MIX | GLOBAL > OUTPUT: LEVEL PAN SPREAD, and MASTER as K4 (the virtual master, section 6) | | | |
 
-HYDRA's banks: MACROS SCAN 1 MUTANT 1 CUTOFF RESONANCE; FILTER is EDIT > FILTER 1 > CUTOFF: TYPE CUTOFF RES ENV 1; ENV is ENV > ENV 1:
+HYDRA's banks: MACROS its macros 1-4; FILTER is EDIT > FILTER 1 > CUTOFF: TYPE CUTOFF RES ENV 1; ENV is ENV > ENV 1:
 ATTACK DECAY SUSTAIN RELEASE; LFO is the common LFO > WAVE.
 
 MACROS is HOME's four, so it follows HOME's row: SELECT on HOME (K6) turns HOME's knobs between the sound's first four macros
@@ -158,12 +158,13 @@ pair:
 
 | | PROPHET | FM6 | CZ-1 | JUNO-106 | HYDRA |
 | --- | --- | --- | --- | --- | --- |
-| K1..K4 | CUTOFF RESONANCE ENV AMOUNT RELEASE | MOD LEVEL MOD RATIO MOD EG DETUNE | VIBRATO LFO RATE GLIDE LEVEL | CUTOFF RESONANCE ENV AMOUNT RELEASE | SCAN 1 MUTANT 1 CUTOFF RESONANCE |
-| K5..K8 | ATTACK (amp) FILT DECAY B FINE LFO RATE | ALGO FEEDBACK VELOCITY LFO SPEED (the FM6's own macros, then its LFO) | WAVE WINDOW (line 1) DETUNE LEVEL 2 | ATTACK LFO RATE VCF LFO PWM | SCAN 2 MUTANT 3 DRIVE PASS |
+| K1..K4 | CUTOFF RESONANCE ENV AMOUNT RELEASE | MOD LEVEL MOD RATIO MOD EG DETUNE | VIBRATO LFO RATE GLIDE LEVEL | CUTOFF RESONANCE ENV AMOUNT RELEASE | macros 1-4 |
+| K5..K8 | ATTACK (amp) FILT DECAY B FINE LFO RATE | ALGO FEEDBACK VELOCITY LFO SPEED (the FM6's own macros, then its LFO) | WAVE WINDOW (line 1) DETUNE LEVEL 2 | ATTACK LFO RATE VCF LFO PWM | macros 5-8 |
 
-HYDRA's eight are where its eight macros act (Melodee's SCAN 1, SCAN 2, MUTANT 1 and 3 DEPTH, FILTER 1 CUT, RES, DRIVE, FILTER 2
-MORPH), edited in the patch itself, as every engine's HOME is here: a turn is saved with the sound, sent with it and seen by
-the editor. The macro offsets themselves stay where MIDI's CCs reach them.
+HYDRA's eight are its own macros, the Hydrasynth's kind (added 2026-11-05, at Kerem's asking): the sound names each and routes
+it to destinations of its own with depths (LFO > MACRO 1..8, `hydra_patch.h`), the knob's label is the macro's name, its
+value E1..E8 (0 the sound as saved). The factory sounds keep one plan: 1 and 2 character and motion, 3 BRIGHT (CC74), 4 the
+resonance or edge (CC71), the HOME row; 5..8 what each sound has to give. Every other engine's eight edit its sound itself.
 
 While it is in use, MASTER, SELECT, ALGORITHM and PRESETS give way: the board lends K5's detents to the app (`plat_k5_lend`,
 `tools/base_overlay.py`) and the level stays where it is; MIX's K4 and GLOBAL > OUTPUT still set MASTER, `<` `>` still turn

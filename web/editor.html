@@ -231,8 +231,8 @@
     </div>
     <div id="hypanel" class="group" hidden>
       <h2>HYDRA native patches</h2>
-      <p class="dim">Three wave-scanning oscillators, four mutants, two filters. Read the sound before editing; Send to track plays the edited patch. Save patches in the shared user bank.</p>
-      <p class="bar"><button id="hyimport">Import .syx</button><input id="hyfile" type="file" accept=".syx" hidden>
+      <p class="dim">Three wave-scanning oscillators, four mutants, two filters. Read the sound before editing; Send to track plays the edited patch. Save patches in the shared user bank. Import also reads ASM Hydrasynth patches (.syx dumps, ASM Manager .hydra banks and .patch files) and converts them, as near as HYDRA goes.</p>
+      <p class="bar"><button id="hyimport">Import .syx</button><input id="hyfile" type="file" accept=".syx,.hydra,.patch" hidden>
         <select id="hyvoices" aria-label="Imported HYDRA patch"></select><button id="hyread">Read track</button><button id="hysend">Send to track</button>
         <button id="hyexport">Export patch .syx</button><button id="hyexportbank">Export imported library .syx</button><button id="hylibrary">Add to library</button></p>
       <label>Name <input id="hyname" maxlength="12"></label><div id="hycontrols" class="groups"></div>
@@ -319,7 +319,7 @@
           <button id="libsave" data-t="saveToLib" data-ic="port_disk"></button>
           <button id="libimport" data-t="import" data-ic="symbol_upload"></button>
           <button id="libexport" data-t="exportLib" data-ic="symbol_download"></button>
-          <input type="file" id="libfile" accept=".json,.syx,.SYX,application/json,application/octet-stream" multiple hidden>
+          <input type="file" id="libfile" accept=".json,.syx,.SYX,.hydra,.patch,application/json,application/octet-stream" multiple hidden>
           <span class="dim" id="libcount"></span>
         </p>
       </div>
@@ -338,7 +338,7 @@
             <button id="bkerase" data-t="erase" data-ic="symbol_trash"></button>
           </p>
           <p class="bar">
-            <button id="bknativeimport" hidden>Import .syx</button><input id="bknativefile" type="file" accept=".syx" hidden>
+            <button id="bknativeimport" hidden>Import .syx</button><input id="bknativefile" type="file" accept=".syx,.hydra,.patch" hidden>
             <button id="bkrefresh" data-t="reload" data-ic="control_arrow_loop"></button>
             <button id="bkexport" data-t="exportBank" data-ic="symbol_download"></button>
             <span class="dim" data-t="dndHelp"></span>
@@ -459,7 +459,8 @@ const J106 = {
 };
 
 /* HYDRA patches (firmware/src/hydra_patch.h): 144 bytes, the name in the last twelve. A field's raw byte is its value - min.
-   Its message is Saadet's own: F0 7D 48 59 01, two nibbles a byte (low first), F7. */
+   Its message is Saadet's own: F0 7D 48 59 01, two nibbles a byte (low first), F7. The macros: eight names, then a pool of
+   14 slots, each the macro (high three bits) and its destination (low five, 0 free) in one byte, then the depth + 127. */
 const HY = (() => {
   const WAVES=["SINE","TRI","SAW","SQR","PULSE25","PULSE10","SOFTSW","HALFSIN","OCTAVE","FIFTHS","ODD 5","EVEN","DRAWBR","ORGAN 2","BRIGHT","HOLLOW","VOX A","VOX E","VOX I","VOX O","VOX U","VOX AE","CHOIR","NASAL","BELL","CHIME","GLASS","TINE","MALLET","STEEL","GONG","KALIMBA","SYNC 2","SYNC 3","SYNC 5","PM 1","PM 2","PM 3","BITS","STEPS","COMB","NOTCH","RAMP UP","THIN","BUZZ","FORMNT","TWIN PK","AIR","GRIT","DUST","FUZZ","CRUSH","WIRE","REED","BRASS","STRING"],SLOTS=["EMPTY",...WAVES];
   const fields=[],f=(id,label,min,max,names)=>{fields.push({id,label,min,max,...(names?{names}:{})});};
@@ -477,15 +478,22 @@ const HY = (() => {
   f(75,"Filter 1 ENV 1",-63,63);f(76,"Filter 1 key tracking %",0,200);f(77,"Filter 1 velocity",0,127);
   f(79,"Filter 2 type",0,1,["Band","Notch"]);f(80,"Filter 2 pass",0,127);f(81,"Filter 2 cutoff",0,127);f(82,"Filter 2 resonance",0,127);f(83,"Filter 2 ENV 1",-63,63);f(84,"Filter 2 key tracking %",0,200);
   f(85,"Level",0,127);f(86,"ENV 1 to scan 1",-63,63);f(87,"ENV 1 to scan 2",-63,63);f(88,"ENV 1 to mutant 1",-63,63);
-  f(100,"ENV 1 delay",0,127);f(101,"ENV 1 attack",0,127);f(102,"ENV 1 hold",0,127);f(103,"ENV 1 decay",0,127);f(104,"ENV 1 sustain",0,127);f(105,"ENV 1 release",0,127);
-  const HY={ENGINE:25,RECORD:144,NAME:132,WAVES,FIELDS:fields,
-    GROUPS:[['OSC 1',0,14],['OSC 2',14,28],['OSC 3',28,32],['Mutants 1, 2 (OSC 1)',32,44],['Mutants 3, 4 (OSC 2)',44,56],['Mixer',56,70],['Filter 1',70,79],['Filter 2',79,85],['ENV 1 and level',85,106]],
-    get(b,id) { const d=fields.find(x=>x.id===id);return b[id]+d.min; },
-    set(b,id,v) { const d=fields.find(x=>x.id===id);b[id]=v-d.min; },
-    valid(b) { return Array.isArray(b)&&b.length===144&&b.every(x=>Number.isInteger(x)&&x>=0&&x<=255)&&fields.every(d=>b[d.id]<=d.max-d.min)&&b.slice(132).every(x=>x>=32&&x<=126); },
+  f(89,"ENV 1 delay",0,127);f(90,"ENV 1 attack",0,127);f(91,"ENV 1 hold",0,127);f(92,"ENV 1 decay",0,127);f(93,"ENV 1 sustain",0,127);f(94,"ENV 1 release",0,127);
+  const MACRO_NAMES=["AUTO","BRIGHT","DARK","TONE","GRIT","BITE","EDGE","RES","SCAN","MORPH","MOTION","SWEEP","WARP","FM","SYNC","STACK","SQUEEZE","PW","HARMONIC","DETUNE","WIDTH","SUB","BODY","AIR","NOISE","RING","BELL","GLASS","METAL","VOWEL","CHOIR","BREATH","ATTACK","DECAY","RELEASE","PLUCK","SWELL","PASS","BLEND","COLOR","SHAPE","FAT","THIN","SPACE","LEVEL","FILTER","ENV","TALK"];
+  const TARGETS=["None","OSC 1 scan","OSC 2 scan","OSC 2 cents","Mutant 1 depth","Mutant 2 depth","Mutant 3 depth","Mutant 4 depth","Mutant 1 ratio","Mutant 3 ratio","Mutant 1 feedback / window","Mutant 1 wet","Mutant 3 wet","OSC 1 level","OSC 2 level","OSC 3 level","Ring level","Noise level","Filter 1 cutoff","Filter 1 resonance","Filter 1 drive","Filter 1 ENV 1","Filter 2 pass","Filter 2 cutoff","Filter 2 resonance","Filter 2 ENV 1","Level","ENV 1 to scan 1","ENV 1 to mutant 1","ENV 1 attack","ENV 1 decay","ENV 1 release"];
+  for(let m=0;m<8;m++)f(95+m,`Macro ${m+1} name`,0,MACRO_NAMES.length-1,MACRO_NAMES);
+  for(let k=0;k<14;k++){const b=103+2*k;   /* (the slot's two halves: fields of their own past the patch's bytes) */
+    fields.push({id:300+2*k,label:`Slot ${k+1} macro`,min:1,max:8,get:x=>(x[b]>>5)+1,set:(x,v)=>{x[b]=(v-1)<<5|(x[b]&31);}});
+    fields.push({id:301+2*k,label:`Slot ${k+1} destination`,min:0,max:31,names:TARGETS,get:x=>x[b]&31,set:(x,v)=>{x[b]=v?(x[b]&0xE0)|v:0;if(!v)x[b+1]=127;}});
+    f(b+1,`Slot ${k+1} depth`,-127,127);}
+  const HY={ENGINE:25,RECORD:144,NAME:132,WAVES,FIELDS:fields,MACRO_NAMES,TARGETS,
+    GROUPS:[['OSC 1',0,14],['OSC 2',14,28],['OSC 3',28,32],['Mutants 1, 2 (OSC 1)',32,44],['Mutants 3, 4 (OSC 2)',44,56],['Mixer',56,70],['Filter 1',70,79],['Filter 2',79,85],['ENV 1 and level',85,95],['Macros',95,400]],
+    get(b,id) { const d=fields.find(x=>x.id===id);return d.get?d.get(b):b[id]+d.min; },
+    set(b,id,v) { const d=fields.find(x=>x.id===id);if(d.set)d.set(b,v);else b[id]=v-d.min; },
+    valid(b) { return Array.isArray(b)&&b.length===144&&b.every(x=>Number.isInteger(x)&&x>=0&&x<=255)&&fields.every(d=>d.get||b[d.id]<=d.max-d.min)&&b.slice(132).every(x=>x>=32&&x<=126); },
     name(b) { return String.fromCharCode(...b.slice(132,144)).trimEnd(); },
     setName(b,name) { b.splice(132,12,...Array.from(String(name).replace(/[^ -~]/g," ").slice(0,12).padEnd(12," "),x=>x.charCodeAt(0))); },
-    init() { const b=[0,2,3,33,34,35,0,0,0,0,0,36,50,100,0,2,1,2,4,7,0,0,0,0,0,36,57,100,0,36,50,100,0,2,32,0,0,127,0,2,32,0,0,127,0,2,32,0,0,127,0,2,32,0,0,127,0,1,0,100,0,0,0,0,0,0,0,0,0,0,1,127,0,0,0,63,0,0,0,0,0,127,0,63,0,100,63,63,63,0,0,0,0,0,0,0,0,0,0,0,0,0,0,64,0,50,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];b.length=132;HY.setName(b,"INIT HYDRA");return b; },
+    init() { const b=[0,2,3,33,34,35,0,0,0,0,0,36,50,100,0,2,1,2,4,7,0,0,0,0,0,36,57,100,0,36,50,100,0,2,32,0,0,127,0,2,32,0,0,127,0,2,32,0,0,127,0,2,32,0,0,127,0,1,0,100,0,0,0,0,0,0,0,0,0,0,1,127,0,0,0,63,0,0,0,0,0,127,0,63,0,100,63,63,63,0,0,0,64,0,50,0,0,0,0,0,0,0,0,1,191,36,191,82,191,115,191,149,191,180,191,221,191,254,191,0,0,0,0,0,0,0,0,0,0,0,0,0];b.length=132;HY.setName(b,"INIT HYDRA");return b; },
     sysex(b) { if(!HY.valid(b))throw Error("Invalid HYDRA patch");return new Uint8Array([240,0x7D,0x48,0x59,1,...HY.nibbles(b),247]); },
     decode(f) { if(f.length!==294||f[0]!==240||f[1]!==0x7D||f[2]!==0x48||f[3]!==0x59||f[4]!==1||f[293]!==247)throw Error("Invalid HYDRA SysEx frame");return HY.bytes(f.slice(5,293)); },
     read(bytes) {
@@ -498,6 +506,191 @@ const HY = (() => {
     bytes(a) { if(a.length!==288||a.some(x=>x>15))throw Error("Invalid HYDRA record");const b=Array.from({length:144},(_,i)=>a[i*2]|a[i*2+1]<<4);if(!HY.valid(b))throw Error("Invalid HYDRA record");return b; }
   };
   return HY;
+})();
+
+/* ASM Hydrasynth patches into HYDRA: our own converter, from the layout Edisyn's reverse-engineered notes give
+   (github.com/eclab/edisyn, edisyn/synth/asmhydrasynth/info, Apache-2.0; no Edisyn code). A Hydrasynth SysEx message is
+   F0 00 20 2B 00 6F, base64 of [the info's CRC-32, each byte from 255, low byte first; the info], F7; a patch is 22 chunks
+   of info 16 00 n 16 + 128 bytes (the last 102): 2790 bytes. ASM Manager's .hydra banks are stored ZIPs of .patch files,
+   the patch from its byte 4. Most values are 16 bits, low byte first, 0..1024 (512 the centre of a signed one).
+   What HYDRA has is taken: OSC 1..3 (waves by family: we do not have the Hydrasynth's tables), the four mutants, ring,
+   noise, the mixer, both filters, ENV 1, the amplitude, and the eight macros with their names, destinations and depths
+   (as the patch has them set: each macro's 0 is where its knob was saved). ENV 2 becomes the part's ADSR, the voice mode
+   and glide its own parameters. The LFOs, ENV 3..5, the matrix, the arpeggiator and the effects are left. */
+const HYS = (() => {
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = b => { let c = 0xFFFFFFFF; for (const x of b) c = CRC[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const b64enc = b => { let s = ""; for (let i = 0; i < b.length; i += 3) { const n = b[i] << 16 | (b[i + 1] ?? 0) << 8 | (b[i + 2] ?? 0);
+    s += B64[n >> 18 & 63] + B64[n >> 12 & 63] + (i + 1 < b.length ? B64[n >> 6 & 63] : "=") + (i + 2 < b.length ? B64[n & 63] : "="); } return s; };
+  const b64dec = s => { const out = []; let buf = 0, bits = 0; for (const ch of s) { if (ch === "=") break; const v = B64.indexOf(ch);
+    if (v < 0) throw Error("Invalid Hydrasynth SysEx"); buf = (buf << 6 | v) & 0xFFFFFF; bits += 6; if (bits >= 8) { bits -= 8; out.push(buf >> bits & 255); } } return out; };
+  const HEAD = [0xF0, 0x00, 0x20, 0x2B, 0x00, 0x6F];
+  const check = info => { const c = crc32(info); return [255 - (c & 255), 255 - (c >>> 8 & 255), 255 - (c >>> 16 & 255), 255 - (c >>> 24 & 255)]; };
+  /* info bytes -> one Hydrasynth message; a message -> its info (null: not the Hydrasynth's) */
+  const message = info => [...HEAD, ...Array.from(b64enc([...check(info), ...info]), x => x.charCodeAt(0)), 0xF7];
+  function infoOf(m) {
+    if (m.length < 8 || HEAD.some((x, i) => m[i] !== x) || m[m.length - 1] !== 0xF7) return null;
+    const p = b64dec(String.fromCharCode(...m.slice(6, -1)));
+    return p.length > 4 ? p.slice(4) : null;   /* (the checksum is not held against it: Edisyn's reader does not either) */
+  }
+  const isSyx = b => { const s = b.indexOf(0xF0); return s >= 0 && HEAD.every((x, i) => b[s + i] === x); };
+  const isZip = b => b[0] === 0x50 && b[1] === 0x4B && b[2] === 3 && b[3] === 4;
+  const isPatch = b => (b.length === 2786 || b.length === 1762) && b[0] !== 0xF0;
+  /* -> [{data}] (data: the patch as its SysEx carries it, 2790 bytes or a 1.5 patch's 1766) */
+  function fromSyx(b) {
+    const out = []; let cur = null;
+    for (let i = 0; i < b.length; i++) {
+      if (b[i] !== 0xF0) continue;
+      const end = b.indexOf(0xF7, i + 1); if (end < 0) throw Error("Truncated Hydrasynth SysEx");
+      const inf = infoOf(Array.from(b.slice(i, end + 1))); i = end;
+      if (!inf || inf[0] !== 0x16 || inf[1] !== 0 || inf[3] !== 0x16) continue;   /* (header, footer, names, requests) */
+      if (inf[2] === 0) cur = [];
+      if (!cur || cur.length !== inf[2]) { cur = null; continue; }
+      cur.push(inf.slice(4));
+      if (cur.length === 22) { const data = cur.flat(); if (data.length >= 1766) out.push({ data }); cur = null; }
+    }
+    if (!out.length) throw Error("No Hydrasynth patch in this SysEx");
+    return out;
+  }
+  function fromZip(b) {
+    const out = [], u16 = o => b[o] | b[o + 1] << 8, u32 = o => (b[o] | b[o + 1] << 8 | b[o + 2] << 16 | b[o + 3] << 24) >>> 0;
+    for (let o = 0; o + 30 <= b.length && u32(o) === 0x04034B50;) {
+      const method = u16(o + 8), size = u32(o + 18), nlen = u16(o + 26), xlen = u16(o + 28);
+      const name = String.fromCharCode(...b.slice(o + 30, o + 30 + nlen)), at = o + 30 + nlen + xlen;
+      if (u16(o + 6) & 8) throw Error("Unsupported Hydrasynth bank");
+      if (/\.patch$/i.test(name)) { if (method !== 0) throw Error("Compressed Hydrasynth bank: save it again from ASM Manager"); out.push({ data: [6, 0, 0, 0, ...b.slice(at, at + size)] }); }
+      o = at + size;
+    }
+    if (!out.length) throw Error("No Hydrasynth patch in this bank");
+    return out;
+  }
+
+  /* HYDRA's patch (firmware/src/hydra_patch.h) */
+  const O = [0, 14], O3 = 28, M = [32, 38, 44, 50], RING_A = 56, LVL = 59, BAL = 64, ROUTE = 69, F1 = 70, F2_TYPE = 79,
+    AMP = 85, E1_SC1 = 86, E1 = 89, MNAME = 95, MA = 103;
+  const TGT_BYTE = [0, 10, 24, 26, 35, 41, 47, 53, 34, 46, 36, 37, 49, 59, 60, 61, 62, 63, 71, 72, 73, 75, 80, 81, 82, 83, 85, 86, 88, 90, 92, 94];
+  const span = g => g === 3 ? 100 : g === 21 || g === 25 || g === 27 || g === 28 ? 126 : 127;
+  /* a Hydrasynth macro destination (its list's index) -> HYDRA's (hydra_patch.h HY_TARGETS) */
+  const DEST = { 13: 1, 16: 2, 194: 3, 21: 4, 34: 5, 47: 6, 60: 7, 20: 8, 46: 9, 22: 10, 23: 10, 24: 11, 50: 12, 73: 13, 74: 14, 75: 15,
+    72: 16, 76: 16, 77: 17, 88: 18, 89: 19, 90: 20, 92: 21, 95: 22, 96: 23, 97: 24, 98: 25, 102: 26, 119: 29, 121: 30, 123: 31 };
+  /* its 219 waves by family -> ours (gen_hy_waves.py's order), as their names suggest */
+  const FAMILIES = [[1, [0]], [1, [1]], [1, [6]], [1, [2]], [1, [3]], [6, [4, 4, 4, 5, 5, 5]], [8, [7, 6, 15, 14, 42, 43, 44, 46]],
+    [5, [32, 33, 34, 34, 44]], [4, [53, 54, 55, 44]], [6, [13, 12, 8, 9, 11, 10]], [7, [8, 9, 10, 11, 12, 14, 15]],
+    [7, [40, 41, 43, 14, 15, 46, 44]], [5, [24, 25, 26, 30, 29]], [3, [35, 36, 37]], [9, [35, 36, 37, 52, 50, 48, 44, 51, 49]],
+    [5, [24, 25, 27, 28, 31]], [8, [23, 45, 53, 54, 55, 22, 16, 19]], [7, [26, 25, 24, 29, 30, 27, 31]], [2, [3, 24]], [3, [2, 4, 3]],
+    [3, [50, 52, 48]], [3, [49, 38, 39]], [6, [16, 17, 18, 19, 20, 21]], [5, [35, 36, 37, 40, 41]], [8, [6, 7, 15, 14, 43, 46, 42, 44]],
+    [6, [38, 39, 51, 44, 3, 5]], [6, [46, 8, 9, 40, 15, 14]], [4, [50, 48, 52, 44]], [7, [28, 27, 31, 24, 25, 26, 29]],
+    [8, [40, 41, 30, 47, 49, 48, 51, 52]], [5, [43, 14, 44, 23, 45]], [8, [13, 12, 8, 9, 11, 10, 15, 14]], [7, [53, 23, 45, 54, 55, 44, 43]],
+    [7, [2, 3, 4, 6, 14, 44, 43]], [4, [22, 55, 54, 53]], [4, [27, 28, 24, 15]], [15, [3, 3, 4, 4, 5, 5, 15, 10, 10, 44, 43, 38, 39, 51, 50]],
+    [23, [0, 8, 9, 11, 10, 12, 13, 15, 14, 6, 2, 8, 9, 11, 10, 12, 13, 15, 14, 6, 2, 44, 43]]];
+  const WAVE = FAMILIES.flatMap(([n, w]) => w.slice(0, n));
+  const NAMES = { BRIGHTEN: "BRIGHT", CUTOFF: "BRIGHT", DARKEN: "DARK", RESO: "RES", WAVESCAN: "SCAN", WAVSTACK: "STACK", PWM: "PW",
+    PULSWDTH: "PW", SPREAD: "WIDTH", RINGMOD: "RING", REVERB: "SPACE", DELAY: "SPACE", "ENV AMT": "ENV", THICKEN: "FAT", MAKEHUGE: "FAT",
+    DISTORT: "GRIT", OVERDRIV: "GRIT", CRUNCH: "GRIT", DRIVE: "GRIT", WOBBLE: "MOTION", "DRY/WET": "BLEND", MORPH: "MORPH" };
+  /* ENV times: the Hydrasynth's steps (value / 8) in ms; ours are TIME_MS_X10's, 1 ms .. 10 s over 128 steps */
+  const hsMs = i => i < 20 ? i : i < 30 ? (i - 20) * 2 + 20 : i < 40 ? (i - 30) * 4 + 40 : i < 50 ? (i - 40) * 8 + 80 : i < 60 ? (i - 50) * 16 + 160 :
+    i < 70 ? (i - 60) * 32 + 320 : i < 80 ? (i - 70) * 64 + 640 : i < 90 ? (i - 80) * 128 + 1280 : i < 100 ? (i - 90) * 256 + 2560 :
+    i < 110 ? (i - 100) * 512 + 5120 : i < 120 ? (i - 100) * 1000 : ((i - 120) * 2 + 20) * 1000;
+  const SYNC = ["0", "1/64 T", "1/64", "1/32 T", "1/64 D", "1/32", "1/16 T", "1/32 D", "1/16", "1/8 T", "1/16 D", "1/8", "1/4 T", "1/8 D", "1/4",
+    "1/2 T", "1/4 D", "1/2", "1/1 T", "1/2 D", "1/1", "1/1 D", "8", "12", "16", "24", "32", "64"];
+  const syncMs = k => { const s = SYNC[Math.min(k, SYNC.length - 1)], m = /^1\/(\d+)( [TD])?$/.exec(s);   /* (at 120 BPM) */
+    return m ? 2000 / +m[1] * (m[2] === " T" ? 2 / 3 : m[2] === " D" ? 1.5 : 1) : +s * 2000; };
+  const ourTime = ms => Math.max(0, Math.min(127, Math.round(127 * Math.log10(Math.max(ms, 1)) / 4)));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, Math.round(v)));
+
+  function convert(d, defaults) {
+    const u8 = o => d[o] ?? 0, s8 = o => (u8(o) << 24) >> 24, u16 = o => u8(o) | u8(o + 1) << 8, s16 = o => (u16(o) << 16) >> 16;
+    const unit = (o, max = 127) => clamp(u16(o) * max / 1024, 0, max), bip = (o, c, w) => clamp(c + (u16(o) - 512) * w / 512, 0, 2 * c);
+    const r = defaults.slice();
+    r.fill(0, MNAME, MA + 28);
+    for (let i = 0; i < 2; i++) {                                /* OSC 1, 2: a wave or a scan over the list up to its first OFF */
+      const p = i ? 108 : 80, b = O[i], first = u16(p + 12), list = [first];
+      for (let j = 1; j < 8 && u16(p + 12 + 2 * j); j++) list.push(u16(p + 12 + 2 * j) - 2);   /* (-1: SILENCE) */
+      r[b] = u8(p) ? 1 : 0;
+      r[b + 1] = WAVE[Math.min(u16(p + 2), 218)];
+      for (let j = 0; j < 8; j++) { const w = list[Math.round(j * (list.length - 1) / 7)]; r[b + 2 + j] = w < 0 ? 0 : WAVE[Math.min(w, 218)] + 1; }
+      r[b + 10] = unit(p + 10);
+      r[b + 11] = clamp(s8(p + 4) + 36, 0, 72); r[b + 12] = clamp(s8(p + 6) + 50, 0, 100); r[b + 13] = clamp(u8(p + 8), 0, 200);
+    }
+    r[O3] = WAVE[Math.min(u16(136), 218)]; r[O3 + 1] = clamp(s8(138) + 36, 0, 72); r[O3 + 2] = clamp(s8(140) + 50, 0, 100);
+    r[O3 + 3] = clamp(u8(142), 0, 200);
+    const MODE = [1, 2, 3, 4, 5, 6, 7, 4], FMSRC = [2, 2, 0, 1, 2, 3, 4, 2, 2, 2, 2, 2, 2];
+    [144, 158, 204, 218].forEach((p, k) => {                     /* the mutants; one with nothing wet is off (it costs a voice) */
+      const b = M[k], mode = u8(p), wet = unit(p + 12);
+      r[b] = wet ? MODE[mode & 7] : 0;
+      r[b + 1] = mode === 0 ? FMSRC[Math.min(u8(p + 2), 12)] : mode === 2 ? Math.min(u8(p + 2), 2) : 2;
+      r[b + 2] = unit(p + 4); r[b + 3] = unit(p + 6); r[b + 4] = unit(mode === 2 ? p + 8 : p + 10); r[b + 5] = wet;
+    });
+    r[RING_A] = u8(264) < 3 ? u8(264) : 0; r[RING_A + 1] = u8(266) < 3 ? u8(266) : 1; r[RING_A + 2] = [0, 1, 2, 2, 0, 0, 0][u8(272)] ?? 0;
+    [274, 276, 278, 280, 282].forEach((o, k) => { r[LVL + k] = unit(o); });
+    r[LVL + 3] = clamp(r[LVL + 3] * u16(268) / 1024, 0, 127);   /* (ring: its level by its depth) */
+    [292, 294, 296, 304, 306].forEach((o, k) => { r[BAL + k] = unit(o); });
+    r[ROUTE] = u8(302) ? 1 : 0;
+    const vowel = (u8(308) === 16 ? 10 : u8(308)) === 10;
+    r[F1] = [0, 1, 2, 3, 6, 4, 5, 7, 8, 9, 10, 0, 8, 9, 0, 1][u8(308) === 16 ? 10 : Math.min(u8(308), 15)];
+    r[F1 + 1] = unit(vowel ? 314 : 310); r[F1 + 2] = unit(312); r[F1 + 3] = unit(326); r[F1 + 4] = u8(328) ? 1 : 0;
+    r[F1 + 5] = bip(316, 63, 63); r[F1 + 6] = clamp((u16(322) - 512) * 200 / 512, 0, 200); r[F1 + 7] = clamp((u16(320) - 512) * 127 / 512, 0, 127);
+    r[F2_TYPE] = u8(472) ? 1 : 0; r[F2_TYPE + 1] = unit(332); r[F2_TYPE + 2] = unit(334); r[F2_TYPE + 3] = unit(336);
+    r[F2_TYPE + 4] = bip(338, 63, 63); r[F2_TYPE + 5] = clamp((u16(344) - 512) * 200 / 512, 0, 200);
+    r[AMP] = unit(350);
+    r[E1_SC1] = r[E1_SC1 + 1] = r[E1_SC1 + 2] = 63;
+    const env = (p, k) => { const sync = u8(p + 8), t = o => sync ? ourTime(syncMs(u16(o))) : ourTime(hsMs(u16(o) >> 3));
+      return { dly: sync ? ourTime(syncMs(u16(p + 10))) : ourTime(hsMs(u16(p + 10))), atk: t(p), hld: t(p + 12), dec: t(p + 2), sus: unit(p + 4), rel: t(p + 6) }; };
+    const e1 = env(478), e2 = env(506);
+    [e1.dly, e1.atk, e1.hld, e1.dec, e1.sus, e1.rel].forEach((v, k) => { r[E1 + k] = v; });
+    /* the macros as saved: the sound at each knob's place, then each destination of its own with a depth over the whole
+       turn (a Hydrasynth knob goes one way, 0..1024; ours both ways from 0) */
+    /* the matrix as it rests: a route from an envelope (sources 1..5) holds its destination where the envelope sustains
+       (a percussive one at 0.6), one from the note's velocity (19) at 0.8, by its depth, which macros may move ("Matrix n
+       Depth", destinations 154..185); a drawbar organ's levels come from these alone. LFOs, the wheels, pressure and the
+       rest are not taken */
+    const route = k => { const src = u8(902 + 2 * k), g = DEST[u16(966 + 2 * k)], p = [478, 506, 534, 562, 590][src - 1];
+      return g && src === 19 ? { g, lvl: 0.8 } : src >= 1 && src <= 5 && g ? { g, lvl: u16(p + 4) > 51 ? u16(p + 4) / 1024 : 0.6 } : null; };
+    const mdepth = Array.from({ length: 32 }, (_, k) => u16(838 + 2 * k));
+    for (let m = 0; m < 8; m++)
+      for (let j = 0; j < 8; j++) {
+        const t = u16(1222 + 16 * m + 2 * j);
+        if (t >= 154 && t < 186) mdepth[t - 154] += (u16(1094 + 16 * m + 2 * j) - 512) / 512 * u16(1606 + 2 * m);
+      }
+    for (let k = 0; k < 32; k++) {
+      const x = route(k);
+      if (x) r[TGT_BYTE[x.g]] = clamp(r[TGT_BYTE[x.g]] + (Math.max(0, Math.min(1024, mdepth[k])) - 512) / 512 * x.lvl * span(x.g), 0, span(x.g));
+    }
+    const slots = [];
+    for (let j = 0; j < 8; j++)
+      for (let m = 0; m < 8; m++) {
+        const t = u16(1222 + 16 * m + 2 * j), frac = (u16(1094 + 16 * m + 2 * j) - 512) / 512, via = t >= 154 && t < 186 ? route(t - 154) : null;
+        const g = DEST[t];
+        if (!frac || (!g && !via)) continue;
+        if (g) r[TGT_BYTE[g]] = clamp(r[TGT_BYTE[g]] + frac * u16(1606 + 2 * m) / 1024 * span(g), 0, span(g));
+        if (slots.length < 14) slots.push(g ? [m, g, clamp(frac * 127 / 2, -127, 127)] : [m, via.g, clamp(frac * via.lvl * 127, -127, 127)]);
+      }
+    slots.forEach(([m, g, dep], k) => { r[MA + 2 * k] = m << 5 | g; r[MA + 2 * k + 1] = 127 + dep; });
+    for (let m = 0; m < 8; m++) {
+      const n = String.fromCharCode(...Array.from({ length: 8 }, (_, i) => u8(1630 + 17 * m + i))).replace(/[^ -~]/g, "").trim().toUpperCase();
+      const w = NAMES[n] || n, k = HY.MACRO_NAMES.indexOf(w);
+      r[MNAME + m] = k > 0 && slots.some(s => s[0] === m) ? k : 0;
+    }
+    const name = String.fromCharCode(...d.slice(9, 25)).replace(/[^ -~]/g, " ").trim().toUpperCase() || "HYDRASYNTH";
+    HY.setName(r, name);
+    if (!HY.valid(r)) throw Error(`Cannot convert ${name}`);
+    const poly = u8(30);
+    return { name: HY.name(r), raw: r, p: { ATK: e2.atk, DEC: e2.dec, SUS: e2.sus, REL: e2.rel,
+      VCE: poly === 0 ? 0 : poly < 4 ? (u8(58) ? 2 : 1) : 3, GLD: u8(52) ? clamp(u8(54), 0, 127) : 0 } };
+  }
+  /* a file (.syx, .hydra, .patch) -> {voices: [{name, raw, p}]}: p the part's own values by their keys (paramKeys) */
+  function read(bytes) {
+    const b = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes), init = HY.init();
+    const found = isZip(b) ? fromZip(b) : isSyx(b) ? fromSyx(b) : isPatch(b) ? [{ data: [6, 0, 0, 0, ...b] }] : null;
+    if (!found) throw Error("Not a Hydrasynth patch file");
+    return { voices: found.map(x => convert(x.data, init)) };
+  }
+  /* p (by key) -> the part's values by id, the device's defaults elsewhere (null where unknown) */
+  const params = (p, keys, base) => { const out = base ? base.slice() : Array(keys?.length || 0).fill(null);
+    for (const [k, v] of Object.entries(p || {})) { const i = keys ? keys.indexOf(k) : -1; if (i >= 0) out[i] = v; } return out; };
+  return { is: b => isZip(b) || isSyx(b) || isPatch(b), read, message, infoOf, crc32, WAVE, DEST, params, chunks: data =>
+    Array.from({ length: Math.ceil(data.length / 128) }, (_, n) => message([0x16, 0, n, 0x16, ...data.slice(n * 128, n * 128 + 128)])) };
 })();
 
 const P5 = {
@@ -1306,11 +1499,13 @@ function czLibraryPatch(v,ctx={}) {
   const p=Array(ctx.keys?.length||92).fill(null);p[(ctx.pe0??84)+7]=2;
   return cleanPatch({name:v.name,engine:15,engineName:"CZ-1",p,cz:v.raw,tags:["CZ-1","SysEx"]});
 }
-function hyLibraryPatch(v,ctx={}) {return cleanPatch({name:v.name,engine:HY.ENGINE,engineName:"HYDRA",p:Array(ctx.keys?.length||ctx.pcount||92).fill(null),hy:v.raw,tags:["HYDRA","SysEx"]});}
+function hyLibraryPatch(v,ctx={}) {const p=Array(ctx.keys?.length||ctx.pcount||92).fill(null);if(v.p&&ctx.keys)HYS.params(v.p,ctx.keys,p).forEach((x,i)=>{p[i]=x;});
+  return cleanPatch({name:v.name,engine:HY.ENGINE,engineName:"HYDRA",p,hy:v.raw,tags:v.p?["HYDRA","Hydrasynth"]:["HYDRA","SysEx"]});}
 function j106LibraryPatch(v,ctx={}) {return cleanPatch({name:v.name,engine:J106.ENGINE,engineName:"JUNO-106",p:Array(ctx.keys?.length||ctx.pcount||92).fill(null),j106:v.raw,tags:["JUNO-106","SysEx"]});}
 function p5LibraryPatch(v,ctx={}) {return cleanPatch({name:v.name,engine:19,engineName:"PROPHET",p:Array(ctx.keys?.length||ctx.pcount||92).fill(null),p5:v.raw,tags:["PROPHET","SysEx"]});}
 /* Library imports work offline too: dispatch by the file's manufacturer, never the selected engine. */
 function readSysexLibrary(bytes, filename, ctx={}) {
+  if (HYS.is(bytes)) return HYS.read(bytes).voices.map(v => hyLibraryPatch(v, ctx));   /* (an ASM Hydrasynth's, converted) */
   const start = bytes.indexOf(0xF0), maker = start < 0 ? -1 : bytes[start + 1];
   if (maker === 0x44) return CZ.read(bytes, filename).voices.map(v => czLibraryPatch(v, ctx));
   if (maker === 0x01) return P5.read(bytes).voices.map(v => p5LibraryPatch(v, ctx));
@@ -1447,7 +1642,7 @@ const sharedBank = {
   async put(rq,info,slot,pt) {
     const kind=pt.fm6?1:pt.cz?2:pt.p5?3:pt.j106?4:pt.hy?5:0,raw=kind?(pt.fm6||pt.cz||pt.p5||pt.j106||pt.hy):null;
     if(pt.drum || pt.engine===10)throw Error("Drum sounds are not supported by Saadet");
-    if(kind && pt.engine!==({1:12,2:15,3:19,4:21}[kind]))throw Error("Native voice does not match its engine");
+    if(kind && pt.engine!==({1:12,2:15,3:19,4:21,5:25}[kind]))throw Error("Native voice does not match its engine");
     if(kind===1 && (raw.length!==128||raw.some(x=>!Number.isInteger(x)||x<0||x>127)) || kind===2&&!CZ.valid(raw) || kind===3&&!P5.valid(raw) || kind===4&&!J106.valid(raw) || kind===5&&!HY.valid(raw))throw Error("Invalid native voice");
     const name=String(pt.name||"PATCH").replace(/[^ -~]/g," ").trim().slice(0,kind?20:12)||"PATCH";
     const values=Array.from({length:info.pcount},(_,i)=>pt.p?.[i]??0),defaults=!pt.p;
@@ -3084,10 +3279,12 @@ function hyRender(){
 }
 $("hyname").addEventListener("change",()=>HY.setName(hyTone,$("hyname").value));
 $("hyimport").addEventListener("click",()=>$("hyfile").click());
-$("hyfile").addEventListener("change",async()=>{const f=$("hyfile").files[0];if(!f)return;try{const imported=HY.read(new Uint8Array(await f.arrayBuffer()));hyVoices=imported.voices;$("hyvoices").replaceChildren(...hyVoices.map((v,i)=>el("option",{value:i},`${i+1}. ${v.name}`)));hyTone=hyVoices[0].raw.slice();hyRender();say(`Imported ${hyVoices.length} HYDRA patches`);}catch(e){say(e.message);}finally{$("hyfile").value="";}});
+$("hyfile").addEventListener("change",async()=>{const f=$("hyfile").files[0];if(!f)return;try{const b=new Uint8Array(await f.arrayBuffer()),imported=HYS.is(b)?HYS.read(b):HY.read(b);hyVoices=imported.voices;$("hyvoices").replaceChildren(...hyVoices.map((v,i)=>el("option",{value:i},`${i+1}. ${v.name}`)));hyTone=hyVoices[0].raw.slice();hyRender();say(HYS.is(b)?`Converted ${hyVoices.length} Hydrasynth patches`:`Imported ${hyVoices.length} HYDRA patches`);}catch(e){say(e.message);}finally{$("hyfile").value="";}});
 $("hyvoices").addEventListener("change",()=>{hyTone=hyVoices[+$("hyvoices").value].raw.slice();hyRender();});
 $("hyread").addEventListener("click",()=>op(async()=>{const r=parse[CMD.HYDRA](await rq(req.hyGet(dev.sel||0)));if(r.rc)throw Error("Cannot read HYDRA patch");hyTone=r.raw;hyRender();say("HYDRA patch read from track");}));
-$("hysend").addEventListener("click",()=>op(async()=>{const d=dev,r=parse[CMD.HYDRA](await rq(req.hyPut(d.sel||0,hyTone)));if(r.rc)throw Error("HYDRA patch rejected");await afterSoundChange("ready",d);}));
+$("hysend").addEventListener("click",()=>op(async()=>{const d=dev,r=parse[CMD.HYDRA](await rq(req.hyPut(d.sel||0,hyTone)));if(r.rc)throw Error("HYDRA patch rejected");
+  const v=hyVoices[+$("hyvoices").value];if(v?.p&&d.keys)for(const [k,x] of Object.entries(v.p)){const i=d.keys.indexOf(k);if(i>=0)await rq(req.set(0,i,x));}   /* (a Hydrasynth's: its envelope, voice, glide) */
+  await afterSoundChange("ready",d);}));
 $("hyexport").addEventListener("click",()=>downloadBytes(`${fileSlug(HY.name(hyTone))}.syx`,HY.sysex(hyTone)));
 $("hyexportbank").addEventListener("click",()=>{if(!hyVoices.length){say("Import a library first");return;}const voices=hyVoices.map(v=>v.raw);voices[+$("hyvoices").value]=hyTone;downloadBytes(`hydra-library-${today()}.syx`,new Uint8Array(voices.flatMap(v=>Array.from(HY.sysex(v)))));});
 $("hylibrary").addEventListener("click",()=>libAdd([hyLibraryPatch({name:HY.name(hyTone),raw:hyTone},libCtx())]).then(()=>say("HYDRA patch added to library")).catch(e=>say(e.message)));
@@ -3557,7 +3754,7 @@ $("libfile").addEventListener("change", async () => {
   for (const f of [...$("libfile").files]) {
     try {
       const ctx = libCtx();
-      if(/\.syx$/i.test(f.name)) { const patches=readSysexLibrary(new Uint8Array(await f.arrayBuffer()),f.name,ctx);await libAdd(patches);n+=patches.length;continue; }
+      if(/\.(syx|hydra|patch)$/i.test(f.name)) { const patches=readSysexLibrary(new Uint8Array(await f.arrayBuffer()),f.name,ctx);await libAdd(patches);n+=patches.length;continue; }
       const obj = JSON.parse(await f.text());
       const r = readLibraryFile(obj, ctx);
       if (!ctx.keys && r.keys) {                     /* no layout yet: the file's becomes the library's */
@@ -3651,9 +3848,10 @@ $("bknativeimport").addEventListener("click",()=>$("bknativefile").click());
 $("bknativefile").addEventListener("change",async()=>{
   const file=$("bknativefile").files[0];let engine=poolEngine();$("bknativefile").value="";if(!file||(!engine&&!dev?.info.shared))return;
   try{
-    const bytes=new Uint8Array(await file.arrayBuffer());if(dev.info.shared)engine=bytes[1]===0x43?12:bytes[1]===0x44?15:bytes[1]===1?19:bytes[1]===0x41&&dev.info.juno?J106.ENGINE:bytes[1]===0x7D&&bytes[2]===0x48&&dev.info.hydra?HY.ENGINE:0;if(!engine)throw Error("Unknown SysEx manufacturer");const parsed=engine===19?P5.read(bytes):engine===J106.ENGINE?J106.read(bytes):engine===HY.ENGINE?HY.read(bytes):engine===15?CZ.read(bytes,file.name):FM6.parseSysex(bytes);
+    const bytes=new Uint8Array(await file.arrayBuffer()),hs=HYS.is(bytes);if(hs&&!dev.info.hydra)throw Error("Install firmware with HYDRA support first");if(dev.info.shared)engine=hs?HY.ENGINE:bytes[1]===0x43?12:bytes[1]===0x44?15:bytes[1]===1?19:bytes[1]===0x41&&dev.info.juno?J106.ENGINE:bytes[1]===0x7D&&bytes[2]===0x48&&dev.info.hydra?HY.ENGINE:0;if(!engine)throw Error("Unknown SysEx manufacturer");const parsed=engine===19?P5.read(bytes):engine===J106.ENGINE?J106.read(bytes):engine===HY.ENGINE?(hs?HYS:HY).read(bytes):engine===15?CZ.read(bytes,file.name):FM6.parseSysex(bytes);
     if(!parsed.voices.length || parsed.badSum)throw Error("Invalid SysEx file");
-    const tones=parsed.voices.map(v=>({engine,name:v.name,...(engine===19?{p5:v.raw}:engine===J106.ENGINE?{j106:v.raw}:engine===HY.ENGINE?{hy:v.raw}:engine===15?{cz:v.raw}:{fm6:Array.from(FM6.pack(v.v))})}));
+    const tones=parsed.voices.map(v=>({engine,name:v.name,...(engine===19?{p5:v.raw}:engine===J106.ENGINE?{j106:v.raw}:engine===HY.ENGINE?{hy:v.raw}:engine===15?{cz:v.raw}:{fm6:Array.from(FM6.pack(v.v))}),
+      ...(v.p&&dev.keys?{p:fullParams({engine,p:HYS.params(v.p,dev.keys)})}:{})}));   /* (a Hydrasynth's: its envelope, voice, glide) */
     const {targets,overwrite}=nativeImportTargets(bankView().slots,tones.length,bankSel??0);
     if(overwrite && !confirm(overwrite.from===overwrite.to?t("confirmOverwrite").replace("{n}",slotName(overwrite.from)).replace("{name}",targets[0].name||"")
       :t("confirmOverwriteRange").replace("{n}",tones.length).replace("{from}",slotName(overwrite.from)).replace("{to}",slotName(overwrite.to)).replace("{used}",overwrite.used)))return;

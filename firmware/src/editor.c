@@ -193,9 +193,12 @@ static void ed_sync(void)                                /* main loop */
     }
 }
 
-/* descriptor of parameter id of track t: the engine parameters of the engine it asked for
- * (t->engine follows in the audio ISR, after a short fade) */
-static const param_desc_t *ed_tdesc(const track_t *t, uint32_t id) { return param_desc_of(t->eng_req % NENGINES, id); }
+/* descriptor of parameter id of track t: the engine parameters of the engine it asked for (t->engine follows in the
+ * audio ISR, after a short fade), by the engine's own labels where it gives them (HYDRA: its macros' names) */
+static const param_desc_t *ed_tdesc(const track_t *t, uint32_t id)
+{
+    return id >= P_E0 && id <= P_E7 ? track_desc(t, id) : param_desc_of(t->eng_req % NENGINES, id);
+}
 /* descriptor and value slot of (scope, id): scope 0 = the selected track, 1 = global */
 static const param_desc_t *ed_desc(uint32_t scope, uint32_t id, int16_t **vp)
 {

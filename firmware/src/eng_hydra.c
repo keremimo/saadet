@@ -12,10 +12,12 @@
  * it (PARALLEL). ENV 1 (delay, attack, hold, decay, sustain, release) moves both filters. The track's ADSR is the
  * amplitude; its LFO, ENV DEST and MOD slots modulate as for any engine (SHP moves the scans of OSC 1 and 2).
  *
- * The patch: HY_BYTES native bytes a part (hy_patch[]; hydra_patch.h lays them out, hydra_edit.h describes them to the pages). E0..E7 are eight
- * macros, signed offsets over it (SCAN 1, SCAN 2, MUTANT 1 and 3 DEPTH, FILTER 1 CUT, RES, DRIVE, FILTER 2 MORPH),
- * which the matrix's E1..E8 reach. The part state holds the voices and a RAM copy of the waves the patch uses (XIP
- * reads stall the audio loop); the block hook refreshes both when the patch or a macro changes.
+ * The patch: HY_BYTES native bytes a part (hy_patch[]; hydra_patch.h lays them out, hydra_edit.h describes them to the pages).
+ * Its eight macros, after the Hydrasynth's: the patch names them and routes each to destinations of its own with depths
+ * (hy_macros); E0..E7 are their values, -64..63 (0: the sound as stored), which the knobs, CC 74/71 and the matrix's
+ * E1..E8 move. The part state holds the voices and a RAM copy of the waves the patch uses (XIP reads stall the audio
+ * loop); the block hook refreshes both when the patch or a macro changes. A voice is costed with every macro wherever
+ * it costs most (hy_worst), so no turn of a macro can make the block late.
  */
 #include "melodee_hy.h"
 #include "hydra_patch.h"
@@ -52,6 +54,11 @@ static const uint8_t HY_INIT[][2] = {
     {HY_F2_CUT, 127}, {HY_F2_ENV, HY_ENV0},
     {HY_AMP, 100}, {HY_E1_SC1, HY_ENV0}, {HY_E1_SC2, HY_ENV0}, {HY_E1_MU1, HY_ENV0},
     {HY_E1_DEC, 64}, {HY_E1_REL, 50},
+    /* the macros: SCAN 1, MUTANT 1, CUTOFF, RES, then F1 ENV, DRIVE, ENV 1's attack and decay, each its own name */
+    {HY_MA, HY_SLOT(0, HT_SCAN1)}, {HY_MA + 1, HY_DEPTH0 + 64}, {HY_MA + 2, HY_SLOT(1, HT_MUT1)}, {HY_MA + 3, HY_DEPTH0 + 64},
+    {HY_MA + 4, HY_SLOT(2, HT_CUT)}, {HY_MA + 5, HY_DEPTH0 + 64}, {HY_MA + 6, HY_SLOT(3, HT_RES)}, {HY_MA + 7, HY_DEPTH0 + 64},
+    {HY_MA + 8, HY_SLOT(4, HT_F1ENV)}, {HY_MA + 9, HY_DEPTH0 + 64}, {HY_MA + 10, HY_SLOT(5, HT_DRIVE)}, {HY_MA + 11, HY_DEPTH0 + 64},
+    {HY_MA + 12, HY_SLOT(6, HT_E1ATK)}, {HY_MA + 13, HY_DEPTH0 + 64}, {HY_MA + 14, HY_SLOT(7, HT_E1DEC)}, {HY_MA + 15, HY_DEPTH0 + 64},
 };
 static void hy_name_set(hy_patch_t *p, const char *s)
 {
@@ -97,8 +104,8 @@ typedef struct {                                       /* the patch, made ready 
     float lvl[HYS_N], bal[HYS_N], amp;
     float f1cut, f1res, f1drive, f1env, f1key, f1vel, f2cut, f2res, f2morph, f2env, f2key;
     float e1atk[1], e1sus, e1dec, e1rel, e1sc[2], e1mu;
-    int32_t mu1macro;                                  /* E2 as the block saw it (a switch fade swaps the E values) */
     int32_t scan[2], semi16[3], cent[3], key[3];
+    uint8_t m1[HM_N];                                  /* MUTANT 1 as the macros leave it (ENV 1 moves it a voice) */
     uint16_t e1dly, e1hld;                             /* control ticks */
     uint8_t scanning[2], on[3], src_used[HYS_N], stack[2], ring_a, ring_b, noise, route, f1type, f1post, f2notch;
     uint8_t row0[2], row3;                             /* OSC 1's and OSC 2's first wave copy, OSC 3's */
@@ -226,17 +233,58 @@ static void hy_mutant(hy_mut_t *u, const uint8_t *q, int32_t macro)
     }
 }
 static float hy_ftime(uint32_t v) { return (float)TIME_MS_X10[v & 127u] * (float)FS / (10000.0f * (float)CTL); }
-static void hy_base(hy_part_t *P, const track_t *t, const uint8_t *r)
+/* the patch as its macros leave it: an assignment moves its destination by depth x the macro's value (e, -64..63) of the
+ * destination's range at a full turn; several on one destination add up, then the sum is clamped to its range */
+static void hy_macros(const uint8_t *r, const int16_t *e, uint8_t *eff)
+{
+    int32_t add[HY_NTGT + 1u];
+    uint32_t k, g;
+    memcpy(eff, r, HY_BYTES);
+    memset(add, 0, sizeof add);
+    for (k = 0; k < HY_MSLOTS; k++) {
+        uint32_t a = r[HY_MA + 2u * k];
+        int32_t d = (int32_t)r[HY_MA + 2u * k + 1u] - HY_DEPTH0;
+        add[HY_SLOT_TGT(a)] += e[HY_SLOT_MACRO(a)] * d * (int32_t)hy_span(HY_SLOT_TGT(a));
+    }
+    for (g = 1; g <= HY_NTGT; g++)
+        if (add[g]) {
+            int32_t x = (add[g] + (add[g] < 0 ? -64 * 127 / 2 : 64 * 127 / 2)) / (64 * 127);
+            eff[HY_TGT[g]] = (uint8_t)clamp((int32_t)r[HY_TGT[g]] + x, 0, (int32_t)hy_span(g));
+        }
+}
+/* the patch where its macros could make a voice cost most: a level, FILTER 2's pass and resonance as high as they reach,
+ * its cutoff as low, its envelope amount off centre if it can be (what hy_cost reads) */
+static void hy_worst(const uint8_t *r, uint8_t *w)
+{
+    int32_t reach[HY_NTGT + 1u];
+    uint32_t k, g;
+    memcpy(w, r, HY_BYTES);
+    memset(reach, 0, sizeof reach);
+    for (k = 0; k < HY_MSLOTS; k++) {                  /* (a value -64 at a whole depth: the whole range) */
+        int32_t d = (int32_t)r[HY_MA + 2u * k + 1u] - HY_DEPTH0;
+        g = HY_SLOT_TGT(r[HY_MA + 2u * k]);
+        reach[g] += ((d < 0 ? -d : d) * (int32_t)hy_span(g) + 126) / 127;
+    }
+    for (g = 1; g <= HY_NTGT; g++)
+        if (reach[g]) {
+            uint32_t b = HY_TGT[g];
+            int32_t lo = clamp((int32_t)r[b] - reach[g], 0, (int32_t)hy_span(g));
+            int32_t hi = clamp((int32_t)r[b] + reach[g], 0, (int32_t)hy_span(g));
+            w[b] = (uint8_t)(b == HY_F2_CUT ? lo : b == HY_F2_ENV && hi == HY_ENV0 ? lo : hi);
+        }
+}
+static void hy_base(hy_part_t *P, const track_t *t, const uint8_t *raw)
 {
     hy_base_t *b = &P->b;
-    const int16_t *e = t->p + P_E0;
+    uint8_t r[HY_BYTES];
     uint32_t o, k;
+    hy_macros(raw, t->p + P_E0, r);
     memset(b, 0, sizeof *b);
     b->fallback = hy_rows(r) > hy_held((uint32_t)(t - trk));   /* (hy_prepare grows the state when it can) */
     for (o = 0; o < 2u; o++) {
         const uint8_t *q = r + (o ? HY_O2 : HY_O1);
         b->scanning[o] = q[HO_MODE] != 0 && !b->fallback;
-        b->scan[o] = clamp(q[HO_SCAN] + e[o], 0, 127) << 8;
+        b->scan[o] = clamp(q[HO_SCAN], 0, 127) << 8;
         b->semi16[o] = (q[HO_SEMI] - HY_SEMI0) * 16;
         b->cent[o] = q[HO_CENT] - HY_CENT0;
         b->key[o] = q[HO_KEY];
@@ -244,9 +292,9 @@ static void hy_base(hy_part_t *P, const track_t *t, const uint8_t *r)
     b->semi16[2] = (r[HY_O3_SEMI] - HY_SEMI0) * 16;
     b->cent[2] = r[HY_O3_CENT] - HY_CENT0;
     b->key[2] = r[HY_O3_KEY];
-    b->mu1macro = e[2];
+    memcpy(b->m1, r + HY_M1, HM_N);
     for (k = 0; k < 4u; k++) {
-        hy_mutant(&b->mut[k], r + HY_M1 + k * HM_N, k == 0u ? e[2] : k == 2u ? e[3] : 0);
+        hy_mutant(&b->mut[k], r + HY_M1 + k * HM_N, 0);
         if (b->mut[k].mode == MU_STACK)
             b->stack[k >> 1] = (uint8_t)(k + 1u);
     }
@@ -275,20 +323,20 @@ static void hy_base(hy_part_t *P, const track_t *t, const uint8_t *r)
         }
     b->noise_on = b->lvl[HYS_NOISE] > 0.0f || b->src_used[HYS_NOISE];
     b->f1type = r[HY_F1_TYPE] < F1_N ? r[HY_F1_TYPE] : F1_LAD24;
-    b->f1cut = (float)clamp(r[HY_F1_CUT] + e[4], 0, 127);
-    b->f1res = hy_unit(r[HY_F1_RES] + e[5]);
-    b->f1drive = 1.0f + hy_unit(r[HY_F1_DRIVE] + e[6]) * 7.0f;
+    b->f1cut = (float)clamp(r[HY_F1_CUT], 0, 127);
+    b->f1res = hy_unit(r[HY_F1_RES]);
+    b->f1drive = 1.0f + hy_unit(r[HY_F1_DRIVE]) * 7.0f;
     b->f1post = r[HY_F1_DPOS] != 0;
     b->f1env = (float)(clamp(r[HY_F1_ENV], 0, 2 * HY_ENV0) - HY_ENV0) * (96.0f / 63.0f);   /* up to ~7 octaves */
     b->f1key = (float)clamp(r[HY_F1_KEY], 0, 200) * 0.01f * (127.0f / 9.0589f / 12.0f);   /* index a semitone */
     b->f1vel = hy_unit(r[HY_F1_VEL]) * 48.0f;
     b->f2notch = r[HY_F2_TYPE] != 0;
-    b->f2morph = hy_unit(r[HY_F2_MORPH] + e[7]);
+    b->f2morph = hy_unit(r[HY_F2_MORPH]);
     b->f2cut = (float)clamp(r[HY_F2_CUT], 0, 127);
     b->f2res = hy_unit(r[HY_F2_RES]);
     b->f2env = (float)(clamp(r[HY_F2_ENV], 0, 2 * HY_ENV0) - HY_ENV0) * (96.0f / 63.0f);
     b->f2key = (float)clamp(r[HY_F2_KEY], 0, 200) * 0.01f * (127.0f / 9.0589f / 12.0f);
-    b->f2open = !b->f2notch && r[HY_F2_MORPH] + e[7] <= 0 && r[HY_F2_CUT] >= 127 && !r[HY_F2_RES] &&
+    b->f2open = !b->f2notch && !r[HY_F2_MORPH] && r[HY_F2_CUT] >= 127 && !r[HY_F2_RES] &&
                 r[HY_F2_ENV] == HY_ENV0 && !r[HY_F2_KEY];
     b->amp = hy_unit(r[HY_AMP]);
     b->e1sc[0] = (float)(clamp(r[HY_E1_SC1], 0, 2 * HY_ENV0) - HY_ENV0) * (127.0f * 256.0f / 63.0f);
@@ -305,11 +353,11 @@ static void hy_base(hy_part_t *P, const track_t *t, const uint8_t *r)
  * would render at the new patch's cost. The surplus fades as a stolen voice does, without its mutants while it does (the sound has
  * just changed under it). Held notes are never touched. */
 typedef struct { uint16_t c1, os; } hy_cost_t;
-static hy_cost_t hy_cost(const uint8_t *r);
+static hy_cost_t hy_cost_most(const uint8_t *r);
 static void voice_fade(voice_t *v);
 static void hy_tails_fit(hy_part_t *P, track_t *t, const uint8_t *r)
 {
-    uint32_t c1 = hy_cost(r).c1, n = 0, i;
+    uint32_t c1 = hy_cost_most(r).c1, n = 0, i;
     for (i = 0; i < NVOICE; i++)
         n += t->v[i].active && t->v[i].stage != 4u;
     for (i = 0; i < NVOICE && n * c1 > HY_BLOCK_US; i++) {
@@ -381,6 +429,13 @@ static hy_cost_t hy_cost(const uint8_t *r)
         c1 += 17u;
     return (hy_cost_t){(uint16_t)c1, (uint16_t)os};
 }
+/* what a voice may come to cost, whatever its macros do: the budget's figure */
+static hy_cost_t hy_cost_most(const uint8_t *r)
+{
+    uint8_t w[HY_BYTES];
+    hy_worst(r, w);
+    return hy_cost(w);
+}
 #define HY_UNIT_US (HY_BLOCK_US / 18u)
 /* the voice budget by that cost: two units at the least, three with any mutant, up to the whole budget for one voice. Polyphony
  * is bound here, before a note starts: nothing is ever cut for being late */
@@ -398,14 +453,14 @@ static uint32_t hy_units_of(const uint8_t *r, hy_cost_t c)
 static int hy_os_room(const track_t *t)
 {
     const uint8_t *raw = hy_patch_of(t)->raw;
-    hy_cost_t c = hy_cost(raw);
+    hy_cost_t c = hy_cost_most(raw);
     uint32_t voices = 18u / hy_units_of(raw, c), full = voices * c.c1, used = c.os, p, i;
     if (full + c.os > HY_BLOCK_US)
         return 0;
     for (p = 0; p < NPART; p++) {
         const track_t *o = &trk[p];
         hy_part_t *P = o->engine == ENGI_HYDRA ? hy_part(p) : 0;
-        uint32_t each = P ? hy_cost(hy_patch_of(o)->raw).os : 0u;
+        uint32_t each = P ? hy_cost_most(hy_patch_of(o)->raw).os : 0u;
         for (i = 0; P && i < NVOICE; i++)
             if (o->v[i].active && P->voice[i % HY_SLOTS].os)
                 used += each;
@@ -459,7 +514,7 @@ static uint32_t hy_cap(const track_t *t) { (void)t; return HY_POLY; }
 static uint32_t hy_units(const track_t *t)
 {
     const uint8_t *r = hy_patch_of(t)->raw;
-    return hy_units_of(r, hy_cost(r));
+    return hy_units_of(r, hy_cost_most(r));
 }
 
 /* ENV 1, once a block: delay, attack (linear), hold, decay to sustain, release (exponential) */
@@ -915,7 +970,7 @@ static void hy_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vm
         hy_osc_t *r = &c->o[o];
         const hy_mut_t *u1 = &b->mut[o * 2u], *u2 = &b->mut[o * 2u + 1u], *m1, *m2;
         if (!o && b->e1mu != 0.0f && u1->mode) {      /* ENV 1 -> MUTANT 1's DEPTH: this voice's own */
-            hy_mutant(&s->mu1, hy_patch_of(t)->raw + HY_M1, b->mu1macro + (int32_t)(e1 * b->e1mu));
+            hy_mutant(&s->mu1, b->m1, (int32_t)(e1 * b->e1mu));
             u1 = &s->mu1;
         }
         int32_t p16 = 960 + (m->pitch16 - 960) * b->key[o] / 100 + b->semi16[o];
@@ -1003,6 +1058,7 @@ static void hy_factory(uint32_t k, hy_patch_t *p)
 {
     const uint8_t *d = HY_FACTORY[k].d;
     hy_patch_init(p);
+    memset(p->raw + HY_MNAME, 0, HY_MACROS + 2u * HY_MSLOTS);   /* (its own macros, none of INIT's) */
     for (; d[0] != 0xFFu; d += 2)
         p->raw[d[0]] = d[1];
     hy_name_set(p, HY_FACTORY[k].name);
@@ -1028,15 +1084,17 @@ static void hy_preset_loaded(track_t *t, uint32_t pi)
         hy_patch_init(p);
 }
 
+static const param_desc_t *hy_macro_desc(const track_t *t, uint32_t k);   /* hydra_edit.h: a macro by the patch's name */
 static const engine_t ENG_HYDRA = {
     .name = "HYDRA",
-    .page_title = {"SCAN/MUTANT", "FILTERS"},
+    .page_title = {"MACROS 1-4", "MACROS 5-8"},
     .edit = {
-        {"SCAN1", F_INT, -63, 63, 0, 0, 0}, {"SCAN2", F_INT, -63, 63, 0, 0, 0},
-        {"MUT1", F_INT, -63, 63, 0, 0, 0}, {"MUT3", F_INT, -63, 63, 0, 0, 0},
-        {"CUT", F_INT, -63, 63, 0, 0, 0}, {"RES", F_INT, -63, 63, 0, 0, 0},
-        {"DRIVE", F_INT, -63, 63, 0, 0, 0}, {"PASS", F_INT, -63, 63, 0, 0, 0},
+        {"M1", F_BIPCT, -64, 63, 0, 0, 0}, {"M2", F_BIPCT, -64, 63, 0, 0, 0},
+        {"M3", F_BIPCT, -64, 63, 0, 0, 0}, {"M4", F_BIPCT, -64, 63, 0, 0, 0},
+        {"M5", F_BIPCT, -64, 63, 0, 0, 0}, {"M6", F_BIPCT, -64, 63, 0, 0, 0},
+        {"M7", F_BIPCT, -64, 63, 0, 0, 0}, {"M8", F_BIPCT, -64, 63, 0, 0, 0},
     },
+    .desc = hy_macro_desc,
     .preset_make = hy_preset_make,
     .npresets = HY_FACTORY_N + 1u,
     .note_on = hy_note_on,
@@ -1047,5 +1105,5 @@ static const engine_t ENG_HYDRA = {
     .poly = HY_POLY,
     .spare = 1,
     .rings_on = 1,                                     /* (a key struck in its own tail: a new voice, velocity is ADSR gain) */
-    .knob = {P_E0, P_E2, P_E4, P_E5},
+    .knob = {P_E0, P_E1, P_E2, P_E3},
 };

@@ -64,7 +64,7 @@ static const param_desc_t *field_desc(const ui_field_t *f)
     case FK_FM6FN: if (e == ENGI_FM6 && f->id < FM6_NFN) d = &FM6_FD[f->id]; break;
     case FK_CZ: if (e == ENGI_CZ && f->id < LCZ_NP && CZ_PD[f->id].label) d = &CZ_PD[f->id]; break;
     case FK_J106: if (e == ENGI_J106 && f->id < J106_FIELDS) d = &J106_PANEL[f->id]; break;
-    case FK_HY: if (e == ENGI_HYDRA && f->id < NELEM(HY_PANEL) && HY_PANEL[f->id].label) d = hy_desc(TSEL, f->id); break;
+    case FK_HY: if (e == ENGI_HYDRA && hy_field_ok(f->id)) d = hy_desc(TSEL, f->id); break;
     case FK_DEV: d = f->id < DEV_N && (f->id != DEV_PART || trk_n() > 1u) ? &DEV_D[f->id] : 0; break;
     case FK_LIB: d = lib_desc(f->id); break;
 #ifdef SAADET_FM1_BASE

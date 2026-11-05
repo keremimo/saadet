@@ -119,9 +119,17 @@ static const ui_stop_t ST_LFO_J106[] = {
                                       FJ(J106_VCF_LFO, "VCF")}},
     LFO_COMMON,
 };
+/* HYDRA's macros beside the matrix: a macro's NAME, its VALUE (E1..E8, as the knobs turn it) and up to three of its
+ * destinations with their depths, from the patch's pool of HY_MSLOTS (hydra_edit.h) */
+#define HY_MACRO_STOPS(m, n) \
+    {n, "DEST 1", PIC_FADERS, {FH(HY_MNAME + (m), "NAME"), FT(P_E0 + (m), "VALUE"), FH(HYV_DEST(m, 0), 0), FH(HYV_DEPTH(m, 0), 0)}}, \
+    {n, "DESTS 2-3", PIC_FADERS, {FH(HYV_DEST(m, 1), 0), FH(HYV_DEPTH(m, 1), 0), FH(HYV_DEST(m, 2), 0), FH(HYV_DEPTH(m, 2), 0)}}
 static const ui_stop_t ST_LFO_HY[] = {
     LFO_COMMON,
+    HY_MACRO_STOPS(0, "MACRO 1"), HY_MACRO_STOPS(1, "MACRO 2"), HY_MACRO_STOPS(2, "MACRO 3"), HY_MACRO_STOPS(3, "MACRO 4"),
+    HY_MACRO_STOPS(4, "MACRO 5"), HY_MACRO_STOPS(5, "MACRO 6"), HY_MACRO_STOPS(6, "MACRO 7"), HY_MACRO_STOPS(7, "MACRO 8"),
 };
+#undef HY_MACRO_STOPS
 static const ui_stop_t ST_LFO_FM6[] = {
     {"FM LFO", "WAVE", PIC_FADERS, {FV(FP_LFW, "WAVE"), FV(FP_LFS, "SPEED"), FV(FP_LFD, "DELAY"), FV(FP_LKS, "RESTART")}},
     {"FM LFO", "DEPTH", PIC_FADERS, {FV(FP_LPMD, "PITCH"), FV(FP_LAMD, "AMP"), FV(FP_LPMS, "PMS"), F0}},
@@ -309,8 +317,7 @@ static ui_place_t place_of(uint32_t p)
 
 /* HOME's macros, the engine's eight in two rows of four (a turn shows the name and value over the whole screen). HOME's
  * four knobs edit one row, SELECT on HOME picks which; the SMK-37's 8 KNOBS bank has both at once (ui_smk.c), K5..K8
- * the second. HYDRA's are the places in the patch its eight macros move, so a turn edits the sound itself, as every
- * other engine's HOME does */
+ * the second. HYDRA's are its own eight macros, named and routed by the sound (LFO > MACRO 1..8) */
 static const ui_field_t HOME_F[5][8] = {
     {FP(P5_CUTOFF, "CUTOFF"), FP(P5_RESONANCE, "RESONANCE"), FP(P5_ENV_FILTER, "ENV AMOUNT"), FP(P5_RELEASE_AMP, "RELEASE"),
      FP(P5_ATTACK_AMP, "ATTACK"), FP(P5_DECAY_FILTER, "FILT DECAY"), FP(P5_FINE_B, "B FINE"), FP(P5_LFO_RATE, "LFO RATE")},
@@ -320,8 +327,7 @@ static const ui_field_t HOME_F[5][8] = {
      FC(LCZ_LBASE(0) + LCZ_W1, "WAVE"), FC(LCZ_WIN(0), "WINDOW"), FC(LCZ_FINE, "DETUNE"), FC(LCZ_LBASE(1) + LCZ_LEVEL, "LEVEL 2")},
     {FJ(J106_VCF_FREQ, "CUTOFF"), FJ(J106_VCF_RES, "RESONANCE"), FJ(J106_VCF_ENV, "ENV AMOUNT"), FJ(J106_ENV_R, "RELEASE"),
      FJ(J106_ENV_A, "ATTACK"), FJ(J106_LFO_RATE, "LFO RATE"), FJ(J106_VCF_LFO, "VCF LFO"), FJ(J106_DCO_PWM, "PWM")},
-    {FH(HY_O1 + HO_SCAN, "SCAN 1"), FH(HY_M1 + HM_DEPTH, "MUTANT 1"), FH(HY_F1_CUT, "CUTOFF"), FH(HY_F1_RES, "RESONANCE"),
-     FH(HY_O2 + HO_SCAN, "SCAN 2"), FH(HY_M3 + HM_DEPTH, "MUTANT 3"), FH(HY_F1_DRIVE, "DRIVE"), FH(HY_F2_MORPH, "PASS")},
+    {FT(P_E0, 0), FT(P_E1, 0), FT(P_E2, 0), FT(P_E3, 0), FT(P_E4, 0), FT(P_E5, 0), FT(P_E6, 0), FT(P_E7, 0)},
 };
 
 /* the buttons' places (panel.c B_*); REC is no place (it latches). FX opens the library */

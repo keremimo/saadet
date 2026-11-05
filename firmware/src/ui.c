@@ -483,7 +483,8 @@ static void card_label(char *l, uint32_t n)
 {
     static const char *const SHORT[][2] = {{"RESONANCE", "RES"}, {"ENV AMOUNT", "ENV AMT"}, {"FILT DECAY", "F DECAY"},
                                            {"MOD LEVEL", "MOD LVL"}, {"MOD RATIO", "RATIO"}, {"FEEDBACK", "FEEDBK"},
-                                           {"LFO SPEED", "LFO SPD"}, {"MUTANT 1", "MUT 1"}, {"MUTANT 3", "MUT 3"}};
+                                           {"LFO SPEED", "LFO SPD"}, {"MUTANT 1", "MUT 1"}, {"MUTANT 2", "MUT 2"},
+                                           {"MUTANT 3", "MUT 3"}, {"MUTANT 4", "MUT 4"}, {"HARMONIC", "HARM"}, {"ENV>SCAN", "E>SCAN"}};
     uint32_t i;
     if (text_w(TY_LB, l) <= 56)
         return;

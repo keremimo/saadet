@@ -28,8 +28,8 @@ The panel guide, [UI.md](UI.md), still applies. This page is what the keyboard a
 
 A bank is four values that K1..K4 or the faders reach from any place: PAGE, MACROS, FILTER, ENV, LFO, ARP, CHORD and MIX. The
 knobs have a ninth, 8 KNOBS: every knob is the sound's, K1..K4 its first four macros and K5..K8 its other four, so MASTER, SELECT,
-ALGORITHM and PRESETS wait until you pick another bank (MASTER is also K4 of MIX, and GLOBAL > OUTPUT). On HYDRA the eight are its
-macros: SCAN 1, MUTANT 1, CUTOFF, RESONANCE, then SCAN 2, MUTANT 3, DRIVE and PASS. The cards show the row you turned last. The
+ALGORITHM and PRESETS wait until you pick another bank (MASTER is also K4 of MIX, and GLOBAL > OUTPUT). On HYDRA the eight are the
+sound's own macros, named and routed by it (LFO > MACRO 1–8). The cards show the row you turned last. The
 header names the knobs' bank while it is in use. HOME keeps the bank. A page you open shows its own four knobs until you tap KNOB
 BANK or pick a bank there. LIBRARY, SAVE and GLOBAL always keep their own.
 

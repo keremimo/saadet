@@ -1,11 +1,17 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Kerem Kilic (Ellic Studio) */
 /* HYDRA's native patch (eng_hydra.c): the same 144 bytes in a part, the last state, a performance and a user slot, so a
- * sound moves between them whole. HY_RSV is held for the modulation section, which no field reads yet; a stored patch may
- * hold anything there. Signed fields are stored raw = value + offset (HY_SEMI0, HY_CENT0, HY_ENV0). */
+ * sound moves between them whole. Signed fields are stored raw = value + offset (HY_SEMI0, HY_CENT0, HY_ENV0).
+ *
+ * The macros, after the Hydrasynth's: the sound names its eight (HY_MNAME, a word of HY_MACRO_NAMES each, AUTO: its
+ * first destination's) and routes them through a pool of HY_MSLOTS assignments, two bytes each: the macro (high three
+ * bits) and its destination (low five, a HY_TGT entry, 0: the slot is free), then the depth, raw = depth + HY_DEPTH0
+ * (-127..127: the destination's whole range at a full turn). The macros' values are the part's E1..E8 (eng_hydra.c),
+ * -64..63, 0 the sound as stored. HY_SPARE and byte 78 are held; a stored patch may hold anything there. */
 #pragma once
 enum { HO_MODE, HO_WAVE, HO_L0, HO_SCAN = HO_L0 + 8, HO_SEMI, HO_CENT, HO_KEY, HO_N };   /* OSC 1 / OSC 2 */
 enum { HM_MODE, HM_SRC, HM_RATIO, HM_DEPTH, HM_AUX, HM_WET, HM_N };                     /* a MUTANT */
+enum { HY_MACROS = 8, HY_MSLOTS = 14, HY_DEPTH0 = 127 };
 enum {
     HY_O1 = 0, HY_O2 = HY_O1 + HO_N,
     HY_O3 = HY_O2 + HO_N, HY_O3_WAVE = HY_O3, HY_O3_SEMI, HY_O3_CENT, HY_O3_KEY,
@@ -15,11 +21,55 @@ enum {
     HY_F1_TYPE, HY_F1_CUT, HY_F1_RES, HY_F1_DRIVE, HY_F1_DPOS, HY_F1_ENV, HY_F1_KEY, HY_F1_VEL,
     HY_F2_TYPE = HY_F1_VEL + 2, HY_F2_MORPH, HY_F2_CUT, HY_F2_RES, HY_F2_ENV, HY_F2_KEY,
     HY_AMP, HY_E1_SC1, HY_E1_SC2, HY_E1_MU1,                     /* ENV 1 -> SCAN 1, SCAN 2, MUTANT 1 DEPTH */
-    HY_E1 = 100, HY_E1_DLY = HY_E1, HY_E1_ATK, HY_E1_HLD, HY_E1_DEC, HY_E1_SUS, HY_E1_REL,
-    HY_RSV,                                                      /* (.. HY_NAME - 1) */
+    HY_E1, HY_E1_DLY = HY_E1, HY_E1_ATK, HY_E1_HLD, HY_E1_DEC, HY_E1_SUS, HY_E1_REL,
+    HY_MNAME, HY_MA = HY_MNAME + HY_MACROS, HY_SPARE = HY_MA + 2 * HY_MSLOTS,
     HY_NAME = 132, HY_NAME_LEN = 12, HY_BYTES = 144
 };
-_Static_assert(HY_E1_MU1 < HY_E1 && HY_RSV <= HY_NAME && HY_NAME + HY_NAME_LEN == HY_BYTES, "HYDRA patch layout");
+_Static_assert(HY_SPARE < HY_NAME && HY_NAME + HY_NAME_LEN == HY_BYTES, "HYDRA patch layout");
+#define HY_SLOT(macro, tgt) ((uint8_t)((macro) << 5 | (tgt)))
+#define HY_SLOT_MACRO(a) ((uint32_t)(a) >> 5)
+#define HY_SLOT_TGT(a) ((uint32_t)(a) & 31u)
+/* where a macro may go: what changes the sound, not what a voice is made of (an oscillator's mode or wave, a mutant's
+ * mode, a filter's type); a level or FILTER 2 a macro can open is costed as opened (eng_hydra.c hy_worst). {id, the
+ * byte, its name on the pages} */
+#define HY_TARGETS                                                                                                       \
+    X(NONE, 0, "NONE") X(SCAN1, HY_O1 + HO_SCAN, "SCAN 1") X(SCAN2, HY_O2 + HO_SCAN, "SCAN 2")                          \
+    X(FINE2, HY_O2 + HO_CENT, "O2 FINE") X(MUT1, HY_M1 + HM_DEPTH, "MUTANT 1") X(MUT2, HY_M2 + HM_DEPTH, "MUTANT 2")     \
+    X(MUT3, HY_M3 + HM_DEPTH, "MUTANT 3") X(MUT4, HY_M4 + HM_DEPTH, "MUTANT 4") X(RATIO1, HY_M1 + HM_RATIO, "M1 RATIO")  \
+    X(RATIO3, HY_M3 + HM_RATIO, "M3 RATIO") X(AUX1, HY_M1 + HM_AUX, "M1 AUX") X(WET1, HY_M1 + HM_WET, "M1 WET")          \
+    X(WET3, HY_M3 + HM_WET, "M3 WET") X(OSC1, HY_LVL, "OSC 1") X(OSC2, HY_LVL + 1, "OSC 2") X(OSC3, HY_LVL + 2, "OSC 3") \
+    X(RING, HY_LVL + 3, "RING") X(NOISE, HY_LVL + 4, "NOISE") X(CUT, HY_F1_CUT, "CUTOFF") X(RES, HY_F1_RES, "RES")      \
+    X(DRIVE, HY_F1_DRIVE, "DRIVE") X(F1ENV, HY_F1_ENV, "F1 ENV") X(PASS, HY_F2_MORPH, "PASS")                          \
+    X(F2CUT, HY_F2_CUT, "F2 CUT") X(F2RES, HY_F2_RES, "F2 RES") X(F2ENV, HY_F2_ENV, "F2 ENV") X(LEVEL, HY_AMP, "LEVEL") \
+    X(ENVSCAN, HY_E1_SC1, "ENV>SCAN") X(ENVMUT, HY_E1_MU1, "ENV>MUT") X(E1ATK, HY_E1_ATK, "E1 ATK")                    \
+    X(E1DEC, HY_E1_DEC, "E1 DEC") X(E1REL, HY_E1_REL, "E1 REL")
+#define X(n, b, l) HT_##n,
+enum { HY_TARGETS HT_COUNT };
+#undef X
+#define X(n, b, l) (uint8_t)(b),
+static const uint8_t HY_TGT[] = {HY_TARGETS};
+#undef X
+#define HY_NTGT 31u
+_Static_assert(HT_COUNT == HY_NTGT + 1u, "a slot's five bits name every destination");
+/* a destination's range in raw steps (its stored maximum) */
+static inline uint32_t hy_span(uint32_t g)
+{
+    uint32_t b = HY_TGT[g % (HY_NTGT + 1u)];
+    return b == HY_O2 + HO_CENT ? 100u : b == HY_F1_ENV || b == HY_F2_ENV || b == HY_E1_SC1 || b == HY_E1_MU1 ? 126u : 127u;
+}
+/* a macro's name: AUTO (its first destination's), else one of these */
+#define HY_NAMES                                                                                                         \
+    X(AUTO) X(BRIGHT) X(DARK) X(TONE) X(GRIT) X(BITE) X(EDGE) X(RES) X(SCAN) X(MORPH) X(MOTION) X(SWEEP) X(WARP) X(FM)   \
+    X(SYNC) X(STACK) X(SQUEEZE) X(PW) X(HARMONIC) X(DETUNE) X(WIDTH) X(SUB) X(BODY) X(AIR) X(NOISE) X(RING) X(BELL)     \
+    X(GLASS) X(METAL) X(VOWEL) X(CHOIR) X(BREATH) X(ATTACK) X(DECAY) X(RELEASE) X(PLUCK) X(SWELL) X(PASS) X(BLEND)      \
+    X(COLOR) X(SHAPE) X(FAT) X(THIN) X(SPACE) X(LEVEL) X(FILTER) X(ENV) X(TALK)
+#define X(n) HN_##n,
+enum { HY_NAMES HN_COUNT };
+#undef X
+#define X(n) #n,
+static const char *const HY_MACRO_NAMES[] = {HY_NAMES};
+#undef X
+#define HY_NNAME ((uint32_t)HN_COUNT)
 enum { MU_OFF, MU_FM, MU_STACK, MU_SYNC, MU_PW, MU_SQZ, MU_WARP, MU_HARM, MU_N };
 enum { HYS_OSC1, HYS_OSC2, HYS_OSC3, HYS_RING, HYS_NOISE, HYS_N };            /* FM sources */
 enum { F1_LAD12, F1_LAD24, F1_FAT12, F1_FAT24, F1_MSLP, F1_MSHP, F1_LPG, F1_3LP, F1_3BP, F1_3HP, F1_VOWEL, F1_N };
@@ -47,7 +97,7 @@ static int hy_patch_valid(const hy_patch_t *p)
         {HY_F1_ENV, HY_F1_ENV, 2 * HY_ENV0}, {HY_F1_KEY, HY_F1_KEY, 200}, {HY_F1_VEL, HY_F1_VEL, 127},
         {HY_F2_TYPE, HY_F2_TYPE, 1}, {HY_F2_MORPH, HY_F2_RES, 127}, {HY_F2_ENV, HY_F2_ENV, 2 * HY_ENV0},
         {HY_F2_KEY, HY_F2_KEY, 200}, {HY_AMP, HY_AMP, 127}, {HY_E1_SC1, HY_E1_MU1, 2 * HY_ENV0},
-        {HY_E1_DLY, HY_E1_REL, 127},
+        {HY_E1_DLY, HY_E1_REL, 127}, {HY_MNAME, HY_MNAME + HY_MACROS - 1, HY_NNAME - 1u},
     };
 #undef HY_OSC_RULES
 #undef HY_MUT_RULES
@@ -55,6 +105,9 @@ static int hy_patch_valid(const hy_patch_t *p)
         for (uint32_t i = RULE[k][0]; i <= RULE[k][1]; i++)
             if (p->raw[i] > RULE[k][2])
                 return 0;
+    for (uint32_t k = 0; k < HY_MSLOTS; k++)           /* (a slot's first byte is whole: eight macros, 31 destinations) */
+        if (p->raw[HY_MA + 2u * k + 1u] > 2u * HY_DEPTH0)
+            return 0;
     for (uint32_t i = 0; i < HY_NAME_LEN; i++)
         if (p->raw[HY_NAME + i] < 32u || p->raw[HY_NAME + i] > 126u)
             return 0;

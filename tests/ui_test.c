@@ -195,8 +195,7 @@ int main(void)
     bad |= check(".. until the knob rests", !uix.pop && !lint_has("CUTOFF") && lint_has("P5"));
     {   /* SELECT on HOME: the macros' other four, and back */
         static const ui_field_t A = FP(P5_ATTACK_AMP, "ATTACK"), C = FP(P5_CUTOFF, "CUTOFF");
-        static const ui_field_t SCAN2 = FH(HY_O2 + HO_SCAN, "SCAN 2"), DRIVE = FH(HY_F1_DRIVE, "DRIVE");
-        int32_t a = field_get(&A), c = field_get(&C), s2, dr;
+        int32_t a = field_get(&A), c = field_get(&C);
         turn(EN_SELECT, 1);
         bad |= check("HOME: SELECT, the second four", uix.place == PL_HOME && uix.row == 1u && lint_has("KNOBS 5-8"));
         turn(EN_K1, 2);
@@ -213,16 +212,25 @@ int main(void)
         frames(1400);
         engine_load_of(TSEL, ENGI_HYDRA, 1);
         settle();
-        s2 = field_get(&SCAN2);
-        dr = field_get(&DRIVE);
         turn(EN_SELECT, 1);
-        turn(EN_K1, s2 > 60 ? -3 : 3);
-        turn(EN_K3, dr > 60 ? -3 : 3);
-        bad |= check("HOME: HYDRA's second four, SCAN 2 .. PASS: its macros' places in the patch",
-                     field_get(&SCAN2) != s2 && field_get(&DRIVE) != dr && lint_has("DRIVE") && lint_check("hydra row 2") == 0u);
+        turn(EN_K1, 3);
+        turn(EN_K3, 3);
+        bad |= check("HOME: HYDRA's second four are macros 5..8, by the sound's names (WAVESCAN: SUB .. DECAY)",
+                     TSEL->p[P_E4] == 3 && TSEL->p[P_E6] == 3 && TSEL->p[P_E0] == 0 && lint_has("GRIT") && lint_check("hydra row 2") == 0u);
         ui_png("pop_hydra_row2");
         frames(1400);
         turn(EN_SELECT, -1);
+        show(PL_LFO, stop_named(PL_LFO, "MACRO 3", 0));
+        frame();
+        bad |= check("LFO > MACRO 3: its name, its value, a destination and its depth", lint_has("BRIGHT") && lint_has("VALUE") &&
+                     lint_has("CUTOFF") && lint_has("DEPTH 1") && lint_check("hydra macro") == 0u);
+        ui_png("hydra_macro_page");
+        turn(EN_SELECT, 1);
+        frame();
+        bad |= check(".. its next page: the destinations after", lint_has("DEST 2") && lint_has("F1 ENV") && lint_has("DEST 3") &&
+                     lint_check("hydra macro 2") == 0u);
+        ui_png("hydra_macro_page2");
+        press(B_HOME);
         engine_load_of(TSEL, ENGI_PROPHET, 1);
         settle();
         frames(1600);                                  /* (the row's message goes) */
@@ -1025,9 +1033,8 @@ int main(void)
             {
                 static const ui_field_t A = FP(P5_ATTACK_AMP, "ATTACK"), D = FP(P5_DECAY_FILTER, "FILT DECAY"),
                                         F = FP(P5_FINE_B, "B FINE"), L = FP(P5_LFO_RATE, "LFO RATE");
-                static const ui_field_t SC1 = FH(HY_O1 + HO_SCAN, "SCAN 1"), PASS = FH(HY_F2_MORPH, "PASS");
                 int32_t a = field_get(&A), d = field_get(&D), f = field_get(&F), l = field_get(&L), c = field_get(&CUT);
-                uint32_t row = uix.row, sc, ps;
+                uint32_t row = uix.row;
                 smk_in.k5 = a > 60 ? -2 : 2; frame();
                 turn(EN_SELECT, d > 60 ? -2 : 2);
                 turn(EN_ALGO, f > 60 ? -2 : 2);
@@ -1047,12 +1054,10 @@ int main(void)
                 frames(1600);
                 engine_load_of(TSEL, ENGI_HYDRA, 1);
                 settle();
-                sc = (uint32_t)field_get(&SC1);
-                ps = (uint32_t)field_get(&PASS);
-                turn(EN_K1, sc > 60u ? -2 : 2);
-                turn(EN_PRESET, ps > 60u ? -2 : 2);
-                bad |= check("SMK 8 KNOBS: HYDRA's eight, SCAN 1 .. PASS", (uint32_t)field_get(&SC1) != sc && (uint32_t)field_get(&PASS) != ps &&
-                             lint_has("SCAN 2") && lint_has("MUT 3") && lint_has("DRIVE") && lint_has("PASS") && lint_check("knobs8 hydra") == 0u);
+                turn(EN_K1, 2);
+                turn(EN_PRESET, -2);
+                bad |= check("SMK 8 KNOBS: HYDRA's eight macros, by the sound's names", TSEL->p[P_E0] == 2 && TSEL->p[P_E7] == -2 &&
+                             lint_has("SUB") && lint_has("DETUNE") && lint_has("GRIT") && lint_has("DECAY") && lint_check("knobs8 hydra") == 0u);
                 ui_png("smk_knobs8_hydra");
                 frames(1600);
                 engine_load_of(TSEL, ENGI_PROPHET, 1);
