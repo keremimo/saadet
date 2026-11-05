@@ -4,7 +4,7 @@
  * the foot of the screen; pressing the place's button again or turning SELECT turns its page; holding the button lists
  * what is inside on the screen and on the keys (a key jumps there, the keys play no notes while it is held), but ARP
  * held is the sustain pedal (seq.c), which keeps its notes until ARP is pressed again, and opens its place on a tap only
- * when it keeps none. On HOME the four knobs are the sound's macros
+ * when it keeps none. On HOME the four knobs are the sound's macros, SELECT turns them to its other four,
  * and a turn shows its value over the whole screen; holding HOME lists the favourites on the keys. PRESETS browses the sounds and ALGORITHM the engines (the sound loads when they rest); FX opens the
  * library, SAVE stores the sound (pressed again) or a dump that came in. REC latches the notes held, OCT- / OCT+ shift
  * the octave (both: back to 0; both for 5 s: UPDATE MODE, main.c). Startup maintenance (ui_boot.c), the update
@@ -49,7 +49,8 @@ static struct {
     uint8_t held_new, jumped, reveal;   /* it opened with this press; a key jumped; the list is shown */
     uint32_t held_t;
     uint8_t hot, pop;            /* the column last turned (4: none); HOME: its value over the screen */
-    uint32_t hot_t, knob_t[4];
+    uint8_t hot_row, row;        /* the row of the knob last turned (1: K5..K8); HOME's row of macros (1: the second) */
+    uint32_t hot_t, knob_t[8];
     struct { uint8_t on, src; uint32_t t; } br;   /* browsing the sounds: the engine's list (ui_lib.c) */
     uint8_t eng;                 /* the engine the pages were of (another: EDIT, ENV, LFO from their first) */
     char toast[28];
@@ -96,6 +97,7 @@ static void ui_open(uint32_t p)
     }
     uix.place = (uint8_t)p;
     uix.hot = 4u;
+    uix.hot_row = 0;
     uix.pop = 0;
     if (p == PL_LIB)
         lib_open(ui_stop(PL_LIB));
@@ -111,12 +113,26 @@ static void ui_turn_page(uint32_t p, int32_t d)  /* the place's next (d > 0) or 
     if (pl.n)
         uix.stop[p] = (uint8_t)(((int32_t)ui_stop(p) + d % pl.n + pl.n) % pl.n);
     uix.hot = 4u;
+    uix.hot_row = 0;
     if (p == PL_LIB)
         lib_open(ui_stop(PL_LIB));
     if (p == PL_SAVE && !sx_staged())                  /* another thing to save: its slot and name */
         save_open();
 }
-/* the field knob k edits now: a HOME macro, the stop's, or none */
+/* HOME's macro i (0..3), in the row SELECT picked on HOME */
+static const ui_field_t *home_field(uint32_t i)
+{
+    return &HOME_F[eng_tint(TSEL->eng_req)][(i & 3u) + 4u * (uix.row & 1u)];
+}
+/* SELECT on HOME: the macros' first row (back) or second (on); the header says which */
+static void home_row(int32_t s)
+{
+    uix.row = (uint8_t)(s > 0);
+    uix.hot = 4u;
+    uix.pop = 0;
+    ui_say("KNOBS ", uix.row ? "5-8" : "1-4");
+}
+/* the field knob k edits now (K5..K8: 4..7, the SMK-37's 8 KNOBS bank): a HOME macro, the stop's, or none */
 static const ui_field_t *ui_knob_field(uint32_t k)
 {
     static const ui_field_t none = F0;
@@ -125,8 +141,10 @@ static const ui_field_t *ui_knob_field(uint32_t k)
     if (smk_knob_banked())
         return smk_knob_field(k);
 #endif
+    if (k > 3u)
+        return &none;
     if (uix.place == PL_HOME)
-        return &HOME_F[eng_tint(TSEL->eng_req)][k];
+        return home_field(k);
     return pl.n ? &pl.stop[ui_stop(uix.place)].f[k] : &none;
 }
 
@@ -337,7 +355,8 @@ static void ui_knob(uint32_t k, int32_t s)
         lib.erase = 0;                          /* arming never counts a button that was already held */
         uix.jumped = 1;
     }
-    uix.hot = (uint8_t)k;
+    uix.hot = (uint8_t)(k & 3u);
+    uix.hot_row = (uint8_t)(k >> 2);
     uix.hot_t = fm1_ms;
 #ifdef SAADET_SMK37
     uix.pop = uix.place == PL_HOME && !smk_knob_banked();
@@ -418,12 +437,28 @@ static void ui_input(void)
 #ifdef SAADET_SMK37
     smk_input();
 #endif
-    if ((s = panel_enc(EN_SELECT)) && uix.place != PL_HOME)
-        ui_turn_page(uix.place, s);
-    if ((s = panel_enc(EN_PRESET)))
-        browse_turn(0, s);
-    if ((s = panel_enc(EN_ALGO)))
-        browse_turn(1, s);
+#ifdef SAADET_SMK37
+    if (smk_knobs8()) {                          /* the 8 KNOBS bank: K5 .. K8 are the sound's too */
+        if ((s = smk_in.k5)) ui_knob(4u, s);
+        if ((s = panel_enc(EN_SELECT))) ui_knob(5u, s);     /* K6 */
+        if ((s = panel_enc(EN_ALGO))) ui_knob(6u, s);       /* K7 */
+        if ((s = panel_enc(EN_PRESET))) ui_knob(7u, s);     /* K8 */
+        smk_in.k5 = 0;
+    } else
+#endif
+    {
+#ifdef SAADET_SMK37
+        smk_in.k5 = 0;                           /* (MASTER's: the board's, lent only to the bank) */
+#endif
+        if ((s = panel_enc(EN_SELECT))) {
+            if (uix.place != PL_HOME) ui_turn_page(uix.place, s);
+            else if (!uix.br.on) home_row(s);
+        }
+        if ((s = panel_enc(EN_PRESET)))
+            browse_turn(0, s);
+        if ((s = panel_enc(EN_ALGO)))
+            browse_turn(1, s);
+    }
     for (k = 0; k < 4u; k++)
         if ((s = panel_enc(EN_K1 + k)))
             ui_knob(k, s);
@@ -443,6 +478,21 @@ static void ui_sound_name(char *b)               /* the sound's name: its user s
     else
         str_cpy(b, "INIT", 22);
 }
+/* a card's label: a name wider than its column, its short form (HOME's readout over the screen keeps the full name) */
+static void card_label(char *l, uint32_t n)
+{
+    static const char *const SHORT[][2] = {{"RESONANCE", "RES"}, {"ENV AMOUNT", "ENV AMT"}, {"FILT DECAY", "F DECAY"},
+                                           {"MOD LEVEL", "MOD LVL"}, {"MOD RATIO", "RATIO"}, {"FEEDBACK", "FEEDBK"},
+                                           {"LFO SPEED", "LFO SPD"}, {"MUTANT 1", "MUT 1"}, {"MUTANT 3", "MUT 3"}};
+    uint32_t i;
+    if (text_w(TY_LB, l) <= 56)
+        return;
+    for (i = 0; i < NELEM(SHORT); i++)
+        if (str_eq(l, SHORT[i][0])) {
+            str_cpy(l, SHORT[i][1], n);
+            return;
+        }
+}
 static void vm_col_of(vm_col_t *c, const ui_field_t *f)
 {
     const param_desc_t *d = field_desc(f);
@@ -452,6 +502,7 @@ static void vm_col_of(vm_col_t *c, const ui_field_t *f)
     c->on = 1;
     c->dim = (uint8_t)!field_active(f);
     str_cpy(c->label, field_label(f, d), sizeof c->label);
+    card_label(c->label, sizeof c->label);
     field_text(f, d, c->val, c->unit);
     v = field_get(f);
     r = d->max - d->min;
@@ -679,7 +730,7 @@ static void vm_build(ui_vm_t *v)
     }
     if (uix.place == PL_HOME) {
         if (uix.pop && uix.hot < 4u) {                 /* a macro turned: its name and value over the screen */
-            const ui_field_t *f = &HOME_F[e][uix.hot];
+            const ui_field_t *f = home_field(uix.hot);
             const param_desc_t *d = field_desc(f);
             v->mode = VM_POP;
             if (d) {
@@ -711,7 +762,7 @@ static void vm_build(ui_vm_t *v)
         vm_state(v->state, sizeof v->state);
         vm_keys_now(v);
         for (i = 0; i < 4u; i++) {
-            const ui_field_t *f = &HOME_F[e][i];
+            const ui_field_t *f = home_field(i);
             const param_desc_t *d = field_desc(f);
             if (d && d->max > d->min)
                 v->macro[i] = (uint8_t)((field_get(f) - d->min) * 50 / (d->max - d->min));

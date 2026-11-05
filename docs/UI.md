@@ -8,10 +8,10 @@ screen takes on the colour of the engine of the part you are on. Every button op
 | Control | What it does |
 | --- | --- |
 | VOLUME | Master level. |
-| SELECT | Turns the page of the place on the screen. |
+| SELECT | Turns the page of the place on the screen. On HOME: clockwise, K1–K4 edit the sound's other four macros; back, the first four. |
 | PRESETS | Browses the engine's sounds: its factory sounds, then your sounds on it. The sound loads when the knob rests. |
 | ALGORITHM | Browses the next or previous engine's sounds. |
-| K1–K4 | Edit the four values at the foot of the screen. On HOME they are the sound's four macros. |
+| K1–K4 | Edit the four values at the foot of the screen. On HOME they are the sound's macros, four of its eight. |
 | OCT- / OCT+ | Shift the keyboard by an octave. Press both to return to 0. Hold both for 5 s to enter update mode. |
 
 Tap a place's button again to turn its page. Hold a button to list what is inside it: the list also lights up on the

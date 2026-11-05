@@ -81,6 +81,7 @@ void sd_smk_read(sd_smk_t *s){
     for(int i=0;i<4;i++)s->fader[i]=(uint8_t)plat_fader(i);
 }
 void sd_master_set(uint32_t q12){plat_master_set(q12);}
+int32_t sd_k5(int lend){return plat_k5_lend(lend);}
 void sd_smk_config(uint32_t vel,uint32_t trs_off){
     static uint32_t was_vel=255u,was_off=255u;
     if(vel!=was_vel){was_vel=vel;plat_vel_curve((int)vel);}

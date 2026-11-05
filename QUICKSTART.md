@@ -25,7 +25,7 @@ installer again, press **Find FM-1**, then **Resume installation**.
 | --- | --- |
 | **PRESETS** knob | Browses the current engine's sounds. A sound loads when the knob rests. |
 | **ALGORITHM** knob | Moves to the next or previous engine. The screen takes on the engine's colour. |
-| **HOME** | The sound, the chord you're playing and the scale. **K1–K4** are the sound's four macros. |
+| **HOME** | The sound, the chord you're playing and the scale. **K1–K4** are the sound's macros; turn **SELECT** for its other four. |
 | **VOLUME** | Master level. |
 | **OCT− / OCT+** | Shift the keyboard an octave. Press both together to return to 0. |
 

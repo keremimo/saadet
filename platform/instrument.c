@@ -156,6 +156,7 @@ static void sd_smk_poll(void)
     token=sd_lock();sd_kb_keys=keys;sd_kb_retrig|=retrig;sd_unlock(token);
     sd_jack_pedal=s.pedal;
     smk_in.extra=s.extra;smk_in.pads=s.pads;smk_in.pads_hit|=s.pads_hit;
+    smk_in.k5+=sd_k5(smk_k5_lent());   /* (the 8 KNOBS bank: K5 is a knob of the sound's, not MASTER) */
     memcpy(smk_in.vel,s.pad_vel,16);memcpy(smk_in.press,s.pad_press,16);memcpy(smk_in.fader,s.fader,4);
     smk_pads_poll();
     if(s.bend!=sent_bend){

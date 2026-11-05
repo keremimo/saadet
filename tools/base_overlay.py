@@ -189,7 +189,23 @@ def apply(work, board="fm1", model=None, product="Saadet"):
         p=work/'device/plat_smk37.c';s=p.read_text()
         s=replace(s,'    if (fm1_in.frames < SMK_SETTLE_FRAMES) {\n        smk_pedal_rest = r;\n        return;\n    }\n    if (!smk_pc) {\n',
             '    if (fm1_in.frames < SMK_SETTLE_FRAMES)\n        return;\n    if (!smk_pc) {\n        smk_pedal_rest = r;\n')
-        p.write_text('/* Saadet pedal rest fix Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
+        # K5 is the virtual MASTER, except while Saadet's 8 KNOBS bank has it (firmware/src/ui_smk.c): then the app takes
+        # its detents through plat_k5_lend and the level stays where it is.
+        s=replace(s,'static void smk_main_poll(void)','''/* Saadet: K5 lent to the app (on), its detents since the last call; lent, it turns no MASTER */
+static uint8_t smk_k5_lent;
+int32_t plat_k5_lend(int on)
+{
+    smk_k5_lent = (uint8_t)(on != 0);
+    return on ? fm1_enc_take(SMK_MASTER_ENC) : 0;
+}
+static void smk_main_poll(void)''')
+        s=replace(s,'    int32_t s = fm1_enc_take(SMK_MASTER_ENC);\n','    int32_t s = smk_k5_lent ? 0 : fm1_enc_take(SMK_MASTER_ENC);\n')
+        p.write_text('/* Saadet pedal rest fix and K5 lending Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
+        p=work/'include/plat.h';s=p.read_text()
+        s=replace(s,"void plat_master_set(uint32_t q12);    /* the virtual MASTER's level, 0..4096 */\n",
+                  "void plat_master_set(uint32_t q12);    /* the virtual MASTER's level, 0..4096 */\n"
+                  "int32_t plat_k5_lend(int on);         /* Saadet: on, K5 turns no MASTER; its detents since the last call */\n")
+        p.write_text('/* Saadet K5 lending Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
     p=work/'tools/build.py';s=p.read_text()
     s=replace(s,'    img = bytearray((OUT / "text.bin").read_bytes())', '    tc("common/bin/objcopy", "-O", "binary", "-j", ".audio_text", elf, OUT / "audio.bin")\n    img = bytearray((OUT / "text.bin").read_bytes())')
     s=replace(s,'    (OUT / (NAME + ".dis")).write_text(dis)', '    (OUT / (NAME + ".dis")).write_text(dis)\n    (OUT / (NAME + ".symbols")).write_text(syms)')
@@ -378,6 +394,10 @@ static struct ble_scan_tab own_scan;""")
     # The base's expect_no_out is the same check; BLE stays either link, as the scripts mean it.
     s=replace(s,'uint32_t to = !strcmp(port, "BLE-DEV") ? TO_BLE_DEV : p >= 0 ? 1u << p : 0u, i;',
               'uint32_t to = !strcmp(port, "BLE-DEV") ? TO_BLE_DEV : !strcmp(port, "BLE") ? TO_BLE : p >= 0 ? 1u << p : 0u, i;')
+    if smk:                                       # (the host has no K5: the UI tests turn it themselves)
+        s=replace(s,'void plat_master_set(uint32_t q12) { master = q12 > 4096u ? 4096u : q12; }\n',
+                  'void plat_master_set(uint32_t q12) { master = q12 > 4096u ? 4096u : q12; }\n'
+                  'int32_t plat_k5_lend(int on) { (void)on; return 0; }\n')
     s=replace(s,"""        } else if (!strcmp(cmd, "expect_out") || !strcmp(cmd, "expect_no_out")) {""","""        } else if (!strcmp(cmd, "expect_unsent")) {
             fails += expect_out(a, mk_pkt(b, c, d), 0);
         } else if (!strcmp(cmd, "expect_out") || !strcmp(cmd, "expect_no_out")) {""")

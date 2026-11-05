@@ -7,8 +7,10 @@
  *
  * smk_in is what the bridge reads each pass (platform/instrument.c; the host tests fill it themselves), smk_pad_out what
  * the pads show. Pads 0..7 are the top row, 8..15 the bottom, left to right. */
-enum { BK_PAGE, BK_MACROS, BK_FILTER, BK_ENV, BK_LFO, BK_ARP, BK_CHORD, BK_MIX, BK_N };
-static const char *const BK_NAME[BK_N] = {"PAGE", "MACROS", "FILTER", "ENV", "LFO", "ARP", "CHORD", "MIX"};
+/* BK_KNOBS8 is the knobs' alone: all eight, K5..K8 too (MASTER, SELECT, ALGORITHM and PRESETS give way), and last, so
+ * the faders' banks are the eight before it */
+enum { BK_PAGE, BK_MACROS, BK_FILTER, BK_ENV, BK_LFO, BK_ARP, BK_CHORD, BK_MIX, BK_KNOBS8, BK_N };
+static const char *const BK_NAME[BK_N] = {"PAGE", "MACROS", "FILTER", "ENV", "LFO", "ARP", "CHORD", "MIX", "8 KNOBS"};
 enum { PM_CHORDS, PM_SOUNDS, PM_FAVS, PM_PARTS, PM_N };   /* the pad bank */
 static const char *const PM_NAME[PM_N] = {"CHORDS", "SOUNDS", "FAVS", "PARTS"};
 /* what the pads are this moment */
@@ -25,6 +27,7 @@ enum { PS_OFF, PS_ON, PS_FILLED, PS_ACTIVE, PS_WAIT, PS_NONE };
 static struct {
     uint32_t extra, pads, pads_hit;                /* the four buttons, the pads down, hit since the last pass */
     uint8_t vel[16], press[16], fader[4];
+    int32_t k5;                                    /* K5's detents while the 8 KNOBS bank has it (smk_k5_lent) */
 } smk_in;
 static uint32_t smk_pad_out[16];                   /* 0xRRGGBB */
 static uint32_t smk_led_extra;                     /* the four buttons' LEDs (SMK_X_*), bit 4 PLAY's red */
@@ -57,15 +60,17 @@ static uint32_t smk_fm6_op(void)
     uint32_t s = uix.stop[PL_EDIT];
     return s >= 1u && s <= 36u ? (s - 1u) / 6u : 0u;
 }
-/* field i of a bank, for the sound playing; 0: the engine has nothing there */
+/* field i of a bank (0..3; 0..7 on 8 KNOBS), for the sound playing; 0: the engine has nothing there */
 static const ui_field_t *smk_bank_field(uint32_t bank, uint32_t i)
 {
     static ui_field_t f;
     const ui_stop_t *st = 0;
     uint32_t e = eng_tint(TSEL->eng_req);
+    if (bank == BK_KNOBS8)
+        return &HOME_F[e][i & 7u];
     i &= 3u;
     switch (bank) {
-    case BK_MACROS: return &HOME_F[e][i];
+    case BK_MACROS: return home_field(i);
     case BK_FILTER:
         st = e == 0u ? smk_stop(ST_EDIT_P5, NELEM(ST_EDIT_P5), "FILTER", "CUTOFF") :
              e == 2u ? smk_stop(ST_EDIT_CZ, NELEM(ST_EDIT_CZ), "LINE 1", "WAVES") :
@@ -93,12 +98,14 @@ static const ui_field_t *smk_bank_field(uint32_t bank, uint32_t i)
     return st ? &st->f[i] : 0;
 }
 static int smk_bank_has(uint32_t bank) { return bank == BK_PAGE || smk_bank_field(bank, 0) != 0; }
-static uint32_t smk_bank_next(uint32_t b, int32_t dir)
+/* a bank the knobs (w 0) or the faders (1) can take */
+static int smk_bank_ok(uint32_t w, uint32_t bank) { return bank < (w ? BK_KNOBS8 : BK_N) && smk_bank_has(bank); }
+static uint32_t smk_bank_next(uint32_t w, uint32_t b, int32_t dir)
 {
-    uint32_t i;
-    for (i = 0; i < BK_N; i++) {
-        b = (uint32_t)((int32_t)b + dir + BK_N) % BK_N;
-        if (smk_bank_has(b))
+    uint32_t i, n = w ? BK_KNOBS8 : BK_N;
+    for (i = 0; i < n; i++) {
+        b = (uint32_t)((int32_t)b + dir + (int32_t)n) % n;
+        if (smk_bank_ok(w, b))
             break;
     }
     return b;
@@ -114,9 +121,12 @@ static int smk_knob_banked(void)
 static const ui_field_t *smk_knob_field(uint32_t k)
 {
     static const ui_field_t none = F0;
-    const ui_field_t *f = smk_bank_field(smk.kbank, k);
+    const ui_field_t *f = k < 4u || smk.kbank == BK_KNOBS8 ? smk_bank_field(smk.kbank, k) : 0;
     return f ? f : &none;
 }
+/* the 8 KNOBS bank, on: K5..K8 are the sound's (ui_input), and the board lends K5 (platform/instrument.c) */
+static int smk_knobs8(void) { return smk.kbank == BK_KNOBS8 && smk_knob_banked(); }
+static int smk_k5_lent(void) { return smk_knobs8(); }
 /* the pad bank. HOME's is the player's and stays, saved when the buttons let go; on a page it lasts until the page changes */
 static void smk_pad_bank(uint32_t m)
 {
@@ -139,7 +149,7 @@ static int smk_knob_taken(uint32_t k, int32_t s)
         return 1;
     }
     if (!k)
-        smk.pick_sel = (uint8_t)smk_bank_next(smk.pick_sel, s > 0 ? 1 : -1);
+        smk.pick_sel = (uint8_t)smk_bank_next(smk.pick - 1u, smk.pick_sel, s > 0 ? 1 : -1);
     if (smk.pick == 1u) { smk.kbank = smk.pick_sel; smk_knob_here = 1; } else smk.fbank = smk.pick_sel;
     smk.picked = 0;
     return 1;
@@ -164,7 +174,7 @@ static const ui_field_t *smk_fader_field(uint32_t i)
     if (smk.fbank == BK_PAGE) {                    /* the page's four, on a page of the sound */
         if (!smk_place_banked())
             return &none;
-        f = uix.place == PL_HOME ? &HOME_F[eng_tint(TSEL->eng_req)][i] : &place_of(uix.place).stop[ui_stop(uix.place)].f[i];
+        f = uix.place == PL_HOME ? home_field(i) : &place_of(uix.place).stop[ui_stop(uix.place)].f[i];
     } else {
         f = smk_bank_field(smk.fbank, i);
     }
@@ -338,7 +348,7 @@ static void smk_pad_down(uint32_t p, uint32_t vel)
         if (smk.pick == 3u) {
             if (p < PM_N)
                 smk_pad_bank(p);
-        } else if (p < BK_N && smk_bank_has(p)) {
+        } else if (smk_bank_ok(smk.pick - 1u, p)) {
             smk.pick_sel = (uint8_t)p;
             if (smk.pick == 1u) { smk.kbank = (uint8_t)p; smk_knob_here = 1; } else smk.fbank = (uint8_t)p;
             smk.picked = 0;
@@ -476,7 +486,7 @@ static void smk_buttons(void)
         if ((x & bit) && d) {                      /* held: the arrows walk its banks */
             smk.bank_tap[w] = 0;
             smk.pick = (uint8_t)(w + 1u);
-            smk.pick_sel = (uint8_t)smk_bank_next(w ? smk.fbank : smk.kbank, d);
+            smk.pick_sel = (uint8_t)smk_bank_next(w, w ? smk.fbank : smk.kbank, d);
             if (w) smk.fbank = smk.pick_sel; else { smk.kbank = smk.pick_sel; smk_knob_here = 1; }
             smk.picked = 0;
             d = 0;
@@ -485,7 +495,7 @@ static void smk_buttons(void)
             if (smk.bank_tap[w]) {
                 /* on a page showing its own four, the first tap brings the bank picked back; then the next */
                 uint32_t resume = !w && smk.kbank != BK_PAGE && !smk_knob_banked();
-                smk_bank_apply(w, resume ? smk.kbank : smk_bank_next(w ? smk.fbank : smk.kbank, 1));
+                smk_bank_apply(w, resume ? smk.kbank : smk_bank_next(w, w ? smk.fbank : smk.kbank, 1));
             }
             else if (smk.pick == w + 1u)
                 ui_say(w ? "FADERS " : "KNOBS ", BK_NAME[w ? smk.fbank : smk.kbank]);
@@ -597,7 +607,7 @@ static void smk_lights(void)
         case PMAP_PICK:
             if (smk.pick == 3u)
                 st = p >= PM_N ? PS_NONE : p == smk.pick_sel ? PS_ACTIVE : PS_ON;
-            else if (p < BK_N)
+            else if (p < (smk.pick == 2u ? BK_KNOBS8 : BK_N))
                 st = p == smk.pick_sel ? PS_ACTIVE : smk_bank_has(p) ? PS_ON : PS_OFF;
             else
                 st = PS_NONE;
@@ -671,13 +681,16 @@ static int smk_pick_view(ui_vm_t *v)
         v->keys = (1u << PM_N) - 1u;
         return 1;
     }
-    str_cpy(v->head, smk.pick == 1u ? "KNOB BANK" : "FADER BANK", sizeof v->head);
-    v->cur = (uint8_t)c;
-    v->first = (uint8_t)(c > 3u && BK_N > VM_ROWS ? (c - 3u < BK_N - VM_ROWS ? c - 3u : BK_N - VM_ROWS) : 0u);
-    v->nrows = VM_ROWS;
-    for (i = 0; i < v->nrows; i++)
-        str_cpy(v->row[i], BK_NAME[v->first + i], sizeof v->row[i]);
-    v->keys = (1u << BK_N) - 1u;
+    {
+        uint32_t n = smk.pick == 1u ? BK_N : BK_KNOBS8;       /* (8 KNOBS: the knobs' alone) */
+        str_cpy(v->head, smk.pick == 1u ? "KNOB BANK" : "FADER BANK", sizeof v->head);
+        v->cur = (uint8_t)c;
+        v->first = (uint8_t)(c > 3u && n > VM_ROWS ? (c - 3u < n - VM_ROWS ? c - 3u : n - VM_ROWS) : 0u);
+        v->nrows = (uint8_t)(n - v->first < VM_ROWS ? n - v->first : VM_ROWS);
+        for (i = 0; i < v->nrows; i++)
+            str_cpy(v->row[i], BK_NAME[v->first + i], sizeof v->row[i]);
+        v->keys = (1u << n) - 1u;
+    }
     return 1;
 }
 /* the strip: a fader's bank for a moment, with where each fader stands, else the knobs' bank. On HOME the cards stand in
@@ -708,9 +721,9 @@ static void smk_strip_view(ui_vm_t *v, int home)
     }
     if (!smk_knob_banked() || (home && !(uix.hot < 4u && fm1_ms - uix.hot_t < SMK_STRIP_MS)))
         return;
-    for (i = 0; i < 4u; i++) {
+    for (i = 0; i < 4u; i++) {                     /* (8 KNOBS: the row last turned) */
         memset(&v->col[i], 0, sizeof v->col[i]);
-        vm_col_of(&v->col[i], smk_knob_field(i));
+        vm_col_of(&v->col[i], smk_knob_field(i + (smk.kbank == BK_KNOBS8 ? 4u * uix.hot_row : 0u)));
     }
     v->strip = 1;
 }

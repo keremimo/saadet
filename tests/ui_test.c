@@ -193,6 +193,40 @@ int main(void)
     ui_png("pop");
     frames(1400);
     bad |= check(".. until the knob rests", !uix.pop && !lint_has("CUTOFF") && lint_has("P5"));
+    {   /* SELECT on HOME: the macros' other four, and back */
+        static const ui_field_t A = FP(P5_ATTACK_AMP, "ATTACK"), C = FP(P5_CUTOFF, "CUTOFF");
+        static const ui_field_t SCAN2 = FH(HY_O2 + HO_SCAN, "SCAN 2"), DRIVE = FH(HY_F1_DRIVE, "DRIVE");
+        int32_t a = field_get(&A), c = field_get(&C), s2, dr;
+        turn(EN_SELECT, 1);
+        bad |= check("HOME: SELECT, the second four", uix.place == PL_HOME && uix.row == 1u && lint_has("KNOBS 5-8"));
+        turn(EN_K1, 2);
+        bad |= check(".. K1 the first of them, over the screen", field_get(&A) != a && field_get(&C) == c && uix.pop &&
+                     lint_has("ATTACK") && lint_check("pop row 2") == 0u);
+        ui_png("pop_row2");
+        frames(1400);
+        turn(EN_SELECT, 3);
+        bad |= check(".. turned on, it stays there", uix.row == 1u);
+        turn(EN_SELECT, -1);
+        a = field_get(&A);
+        turn(EN_K1, 2);
+        bad |= check(".. back: the first four", uix.row == 0u && field_get(&C) != c && field_get(&A) == a && lint_has("CUTOFF"));
+        frames(1400);
+        engine_load_of(TSEL, ENGI_HYDRA, 1);
+        settle();
+        s2 = field_get(&SCAN2);
+        dr = field_get(&DRIVE);
+        turn(EN_SELECT, 1);
+        turn(EN_K1, s2 > 60 ? -3 : 3);
+        turn(EN_K3, dr > 60 ? -3 : 3);
+        bad |= check("HOME: HYDRA's second four, SCAN 2 .. PASS: its macros' places in the patch",
+                     field_get(&SCAN2) != s2 && field_get(&DRIVE) != dr && lint_has("DRIVE") && lint_check("hydra row 2") == 0u);
+        ui_png("pop_hydra_row2");
+        frames(1400);
+        turn(EN_SELECT, -1);
+        engine_load_of(TSEL, ENGI_PROPHET, 1);
+        settle();
+        frames(1600);                                  /* (the row's message goes) */
+    }
 
     /* OCT- / OCT+, both at once: 0; REC latches */
     press(B_OCTUP);
@@ -854,7 +888,7 @@ int main(void)
             press(B_HOME);
             engine_load_of(TSEL, ENGI_FM6, 0);
             frame();
-            bad |= check("SMK banks: FM6 has no FILTER", !smk_bank_has(BK_FILTER) && smk_bank_next(BK_MACROS, 1) == BK_ENV);
+            bad |= check("SMK banks: FM6 has no FILTER", !smk_bank_has(BK_FILTER) && smk_bank_next(0, BK_MACROS, 1) == BK_ENV);
             uix.stop[PL_EDIT] = 1u + 6u * 2u;           /* OP3 on EDIT */
             bad |= check(".. its ENV follows EDIT's operator", smk_bank_field(BK_ENV, 0)->kind == FK_FM6OP && smk_bank_field(BK_ENV, 0)->sub == 2u);
             uix.stop[PL_EDIT] = 0;
@@ -963,6 +997,80 @@ int main(void)
             X_DOWN(SMK_X_FBANK); X_UP(SMK_X_FBANK);
             bad |= check(".. a tap, the next", smk.fbank == BK_ARP);
             smk.fbank = BK_ENV;
+            frames(1600);
+
+            /* 8 KNOBS: every knob the sound's, K5 lent by the board; the knobs' alone */
+            bad |= check("SMK 8 KNOBS: the knobs' last bank, none of the faders'", smk_bank_next(0, BK_MIX, 1) == BK_KNOBS8 &&
+                         smk_bank_next(0, BK_KNOBS8, 1) == BK_PAGE && smk_bank_next(1, BK_MIX, 1) == BK_PAGE && !smk_k5_lent());
+            X_DOWN(SMK_X_FBANK);
+            frames(600);
+            frame();
+            PAD_HIT(8, 100); PAD_UP(8);
+            bad |= check(".. the faders' picker: its pad dark, a tap nothing", smk.fbank == BK_ENV && smk_pad_out[8] == smk_rgb(PS_NONE, 0) &&
+                         !lint_has("8 KNOBS"));
+            X_UP(SMK_X_FBANK);
+            frames(1600);
+            X_DOWN(SMK_X_KBANK);
+            frames(600);
+            frame();
+            bad |= check(".. the knobs' picker: the bottom row's first pad", smk_pad_out[8] == smk_rgb(PS_ON, 0));
+            PAD_HIT(8, 100); PAD_UP(8);
+            frame();
+            bad |= check(".. a tap picks it, the list scrolls to it", smk.kbank == BK_KNOBS8 && lint_has("8 KNOBS") && lint_check("picker 8") == 0u);
+            ui_png("smk_picker_knobs8");
+            X_UP(SMK_X_KBANK);
+            frames(1600);
+            frame();
+            bad |= check(".. on HOME: K5 lent, the tag", smk_knobs8() && smk_k5_lent() && lint_has("8 KNOBS") && lint_check("knobs8 tag") == 0u);
+            {
+                static const ui_field_t A = FP(P5_ATTACK_AMP, "ATTACK"), D = FP(P5_DECAY_FILTER, "FILT DECAY"),
+                                        F = FP(P5_FINE_B, "B FINE"), L = FP(P5_LFO_RATE, "LFO RATE");
+                static const ui_field_t SC1 = FH(HY_O1 + HO_SCAN, "SCAN 1"), PASS = FH(HY_F2_MORPH, "PASS");
+                int32_t a = field_get(&A), d = field_get(&D), f = field_get(&F), l = field_get(&L), c = field_get(&CUT);
+                uint32_t row = uix.row, sc, ps;
+                smk_in.k5 = a > 60 ? -2 : 2; frame();
+                turn(EN_SELECT, d > 60 ? -2 : 2);
+                turn(EN_ALGO, f > 60 ? -2 : 2);
+                turn(EN_PRESET, l > 60 ? -2 : 2);
+                bad |= check(".. K5 .. K8: ATTACK, FILT DECAY, B FINE, LFO RATE", field_get(&A) != a && field_get(&D) != d &&
+                             field_get(&F) != f && field_get(&L) != l && field_get(&CUT) == c && !smk_in.k5);
+                bad |= check(".. no sound browsed, no row turned", !uix.br.on && !lib.pending && uix.place == PL_HOME && uix.row == row &&
+                             TSEL->eng_req == ENGI_PROPHET);
+                bad |= check(".. the cards: the row last turned", lint_has("LFO RATE") && lint_has("ATTACK") && !lint_has("CUTOFF") &&
+                             lint_check("knobs8 home") == 0u);
+                ui_png("smk_knobs8_home");
+                frames(1600);
+                turn(EN_K1, c > 60 ? -1 : 1);
+                bad |= check(".. K1: the first row's, a long name its short form", field_get(&CUT) != c && lint_has("CUTOFF") && lint_has("RES") &&
+                             lint_has("ENV AMT") && lint_check("knobs8 row 1") == 0u);
+                ui_png("smk_knobs8_row1");
+                frames(1600);
+                engine_load_of(TSEL, ENGI_HYDRA, 1);
+                settle();
+                sc = (uint32_t)field_get(&SC1);
+                ps = (uint32_t)field_get(&PASS);
+                turn(EN_K1, sc > 60u ? -2 : 2);
+                turn(EN_PRESET, ps > 60u ? -2 : 2);
+                bad |= check("SMK 8 KNOBS: HYDRA's eight, SCAN 1 .. PASS", (uint32_t)field_get(&SC1) != sc && (uint32_t)field_get(&PASS) != ps &&
+                             lint_has("SCAN 2") && lint_has("MUT 3") && lint_has("DRIVE") && lint_has("PASS") && lint_check("knobs8 hydra") == 0u);
+                ui_png("smk_knobs8_hydra");
+                frames(1600);
+                engine_load_of(TSEL, ENGI_PROPHET, 1);
+                settle();
+            }
+            press(B_EDIT);
+            frames(1600);
+            frame();
+            {
+                uint32_t st = ui_stop(PL_EDIT);
+                bad |= check("SMK 8 KNOBS: a page opened, its own four, K5 MASTER's again", !smk_knobs8() && !smk_k5_lent());
+                smk_in.k5 = 3; frame();
+                turn(EN_SELECT, 1);
+                bad |= check(".. K6 SELECT again", ui_stop(PL_EDIT) == (st + 1u) % place_of(PL_EDIT).n && !smk_in.k5);
+            }
+            uix.stop[PL_EDIT] = 0;
+            press(B_HOME);
+            smk.kbank = BK_PAGE;
             frames(1600);
 
             /* the faders: ENV by default, away until they cross, never a jump */

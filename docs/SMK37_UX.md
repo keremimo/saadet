@@ -22,15 +22,15 @@ Four things are in play at any moment, each with a default that follows the page
 | --- | --- | --- | --- |
 | Place | as the FM-1 (HOME and the ten places, their pages) | - | the place buttons, SELECT, `<` `>` |
 | Pad bank | CHORDS, SOUNDS, FAVS, PARTS | HOME: CHORDS until chosen, then what was chosen; a page: its own (section 2.4) | KNOB BANK + FADER BANK together: tap (next), held (picker) |
-| Knob bank (K1..K4) | PAGE, MACROS, FILTER, ENV, LFO, ARP, CHORD, MIX | PAGE | KNOB BANK tap (next), held (picker) |
-| Fader bank (faders 1..4) | the same eight | ENV | FADER BANK tap (next), held (picker) |
+| Knob bank (K1..K4) | PAGE, MACROS, FILTER, ENV, LFO, ARP, CHORD, MIX, 8 KNOBS (K1..K8) | PAGE | KNOB BANK tap (next), held (picker) |
+| Fader bank (faders 1..4) | the same, but 8 KNOBS | ENV | FADER BANK tap (next), held (picker) |
 
 The pads, the knobs and the faders are independent. Nothing in the FM-1's navigation changes: a button opens its
 place, again turns its page, SELECT turns it, holding lists what is inside. Momentary states (a button held, a BANK
 button held, SAVE's name) take the pads for as long as they last and give them back.
 
 What stays as Melodee's SMK37.md has it: K1..K4 = the four values at the foot of the screen, K5 MASTER, K6 SELECT,
-K7 ALGORITHM, K8 PRESETS; the page buttons by the printed label (FX = LIBRARY, SCALE, CHORD = ENV, NOTE REPEAT =
+K7 ALGORITHM, K8 PRESETS (except under the 8 KNOBS bank, section 3); the page buttons by the printed label (FX = LIBRARY, SCALE, CHORD = ENV, NOTE REPEAT =
 LFO, PARA = EDIT, GLOBE = GLOBAL, PATCH = HOME, BT = SAVE, ARP, SEQ = CHORD, SEQ PLAY = PLAY, SEQ REC = latch,
 OCTAVE -/+); the keybed (the middle 27 as the FM-1's, the outer 10 more notes); the power-on combos. The printed
 names fit Saadet's places better than they fit Melodee's: CHORD opens the envelopes and SEQ the chords, which is
@@ -98,7 +98,7 @@ These take the pads for as long as they last, whatever the mode, and give them b
 | ARP held | the pedal (as the FM-1): the pads keep their mode; chords struck are sustained | as today |
 | BT (SAVE) with a dump waiting, DELETE armed, ERASE armed | every pad WAITING until the press confirms or the arming cancels | as today |
 | SAVE's name | pad 1..16: the letter groups ABC DEF GHI JKL MNO PQR STU VWX YZ 123 456 789 0.# &+/ - and space: a tap sets the letter under the cursor, another within a second cycles it; K2 moves the cursor | SAVE as today |
-| KNOB BANK or FADER BANK held | top row the eight banks (the current ACTIVE, one the engine lacks OFF), the bottom row dark; a tap picks (`pick_banks`) | the bank picker (section 3) |
+| KNOB BANK or FADER BANK held | top row the eight banks (the current ACTIVE, one the engine lacks OFF), for the knobs pad 9 8 KNOBS, the rest dark; a tap picks (`pick_banks`) | the bank picker (section 3) |
 | KNOB BANK + FADER BANK held | the first four pads CHORDS SOUNDS FAVS PARTS (the current ACTIVE), the rest dark; a tap picks (`pick_pads`) | the pad bank, as a list (section 2.4) |
 
 ### 2.4 The pad bank: what the pads are
@@ -146,8 +146,30 @@ edits follow with no new path:
 | CHORD | CHORD: CHORD VOICING STRUM STROKE | | | |
 | MIX | GLOBAL > OUTPUT: LEVEL PAN SPREAD, and MASTER as K4 (the virtual master, section 6) | | | |
 
-HYDRA's banks: MACROS SCAN MUTANT CUTOFF RESONANCE; FILTER is EDIT > FILTER 1 > CUTOFF: TYPE CUTOFF RES ENV 1; ENV is ENV > ENV 1:
+HYDRA's banks: MACROS SCAN 1 MUTANT 1 CUTOFF RESONANCE; FILTER is EDIT > FILTER 1 > CUTOFF: TYPE CUTOFF RES ENV 1; ENV is ENV > ENV 1:
 ATTACK DECAY SUSTAIN RELEASE; LFO is the common LFO > WAVE.
+
+MACROS is HOME's four, so it follows HOME's row: SELECT on HOME (K6) turns HOME's knobs between the sound's first four macros
+and its other four, as on the FM-1 (`ui_pages.c` `HOME_F`: two rows for each engine).
+
+**8 KNOBS** (added 2026-11-05, at Kerem's asking: a bank on all eight knobs, for HYDRA's eight macros first) is the knobs' alone
+and the last bank, on pad 9 of the picker. K1..K4 are the sound's first four macros, K5..K8 its other four, each under its
+pair:
+
+| | PROPHET | FM6 | CZ-1 | JUNO-106 | HYDRA |
+| --- | --- | --- | --- | --- | --- |
+| K1..K4 | CUTOFF RESONANCE ENV AMOUNT RELEASE | MOD LEVEL MOD RATIO MOD EG DETUNE | VIBRATO LFO RATE GLIDE LEVEL | CUTOFF RESONANCE ENV AMOUNT RELEASE | SCAN 1 MUTANT 1 CUTOFF RESONANCE |
+| K5..K8 | ATTACK (amp) FILT DECAY B FINE LFO RATE | ALGO FEEDBACK VELOCITY LFO SPEED (the FM6's own macros, then its LFO) | WAVE WINDOW (line 1) DETUNE LEVEL 2 | ATTACK LFO RATE VCF LFO PWM | SCAN 2 MUTANT 3 DRIVE PASS |
+
+HYDRA's eight are where its eight macros act (Melodee's SCAN 1, SCAN 2, MUTANT 1 and 3 DEPTH, FILTER 1 CUT, RES, DRIVE, FILTER 2
+MORPH), edited in the patch itself, as every engine's HOME is here: a turn is saved with the sound, sent with it and seen by
+the editor. The macro offsets themselves stay where MIDI's CCs reach them.
+
+While it is in use, MASTER, SELECT, ALGORITHM and PRESETS give way: the board lends K5's detents to the app (`plat_k5_lend`,
+`tools/base_overlay.py`) and the level stays where it is; MIX's K4 and GLOBAL > OUTPUT still set MASTER, `<` `>` still turn
+pages and sounds. It is in use where any bank is (HOME, a page it was picked on, never LIBRARY, SAVE or GLOBAL), and not while
+`<` `>` browse sounds. The strip shows the row turned last: on HOME the cards drop in for 1.5 s as any bank's. A label wider
+than its card shows its short form there (RES, ENV AMT, MOD LVL, MUT 1 ..); HOME's readout over the screen keeps the full name.
 
 LIBRARY, SAVE and GLOBAL keep their own four whatever bank is picked, with no tag: what they edit is not the sound. On every
 other page, opening or turning it shows its own four, so its controls can always be reached: the bank takes over only when it is
@@ -193,7 +215,7 @@ fader reaches, through the same field a knob would.
 | KNOB BANK | next knob bank | the bank picker; + a top-row pad: pick; + `<` `>`: previous / next bank |
 | FADER BANK | next fader bank | the same for the faders |
 | KNOB BANK + FADER BANK | next pad bank | the pad bank; + one of the first four pads: pick; + `<` `>`: previous / next |
-| `<` `>` | one SELECT detent: the previous / next page of the place; on HOME, where SELECT does nothing, the previous / next sound of the engine (PRESETS' step, the sound loads at rest); with the pads on SOUNDS or FAVS, the previous / next 16 | with a BANK button: its bank; with both: the pad bank |
+| `<` `>` | one SELECT detent: the previous / next page of the place; on HOME, where SELECT turns the macros' row, the previous / next sound of the engine (PRESETS' step, the sound loads at rest); with the pads on SOUNDS or FAVS, the previous / next 16 | with a BANK button: its bank; with both: the pad bank |
 
 PATCH held lists the favourites (HOME held). LEDs: KNOB BANK lit off PAGE, FADER BANK lit off ENV, both blink while
 held; ARP flashes with the arp's notes; SEQ REC lit while the latch holds; SEQ (CHORD) lit while a chord type is on;

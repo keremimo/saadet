@@ -90,6 +90,7 @@ typedef struct { uint64_t keys, retrig; uint8_t vel[37]; int32_t bend, mod; uint
 void sd_smk_read(sd_smk_t *s);
 void sd_smk_lights(uint32_t extra, const uint32_t *pad_rgb);
 void sd_master_set(uint32_t q12);
+int32_t sd_k5(int lend);   /* K5 lent (1): its detents since the last call, and it turns no MASTER; 0: MASTER's */
 void sd_smk_config(uint32_t vel, uint32_t trs_off);
 #endif
 

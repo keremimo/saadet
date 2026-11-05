@@ -307,13 +307,21 @@ static ui_place_t place_of(uint32_t p)
     return r;
 }
 
-/* HOME's four macros, the engine's (a turn shows the name and value over the whole screen) */
-static const ui_field_t HOME_F[5][4] = {
-    {FP(P5_CUTOFF, "CUTOFF"), FP(P5_RESONANCE, "RESONANCE"), FP(P5_ENV_FILTER, "ENV AMOUNT"), FP(P5_RELEASE_AMP, "RELEASE")},
-    {FT(P_E2, "MOD LEVEL"), FT(P_E3, "MOD RATIO"), FT(P_E4, "MOD EG"), FT(P_E6, "DETUNE")},
-    {FT(P_LD_PIT, "VIBRATO"), FT(P_LRATE, "LFO RATE"), FT(P_GLIDE, "GLIDE"), FT(P_LEVEL, "LEVEL")},
-    {FJ(J106_VCF_FREQ, "CUTOFF"), FJ(J106_VCF_RES, "RESONANCE"), FJ(J106_VCF_ENV, "ENV AMOUNT"), FJ(J106_ENV_R, "RELEASE")},
-    {FH(HY_O1 + HO_SCAN, "SCAN"), FH(HY_M1 + HM_DEPTH, "MUTANT"), FH(HY_F1_CUT, "CUTOFF"), FH(HY_F1_RES, "RESONANCE")},
+/* HOME's macros, the engine's eight in two rows of four (a turn shows the name and value over the whole screen). HOME's
+ * four knobs edit one row, SELECT on HOME picks which; the SMK-37's 8 KNOBS bank has both at once (ui_smk.c), K5..K8
+ * the second. HYDRA's are the places in the patch its eight macros move, so a turn edits the sound itself, as every
+ * other engine's HOME does */
+static const ui_field_t HOME_F[5][8] = {
+    {FP(P5_CUTOFF, "CUTOFF"), FP(P5_RESONANCE, "RESONANCE"), FP(P5_ENV_FILTER, "ENV AMOUNT"), FP(P5_RELEASE_AMP, "RELEASE"),
+     FP(P5_ATTACK_AMP, "ATTACK"), FP(P5_DECAY_FILTER, "FILT DECAY"), FP(P5_FINE_B, "B FINE"), FP(P5_LFO_RATE, "LFO RATE")},
+    {FT(P_E2, "MOD LEVEL"), FT(P_E3, "MOD RATIO"), FT(P_E4, "MOD EG"), FT(P_E6, "DETUNE"),
+     FT(P_E0, "ALGO"), FT(P_E1, "FEEDBACK"), FT(P_E5, "VELOCITY"), FV(FP_LFS, "LFO SPEED")},
+    {FT(P_LD_PIT, "VIBRATO"), FT(P_LRATE, "LFO RATE"), FT(P_GLIDE, "GLIDE"), FT(P_LEVEL, "LEVEL"),
+     FC(LCZ_LBASE(0) + LCZ_W1, "WAVE"), FC(LCZ_WIN(0), "WINDOW"), FC(LCZ_FINE, "DETUNE"), FC(LCZ_LBASE(1) + LCZ_LEVEL, "LEVEL 2")},
+    {FJ(J106_VCF_FREQ, "CUTOFF"), FJ(J106_VCF_RES, "RESONANCE"), FJ(J106_VCF_ENV, "ENV AMOUNT"), FJ(J106_ENV_R, "RELEASE"),
+     FJ(J106_ENV_A, "ATTACK"), FJ(J106_LFO_RATE, "LFO RATE"), FJ(J106_VCF_LFO, "VCF LFO"), FJ(J106_DCO_PWM, "PWM")},
+    {FH(HY_O1 + HO_SCAN, "SCAN 1"), FH(HY_M1 + HM_DEPTH, "MUTANT 1"), FH(HY_F1_CUT, "CUTOFF"), FH(HY_F1_RES, "RESONANCE"),
+     FH(HY_O2 + HO_SCAN, "SCAN 2"), FH(HY_M3 + HM_DEPTH, "MUTANT 3"), FH(HY_F1_DRIVE, "DRIVE"), FH(HY_F2_MORPH, "PASS")},
 };
 
 /* the buttons' places (panel.c B_*); REC is no place (it latches). FX opens the library */

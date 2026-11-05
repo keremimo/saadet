@@ -17,6 +17,9 @@ This is an experimental release; the outstanding hardware checks are listed belo
   mutants (FM, STACK, SYNC, PW, SQUEEZE, WARP, HARMONIC), ring and noise, two filters and 16 factory sounds. Its voices cost what
   the patch asks: eight of a plain patch, six with a mutant, fewer with heavy stacks, and the budget is bound before a note
   starts. A saved state and performances from before it keep their sounds and gain HYDRA's INIT.
+- Every sound has eight macros, in two rows of four. Turn SELECT on HOME for the second row on K1–K4. On an SMK-37, the new
+  8 KNOBS bank puts all eight on K1–K8 at once; while it is picked, K5–K8 are not MASTER, SELECT, ALGORITHM and PRESETS. On
+  HYDRA the eight are its macros: SCAN 1, MUTANT 1, CUTOFF, RESONANCE, SCAN 2, MUTANT 3, DRIVE and PASS.
 - Overload no longer cuts voices, whatever a stored Melodee SAFETY setting says.
 - The limiter now takes only what goes over -2 dBFS, up from -5 dBFS, so at about 70 % of MASTER's travel a triad no longer
   pushes a held note down, except on JUNO-106. At full MASTER it still takes 1 to 2 dB off a triad on average (about 5 on
@@ -114,6 +117,8 @@ Final acceptance of this exact 0.2.0 package on an FM-1 remains to be recorded:
    Its sound has been measured, not yet judged by ear.
 10. Record eight Prophet voices over USB on an FM-1 and count the repeated frames. So far measured only on an SMK-37 Elite
    (docs/VALIDATION.md).
+11. The 8 KNOBS bank on an SMK-37, turned by hand: K5 to K8 edit the second row while MASTER stays put, and another bank gives
+   K5 back to MASTER. SELECT on HOME on an FM-1.
 
 The preparation tools do not install or publish anything. BUILD_INFO.json and SHA256SUMS identify the exact
 package and corresponding source; VERIFICATION.json records the completed automated preparation checks.
