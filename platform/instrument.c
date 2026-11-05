@@ -212,6 +212,21 @@ static void sd_poll(void)
     }
     sd_connections();
 }
+/* The base's own screens write with three faces (device/sys_text.c: the body, a heading, the big one), on the base's
+ * canvas: Saadet's renderer lent that canvas for one string. The background is the canvas's, as the base cleared it.
+ * Only constant data and the renderer's own state: these screens also run when the instrument has not started. */
+static const aafont_t *sd_sys_face(int face){return face==2?TY_VL:face==1?TY_HD:TY_TX;}
+int32_t saadet_sys_h(int face){return sd_sys_face(face)->h;}
+int32_t saadet_sys_w(int face,const char *s){return text_w(sd_sys_face(face),s);}
+void saadet_sys_text(uint16_t *px,uint32_t w,uint32_t h,int32_t x,int32_t y,int face,const char *s,uint16_t fg){
+    uint16_t *keep_px=cv_px;
+    uint32_t keep_w=cv_w,keep_h=cv_h,keep_top=cv_top,keep_rows=cv_rows;
+    int16_t keep_c0=cv_cy0,keep_c1=cv_cy1;
+    int32_t keep_oy=cv_oy;
+    cv_px=px;cv_w=w;cv_h=h;cv_top=0;cv_rows=h;cv_cy0=0;cv_cy1=(int16_t)h;cv_oy=0;
+    cv_text_flags(x,y,sd_sys_face(face),s,fg,swap16(px[0]),0);
+    cv_px=keep_px;cv_w=keep_w;cv_h=keep_h;cv_top=keep_top;cv_rows=keep_rows;cv_cy0=keep_c0;cv_cy1=keep_c1;cv_oy=keep_oy;
+}
 void saadet_init(void)
 {
     fm1_ms=sd_ms();dsp_tables_init();

@@ -131,7 +131,7 @@ const PRODUCT = 'FM-1_9010000';
   const pinned = `build/deps/fm1-base-${rev}/web`;
   const sha = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
   if (existsSync(pinned)) {
-    for (const f of ['fm1ota.js', 'fm1pkg.js']) assert.equal(sha(`web/install/${f}`), sha(`${pinned}/${f}`), `web/install/${f} differs from fm1-base ${rev}`);
+    for (const f of ['fm1ota.js', 'fm1pkg.js', 'fm1ports.js']) assert.equal(sha(`web/install/${f}`), sha(`${pinned}/${f}`), `web/install/${f} differs from fm1-base ${rev}`);
   } else console.log(`vendored fm1-base files: skipped (no ${pinned}; run ./build.sh)`);
 }
 

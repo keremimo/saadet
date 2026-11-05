@@ -55,6 +55,8 @@ int main(void){
     radio_available=0;screen_check("UNAVAILABLE","ble_unavailable");
     turn(EN_K4,1);assert(retries==2);
     radio_available=1;radio_state=2;
+    device_state=2;screen_check("DEVICE LINK IN USE","ble_device_link_in_use");
+    assert(lint_has("Disconnect the device"));device_state=0;
     turn(EN_K3,1);screen_check("FORGET ALL PAIRINGS?","ble_forget_armed");
     turn(EN_K3,-1);assert(!forget_state);
     turn(EN_K3,1);press(B_SAVE);assert(forget_state==2&&uix.place==PL_GLO);
@@ -76,5 +78,6 @@ int main(void){
     press(B_SAVE);assert(device_state==0&&uix.place==PL_GLO);
     device_state=4;turn(EN_K4,1);assert(device_state==0);
     device_count=0;screen_check("LOOKING FOR DEVICES","ble_devices_empty");
+    radio_link=1;screen_check("COMPUTER CONNECTED","ble_devices_computer");radio_link=0;
     puts("BLE UI: live state, link without MIDI, radio controls, retry and screen layout passed");
 }

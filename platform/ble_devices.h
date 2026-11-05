@@ -53,9 +53,6 @@ void sd_ble_device_choose(int steps){
 const char *sd_ble_device_action(void){
     if(sd_forget==2||plat_ble_state()!=BLE_READY)return "RADIO NOT READY";
     if(btdev_busy())sd_bt_pause();else sd_bt_resume();
-#if FM1B_BLE_CENTRAL && !defined(PLAT_HOST)
-    sd_bt_display=0;
-#endif
     return btdev_word(btdev_save());
 }
 void sd_ble_forget_arm(int on){
@@ -67,7 +64,7 @@ void sd_ble_forget_confirm(void){
     if(sd_forget!=1||plat_ms()-sd_forget_at>=15000u)return;
     sd_forget=2;sd_forget_at=plat_ms();sd_forget_resume=sd_radio_on;
     sd_bt_pause();
-    plat_ble_enable(0); /* let both links finish before removing their bonds */
+    plat_ble_enable(0); /* let the link finish before removing the bonds */
 }
 const char *sd_ble_page(int devices,int pairing){
     const char *message="";
@@ -94,7 +91,8 @@ const char *sd_ble_page(int devices,int pairing){
         }
     }
     btdev_page(devices&&sd_radio_on&&sd_forget!=2);
-    sd_bt_poll(sd_radio_on&&sd_forget!=2);
+    sd_bt_hold(pairing);                          /* GLOBAL > BLE open: no rounds looking for the last device */
+    if(!message[0])message=sd_bt_message();
     if(!btdev_busy())btdev_choose(btdev_pick()); /* a new scan can have fewer devices */
     for(int event;(event=btdev_event())!=BTDEV_NONE;){
         if(!message[0])message=btdev_word(event);

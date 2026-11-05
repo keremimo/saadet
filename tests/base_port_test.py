@@ -30,6 +30,9 @@ prefix='''#include <stdint.h>
 #define FELUCCA_UAC 1
 #define FELUCCA_UAC_OUT 1
 #define FELUCCA_UAC_48K 0
+#define FELUCCA_UAC_MIDI_LAST 1
+#define FELUCCA_UAC_AS_FIRST 0
+#define FELUCCA_UAC_IAD 0
 #define FELUCCA_CDC 0
 #define FELUCCA_USB_LAYOUT 0
 #define FELUCCA_USB_PID 1

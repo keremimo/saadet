@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 // Copyright (C) 2026 Charles Vestal
 // Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+// Copyright (C) 2026 Chris Farrell (checkUfw: from fm-static, github.com/seajaysec/fm-static, MPL-2.0 by his permission, seajaysec/fm-static#1)
 //
 // FM-1 .fwsc packages in the browser: the package identity and the image the
 // device reads during an update.
@@ -26,14 +27,48 @@ export function logicalImage(fwsc) {
   return out;
 }
 
+const T16 = new Uint16Array(256);
+for (let i = 0; i < 256; i++) {
+  let c = i << 8;
+  for (let k = 0; k < 8; k++) c = c & 0x8000 ? (c << 1) ^ 0x1021 : c << 1;
+  T16[i] = c & 0xFFFF;
+}
+const crc16 = (d) => { let c = 0; for (let i = 0; i < d.length; i++) c = ((c << 8) & 0xFFFF) ^ T16[((c >> 8) ^ d[i]) & 0xFF]; return c; };
+const ufwDec = (b, n) => { for (let i = 0, k = 0xFFFF; i < n; i++) { b[i] ^= k & 0xFF; k = ((k << 1) ^ (k & 0x8000 ? 0x1021 : 0)) & 0xFFFF; } return b; };
+
+// the part types whose CRC is crc16 of the part's bytes as stored (bsp/tools/fm1pkg.py ufw() writes types 0 flash.bin
+// and 100 ota.bin so; M-VAVE's V15 stock file has 2 info.log, empty, and 255 tail.bin so too). M-VAVE's other parts
+// (50 USR, 52 isd_config.ini, 161 blimit.bin, 251 script.ver) carry a CRC that is not crc16 of the stored bytes, nor of
+// them deciphered, padded to the entry's size or 512, or seeded 0xFFFF (measured on V15); its scheme is unknown, and
+// the FM-1's loader (bsp chip/ota.c ota_ufw) reads only types 0 and 100 from the list, so those parts are only
+// required to lie inside the image
+const CHECKED_TYPES = new Set([0, 2, 100, 255]);
+
+// a damaged or wrong file, caught before anything is sent: the UFW header's CRC, its entry list's, and each part's
+// (bsp/tools/fm1pkg.py ufw() writes them), for the part types in CHECKED_TYPES; every other part must lie inside
+// the image. Throws an Error saying which; returns nothing when all match
+export function checkUfw(image) {
+  const rd16 = (b, o) => b[o] | (b[o + 1] << 8);
+  const rd32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
+  if (image.length < 0x40) throw new Error("not an FM-1 package (too short)");
+  const h = ufwDec(image.slice(0, 0x40), 0x40);
+  if (crc16(h.subarray(2, 0x40)) !== rd16(h, 0)) throw new Error("not an FM-1 package (header checksum)");
+  const n = rd16(h, 8), end = 0x40 + n * 0x50;
+  if (!n || end > image.length || crc16(image.subarray(0x40, end)) !== rd16(h, 2)) throw new Error("the package's list of parts is damaged");
+  for (let i = 0; i < n; i++) {
+    const e = ufwDec(image.slice(0x40 + i * 0x50, 0x90 + i * 0x50), 0x50);
+    const off = rd32(e, 8), len = rd32(e, 12);
+    const type = rd16(e, 0);
+    if (off + len > image.length) throw new Error(`the package is damaged (part ${type} outside the file)`);
+    if (CHECKED_TYPES.has(type) && crc16(image.subarray(off, off + len)) !== rd16(e, 4))
+      throw new Error(`the package is damaged (part ${type} checksum)`);
+  }
+}
+
 // the UFW entries of a logical image, by type (0 flash.bin, 100 ota.bin): {off, len}. The header and the
 // entry list are ciphered with key 0xFFFF (felucca-bsp chip/ota.c ota_jl_enc); the CRCs are not checked here
 export function ufwEntries(image) {
-  const dec = (off, n) => {
-    const b = image.slice(off, off + n);
-    for (let i = 0, k = 0xFFFF; i < n; i++) { b[i] ^= k & 0xFF; k = ((k << 1) ^ (k & 0x8000 ? 0x1021 : 0)) & 0xFFFF; }
-    return b;
-  };
+  const dec = (off, n) => ufwDec(image.slice(off, off + n), n);
   const rd16 = (b, o) => b[o] | (b[o + 1] << 8);
   const rd32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
   const out = {};

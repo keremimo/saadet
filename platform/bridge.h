@@ -53,6 +53,9 @@ int sd_boot_failed(void);
 #endif
 int sd_power_init(void);
 
+int32_t saadet_sys_h(int face);
+int32_t saadet_sys_w(int face,const char *s);
+void saadet_sys_text(uint16_t *px,uint32_t w,uint32_t h,int32_t x,int32_t y,int face,const char *s,uint16_t fg);
 int sd_ble_connected(void);
 int sd_ble_state(void);
 int sd_ble_linked(void);

@@ -7,7 +7,7 @@
   install/index.html            web/install/index.html, its modules bundled into the page: one file, so a cached
                                 or half-loaded page can never mix two releases' code during an install
   install/release.json          the version, the package identity, file names and SHA-256s the page checks
-  install/fakefm1.js, fm1ota.js the simulated FM-1 for ?demo (loaded only there)
+  install/fakefm1.js, fm1ota.js, fm1ports.js the simulated FM-1 for ?demo (loaded only there)
   firmware/saadet-VERSION.fwsc  the package; also the download
   firmware/m-bootloader-X.Y.fwsc, m-bootloader-LICENSE.txt   the pinned m-bootloader (MIT), offered by the installer
   firmware/SHA256SUMS           every file under firmware/
@@ -42,8 +42,8 @@ from release_support import validate_build, validate_source_archive  # noqa: E40
 
 INSTALL = ROOT / "web/install"
 # the installer's modules, each after those it imports; fakefm1.js stays a file of its own (the demo's)
-MODULES = ("fm1pkg.js", "fm1ota.js", "flow.js", "transfer.js", "keepalive.js", "installer.js")
-VENDORED = ("fm1pkg.js", "fm1ota.js")          # fm1-base's, unchanged
+MODULES = ("fm1pkg.js", "fm1ports.js", "fm1ota.js", "flow.js", "transfer.js", "keepalive.js", "installer.js")
+VENDORED = ("fm1pkg.js", "fm1ports.js", "fm1ota.js")          # fm1-base's, unchanged
 WEB = ("editor.html", "fm1backup.js", "fukiai.ttf", "FUKIAI-LICENSE.txt")
 
 IMPORT = re.compile(r'^import\s*\{([^}]*)\}\s*from\s*"\./([\w.]+)";[ \t]*\n', re.M)
@@ -198,7 +198,7 @@ def main(argv=None):
     page = page.replace("<!-- RELEASE_DOWNLOADS -->", downloads + "</p>")
     (out / "install/index.html").write_text(page.replace(tag, f'<script type="module">\n{bundle(MODULES)}</script>'),
                                             encoding="utf-8")
-    for name in ("fakefm1.js", "fm1ota.js"):
+    for name in ("fakefm1.js", "fm1ports.js", "fm1ota.js"):
         shutil.copyfile(INSTALL / name, out / "install" / name)
 
     for name in WEB:

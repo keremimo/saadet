@@ -20,8 +20,8 @@ if "--legacy" in sys.argv:
     raise SystemExit("The legacy platform is retired; only fm1-base targets are available.")
 
 ROOT=Path(__file__).resolve().parents[1]
-REV="6c0b47e4bfc56fd3cd5b34463210d0e7e0ce0431"
-BSP_REV="0f08fcaa6610b7cabe8cfdcc5c50d6facdae0e7f"
+REV="3c4a57eea659f942b0c80a99949dddafc094a57b"
+BSP_REV="41a6e86d921f842243bd01a48111832f7e55b4e2"
 # The SMK-37 board layer: Kerem's unpushed branches smk37-board-24705d (fm1-base) and smk37-board (felucca-bsp), used
 # from their local worktree until they are pushed. The revisions pin it as REV and BSP_REV pin the FM-1's.
 SMK_REV="0868ac55e03896d0fae56f5fbeb0ba11a28174d9"
@@ -82,10 +82,6 @@ env.setdefault("JIELI_TOOLCHAIN",str(Path.home()/".jieli/toolchain"))
 env.setdefault("AC79_SDK",str(Path.home()/"fw-AC79_AIoT_SDK"))
 out=ROOT/"platform/build"/f"smk37-{model}" if smk else ROOT/"platform/build"
 target="--host" not in build_args and "--web" not in build_args
-# The base copies its SDK files only while ble/sdk/.copied is absent, and the build receipt ignores them, so an old or
-# edited copy would silently outlive a pin or SDK change. Like the overlay above, the copy is disposable.
-if target and (out/"ble/sdk").exists():
-    shutil.rmtree(out/"ble/sdk")
 before = source_state(ROOT)
 run([sys.executable,work/"tools/build.py",ROOT/"platform",*build_args],env=env,cwd=ROOT)
 

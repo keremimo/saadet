@@ -73,7 +73,8 @@ static void pic_build(ui_vm_t *v, const ui_stop_t *st)
         int state = sd_ble_state();
         const char *status = !sd_ble_available() ? "UNAVAILABLE" : !sd_ble_enabled() ? "OFF" :
             state == 0 ? "STOPPED" : state == 1 ? "STARTING" : state == 3 ? "FAILED" :
-            sd_ble_connected() ? "MIDI CONNECTED" : sd_ble_linked() ? "WAITING FOR MIDI" : "ADVERTISING";
+            sd_ble_connected() ? "MIDI CONNECTED" : sd_ble_linked() ? "WAITING FOR MIDI" :
+            sd_ble_device_state() >= 2 ? "DEVICE LINK IN USE" : "ADVERTISING";
         str_cpy(v->ps[0], status, sizeof v->ps[0]);
         str_cpy(v->ps[1], "Saadet", sizeof v->ps[1]);
         if (sd_ble_linked() && !sd_ble_connected()) {
@@ -81,13 +82,16 @@ static void pic_build(ui_vm_t *v, const ui_stop_t *st)
             str_cpy(v->ps[3], "Audio MIDI Setup", sizeof v->ps[3]);
         } else if (sd_ble_connected()) {
             str_cpy(v->ps[2], "MIDI in / out ready", sizeof v->ps[2]);
+        } else if (sd_ble_device_state() >= 2) {          /* one Bluetooth link at a time: the device's */
+            str_cpy(v->ps[2], "Disconnect the device", sizeof v->ps[2]);
+            str_cpy(v->ps[3], "on DEV to connect here", sizeof v->ps[3]);
         } else {
             str_cpy(v->ps[2], "Connect from your", sizeof v->ps[2]);
             str_cpy(v->ps[3], "Bluetooth MIDI app", sizeof v->ps[3]);
         }
         if(sd_ble_forget_state()){
             str_cpy(v->ps[0],sd_ble_forget_state()==1?"FORGET ALL PAIRINGS?":"FORGETTING...",sizeof v->ps[0]);
-            str_cpy(v->ps[2],sd_ble_forget_state()==1?"SAVE confirms":"Closing both links",sizeof v->ps[2]);
+            str_cpy(v->ps[2],sd_ble_forget_state()==1?"SAVE confirms":"Closing the link",sizeof v->ps[2]);
             str_cpy(v->ps[3],sd_ble_forget_state()==1?"K3 back cancels":"",sizeof v->ps[3]);
         }
         break;
@@ -95,7 +99,8 @@ static void pic_build(ui_vm_t *v, const ui_stop_t *st)
     case PIC_BTDEV: {
         int state=sd_ble_device_state(),n=sd_ble_device_count(),pick=sd_ble_device_pick();
         const char *status=sd_ble_state()!=2?"RADIO NOT READY":state==4?"CONNECTED":
-            state==2?"CONNECTING":state==3?"FINDING MIDI":n?"MIDI DEVICES":"LOOKING FOR DEVICES";
+            state==2?"CONNECTING":state==3?"FINDING MIDI":sd_ble_linked()?"COMPUTER CONNECTED":
+            n?"MIDI DEVICES":"LOOKING FOR DEVICES";
         str_cpy(v->ps[0],status,sizeof v->ps[0]);
         v->pv[0]=(int16_t)pick;v->pv[1]=(int16_t)n;v->pv[2]=(int16_t)state;
         if(state>=2&&state<=4){

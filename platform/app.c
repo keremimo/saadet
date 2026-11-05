@@ -145,11 +145,7 @@ void sd_lcd_power(uint32_t s){
 uint32_t sd_master(void){return plat_master();}
 int sd_midi_in(uint32_t *p,int *port){
     if(!plat_midi_in(p,port))return 0;
-#ifdef SAADET_SMK37
     if(*port==PORT_BLE&&plat_midi_in_from()==TO_BLE_DEV)*port=3; /* external device, separate from the phone */
-#else
-    if(*port==PORT_BLE&&(*p&0x10u))*port=3; /* external device, separate from the phone */
-#endif
     *p&=~0xF0u;return 1;
 }
 void sd_midi_out(uint32_t p){plat_midi_send(p,TO_USB|TO_BLE);}
@@ -170,6 +166,12 @@ int sd_sysex_send(const uint8_t *p,uint32_t n){
 #endif
 }
 #include "ble_devices.h"
+#ifdef APP_SYS_TEXT
+/* The base's own screens (boot, crash, safe mode, calibration, the splash) on its canvas, in Saadet's faces. */
+static int32_t app_sys_h(int face){return saadet_sys_h(face);}
+static int32_t app_sys_w(int face,const char *s){return saadet_sys_w(face,s);}
+static void app_sys_text(int32_t x,int32_t y,int face,const char *s,uint16_t c){saadet_sys_text(cv_px,cv_w,cv_h,x,y,face,s,c);}
+#endif
 static int sd_data_ok(uint32_t off,uint32_t n){return SD_DATA_OK(off,n);}
 #ifdef PLAT_HOST
 static uint8_t sd_nor[0x100000];

@@ -59,14 +59,19 @@ slot, spell a name and press SAVE. LIBRARY's last list, PERFORM, loads one when 
 
 ## Bluetooth (experimental platform build)
 
-Saadet can connect to one external Bluetooth MIDI device while also accepting
-one phone/computer connection. Both links support MIDI input and output; keys
-played on Saadet go to both connected destinations. USB remains available.
+Saadet has one Bluetooth link at a time: a phone or computer connected to it, or
+one external Bluetooth MIDI device it connected to. The link carries MIDI both
+ways, and keys played on Saadet go to it. USB remains available. While a computer
+is connected, GLOBAL > DEV shows COMPUTER CONNECTED and does not scan; while a
+device is connected, GLOBAL > BLE shows DEVICE LINK IN USE and a computer cannot
+find Saadet. Disconnect one to use the other.
 
-**GLOBAL > DEV** scans while that page is open. Put the external keyboard,
+**GLOBAL > DEV** scans while that page is open, and a computer cannot find Saadet
+during the scan. Put the external keyboard,
 controller or synth in its Bluetooth MIDI pairing/advertising mode. K1 DEVICE
 selects a discovered device; SAVE or a clockwise turn of K4 LINK connects it.
-The page shows CONNECTING, FINDING MIDI, then CONNECTED after the peer
+A device that does not answer within 10 seconds is given up, so a computer can find
+Saadet again. The page shows CONNECTING, FINDING MIDI, then CONNECTED after the peer
 acknowledges its MIDI notification subscription. If the peer requires pairing,
 accept its pairing prompt within 30 seconds. If PAIRING CODE appears, enter
 that six-digit code on the other device; leading zeros are part of the code.
@@ -85,25 +90,24 @@ WAITING FOR MIDI means the link is up but the host has not enabled MIDI:
 on Mac, quit and reopen Audio MIDI Setup, turn RETRY, then Connect again.
 
 To forget saved bonds, turn **K3 FORGET clockwise** on GLOBAL > BLE, then
-press **SAVE** while FORGET ALL PAIRINGS? is displayed. This disconnects both
-BLE links and clears **all** saved BLE pairings on Saadet, preserving radio
-address/calibration and sounds. Turn K3 back, leave the page, or wait 15 seconds
+press **SAVE** while FORGET ALL PAIRINGS? is displayed. This ends the BLE link
+and clears **all** saved BLE pairings on Saadet, preserving the radio address and
+sounds. Turn K3 back, leave the page, or wait 15 seconds
 to cancel before confirmation. FORGET FAILED means the operation did not
-complete; PAIRINGS CLEARED means the SDK accepted the clear. Forget Saadet on
+complete; PAIRINGS CLEARED means it was saved. Forget Saadet on
 the other device as well if it still remembers the old bond, then reconnect.
 
 Saadet accepts optional Just Works pairing for incoming connections. Its
 outgoing MIDI client supports a displayed code for authenticated pairing and requests
 pairing when a MIDI read or subscription returns an authentication/encryption
-error, without forcing it on devices that do not require it. It does not automatically reconnect an external device at
-boot; select and connect it from DEV. The initial MIDI read is attempted first; if it is unsupported, or still
-rejected after encrypted security retries, setup tries the actual notification
-subscription. Only the peer's subscription acknowledgement shows CONNECTED.
+error, without forcing it on devices that do not require it. After boot it looks for the last
+device that reached CONNECTED, 10 seconds of scanning every 30 seconds, and connects when it hears it, also behind a private
+address. A computer can connect between those rounds, and there are none while GLOBAL > BLE is open. A lost link is looked for
+again; a refused pairing or a code nobody entered is not, and the page says why: PAIRING FAILED, FORGET ON PEER (forget Saadet
+on the other device), NO MIDI SERVICE or CONNECTION TIMEOUT. Only the peer's subscription acknowledgement shows CONNECTED.
 
-Fresh displayed-code pairing with midimittr advertising on iPhone has been
-confirmed on hardware. When replacing an earlier Just Works bond, forget
-Saadet on the phone (if listed) and clear Saadet's saved pairings from the
-BLE page before pairing again. This clears all saved BLE peers on Saadet.
+Saadet's Bluetooth is the base's own open stack since this build, so bonds made on an earlier build are gone and the radio
+address has changed: forget Saadet on the phone or computer once and connect again.
 
 ## Importing SysEx
 
@@ -179,9 +183,8 @@ through the base's boot/crash guard. Physical keyboard notes are also sent to
 connected USB/BLE hosts.
 
 **GLOBAL > MIDI K3 THRU** (device setting, default OFF) also sends incoming
-MIDI out again: USB to BLE, TRS to USB and BLE, and either BLE link to USB.
-BLE input does not go back out over BLE, because the base sends BLE output to
-the phone and the external device together and would echo it to its source.
+MIDI out again: USB to BLE, TRS to USB and BLE, and the BLE link to USB.
+BLE input does not go back out over BLE, which would echo it to its source.
 When a BLE link drops or THRU is turned off, notes and sustain it passed on
 are released at their destination. When an out queue is nearly full,
 pressure, pitch bend and continuous controllers are dropped first. SysEx is

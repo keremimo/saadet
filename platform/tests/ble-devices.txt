@@ -1,4 +1,5 @@
 wait 1200
+# The simulator keeps both links; the FM-1 and SMK-37 have one at a time (platform/ble_own.h, ui_ble_test covers its pages).
 # The peripheral can stay connected while Saadet scans for a MIDI peripheral.
 ble connect
 expect ble 1

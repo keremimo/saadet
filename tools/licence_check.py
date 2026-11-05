@@ -27,7 +27,8 @@ BOARD_DEFINES = ["-DPLAT_SMK37=1", "-DPLAT_SMK37_MODEL=2", "-DSAADET_SMK37=1"] i
 
 # All four former exceptions have independent replacements; see docs/cleanroom/preferences-process.md.
 KNOWN_GPL = {}
-ALLOWED = {"MPL-2.0", "MPL-2.0 AND Apache-2.0", "MIT", "BSD-3-Clause", "Apache-2.0"}
+ALLOWED = {"MPL-2.0", "MPL-2.0 AND Apache-2.0", "MIT", "BSD-3-Clause", "Apache-2.0",
+           "GPL-3.0-only OR MPL-2.0"}   # the Bluetooth stack (platform/ble): taken under MPL-2.0
 SPDX = re.compile(r"SPDX-License-Identifier:\s*(.+?)\s*(?:\*/)?$", re.M)
 
 
@@ -52,6 +53,8 @@ def compiled():
             path = Path(os.path.normpath(ROOT / dep))
             if path.is_relative_to(ROOT) and not path.is_relative_to(ROOT / "build") and path.exists():
                 files.add(str(path.relative_to(ROOT)))
+    # the Bluetooth stack: tools/base_overlay.py copies it into the base, so no dependency above leads to it here
+    files.update(str(f.relative_to(ROOT)) for f in (ROOT / "platform/ble").rglob("*") if f.is_file())
     return files
 
 

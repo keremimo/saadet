@@ -21,9 +21,11 @@ assert sym('_start')==0x02000120
 # helpers. Initialize code and pointer data before the first platform call.
 boot=(BASE/'device/main_fm1.c').read_text().split('void fm1_cstart(void)',1)[1]
 first=boot.index('    fm1_time_init();')
-for marker in ('d = _bss_start','d = _pool_start','s = _data_load','s = _rt_load','s=_sd_audio_load'):
+for marker in ('d = _bss_start','boot_image(_rt_load','at, _data_start','at, _sd_audio_start','d = _pool_start','d = _sd_audio_end'):
     assert boot.index(marker)<first,f'boot uses resident helpers before initialization: {marker}'
-assert boot.index('d = _pool_start')<boot.index('s=_sd_audio_load'),'POOL clear wipes resident code'
+# .audio_text lies in the pool: the clear goes around it, and only after the decoder's tables at the pool's start are done.
+assert boot.index('at, _sd_audio_start')<boot.index('d = _pool_start'),'POOL clear leaves the decoder tables behind'
+assert 'd < _sd_audio_start' in boot and 'd < _pool_end' in boot.split('d = _sd_audio_end',1)[1][:40],'POOL clear wipes resident code'
 # CPU1 executes mask-ROM before our entry. PC limits may be armed only once
 # app_init's bounded handshake has returned (ready, skipped, or held timeout).
 main=(BASE/'device/main_fm1.c').read_text()
@@ -52,11 +54,20 @@ for name in ('saadet_render','audio_worker_loop','fm1_core1_main'):
 dis=(OUT/'saadet.dis').read_text()
 body=dis.split('\naudio_worker_loop:',1)[1].split('\n\n',1)[0]
 assert not re.search(r'\bcall -?\d+',body),'CPU1 idle loop contains an outlined helper'
-# The resident section must actually be part of the install image.
+# Every load image must actually be part of the install image, and unpack to what was linked.
 image=(OUT/'saadet.bin').read_bytes()
-packed=(OUT/'audio.bin').read_bytes()
-at=sym('_sd_audio_load')-sym('_start')
-assert len(packed)==hi-lo and image[at:at+len(packed)]==packed
+sys.path.insert(0,str(BASE/'tools'))
+import boot_pack
+import lzma
+assert boot_pack.SECTIONS==('ramtext.bin','data.bin','audio.bin'),'the boot unpacks three images'
+records=boot_pack.unpack_images(image[sym('_rt_load')-sym('_start'):],3)
+for section,(size,stream) in zip(boot_pack.SECTIONS,records):
+    raw=(OUT/section).read_bytes()
+    assert size==len(raw) and lzma.decompress(stream,format=lzma.FORMAT_RAW,filters=boot_pack.FILTERS)==raw,f'{section} does not unpack'
+assert records[2][0]==hi-lo,'.audio_text unpacks to its whole section'
+# The decoder's tables lie at the pool's start while it writes .audio_text further up.
+assert lo-sym('_pool_start')>=8192*2,'the boot decoder tables overlap .audio_text'
+assert len(image)<=sym('_app_xip_end')-sym('_start'),'the packed image overruns the app slot'
 assert sym('_bss_end')<=0x1c20000
 # The USB recording's ring: the deep one (app.h FM1B_UAC_DEEP), 1024 native frames, in POOL and not in low RAM.
 ring=re.search(r'^[0-9a-f]+ l\s+\.pool\s+([0-9a-f]+) ua_ring$',syms,re.M)

@@ -64,6 +64,7 @@ def load_updater():
     path = BASE / "tools/fm1_install.py"
     spec = importlib.util.spec_from_file_location("saadet_base_updater", path)
     module = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, str(BASE / "tools"))   # its own modules (fm1ports)
     spec.loader.exec_module(module)
     return module
 

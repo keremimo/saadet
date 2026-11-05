@@ -166,7 +166,7 @@ Each step ends with a measurable "done". Hardware steps need Kerem's Elite and a
    | --- | --- | --- | --- | --- |
    | Prophet banks (`OBJ_P5BANK0`..+4) | 10 | 0x93000-0x9CFFF | 0xA3000-0xACFFF | `FL_XDATA1` |
    | Last state (`OBJ_SYNTH`) | 2 | 0xA0000, 0xA1000 | 0xA1000, 0xA2000 | `FL_AUTO` |
-   | Performances (`OBJ_PERF0`..+5) | 12 | 0xA8000-0xB3FFF | 0xAD000-0xB8FFF | `FL_XDATA1` |
+   | Performances (`OBJ_PERF0`..+5) | 12 | 0xA8000-0xB3FFF | 0xAD000-0xB8FFF but 0xAF000, and 0xB9000 | `FL_XDATA1` |
    | FM6 bank (`OBJ_FM6BANK`) | 2 | 0x9F000, 0xFE000 | 0xE0000, 0xE1000 | `FL_DATA` |
    | FM6 user slots (`OBJ_UPFM6_EXT`) | 2 | 0xE9000, 0xFA000 | 0xE9000, 0xE2000 | `FL_DATA` |
    | Settings (`OBJ_SETTINGS`) | 2 | 0xFC000, 0xFD000 | 0xEB000, 0xEC000 | `FL_GLOB` |
@@ -180,8 +180,10 @@ Each step ends with a measurable "done". Hardware steps need Kerem's Elite and a
    Why each moved: 0x93000-0x9CFFF is the SMK's app area; 0xFA000 and 0xFC000-0xFDFFF are its protected USR window;
    0xFE000 is outside every window the board's flash driver writes; the platform pairs need a window the base's store
    accepts (`FL_STORE_OK`). The update loader reads bytes 0xF00.. of a sector as a possible record, so only objects
-   that leave their last 256 bytes erased sit in the XDATA windows, which is why the FM6 bank moved to `FL_DATA`. Free
-   after this: 0xE3000-0xE4FFF, 0xED000, 0x9F000-0xA0FFF, 0xAD000-0xBAFFF.
+   that leave their last 256 bytes erased sit in the XDATA windows, which is why the FM6 bank moved to `FL_DATA`. 0xAF000
+   is the board's owner tag (`FL_OWNER`): a save there would read as another firmware's store at the next boot, and every
+   window would be cleared. Free after this: 0x9F000-0xA0FFF, 0xBA000, 0xE3000-0xE4FFF, 0xED000, and, outside every
+   window the board's driver writes today, 0xEE000-0xF3FFF and 0xFE000: 13 sectors, 52 KB, for new engines' banks.
 4. **Controls.** Velocity from keys and pads (the USRTRIM curves), faders, wheels, pedal, TRS out, pad LEDs.
    Done: each one measured on the unit (USB test scripts for the velocity's timing).
 5. **UX phase 1: banks** (knobs, faders, picker, gauge, tags). Ships alone.
@@ -192,7 +194,8 @@ Each step ends with a measurable "done". Hardware steps need Kerem's Elite and a
    `RELEASE_NOTES.md`. The Pro and MKE-P37 packages ship marked untried until a unit of each has run them.
 
 Image size is not the constraint it was for Melodee: the SMK app area (0x9D000) is 40 KiB larger than the FM-1's
-(0x93000), and Saadet is the smaller firmware. RAM is the FM-1's; the pad state and maps are under 200 bytes.
+(0x93000), and Saadet is the smaller firmware, about 180 KB under its slot. RAM is the FM-1's; the pad state and maps are
+under 200 bytes.
 
 ## 5a. Audit against Melodee's SMK-37 build (2026-11-05, nightly `3fe570d2`)
 
@@ -243,8 +246,8 @@ mode (sysex `F0 22 24 35 7D F7`, needs sudo on macOS; the tool must already be w
 
 - **Audio path.** The stock Pro's USB audio is mono; Saadet's base does stereo in both directions on the FM-1. The
   codec pins may differ. Step 2 measures before anything depends on it.
-- **Bluetooth.** The chip is the same and the BT button exists on every model, but BLE on an SMK has not run any
-  open firmware yet. The base's radio code reads its address from the store object `OBJ_BLE`; the SMK keeps its
+- **Bluetooth.** The chip is the same and the BT button exists on every model. Saadet runs the base's own stack, as Melodee's
+  SMK-37 port runs its copy of it. The base's radio code keeps its address in the store object `OBJ_BLE`; the SMK keeps its
   pairing data in BTIF (0xC0000), which the port never writes.
 - **MASTER.** The FM-1's pot is K5, an encoder, on the SMK: a virtual master kept with the settings, shown on
   GLOBAL > OUTPUT.

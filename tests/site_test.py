@@ -33,7 +33,7 @@ class SiteTest(unittest.TestCase):
 
     def test_files_and_checksums(self):
         o, m = self.out, self.meta
-        for f in (".nojekyll", "index.html", "editor.html", "manual/index.html", "install/fakefm1.js", "install/fm1ota.js",
+        for f in (".nojekyll", "index.html", "editor.html", "manual/index.html", "install/fakefm1.js", "install/fm1ota.js", "install/fm1ports.js",
                   "firmware/m-bootloader-LICENSE.txt", "firmware/SHA256SUMS", "firmware/LICENSE",
                   "firmware/LICENSING.md", "firmware/SOURCES.txt", "firmware/LICENSES/MPL-2.0.txt",
                   "firmware/LICENSES/GPL-3.0-only.txt", "firmware/LICENSES/upstream/fm1-base/LICENSE",

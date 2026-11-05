@@ -79,6 +79,9 @@ static int map_test(void)
     uint32_t obj, copy, live = 0, pairs = 0;
     int bad = 0, ok = 1;
     memset(used, 0, sizeof used);
+#ifdef SAADET_SMK37
+    used[FL_OWNER / ST_SECTOR] = 1;                /* the board's owner tag: a save there wipes every window at next boot */
+#endif
     for (obj = 0; obj < OBJ_COUNT; obj++) {
         if (st_retired(obj)) continue;
         for (copy = 0; copy < 2u; copy++) {

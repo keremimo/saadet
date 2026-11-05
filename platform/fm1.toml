@@ -9,12 +9,16 @@ include = ["../firmware/src", "../build/gen"]
 words = "words.tsv"
 ble = true
 ble_central = true
+ble_stack = "own"
+ble_pairing = true
 usb_audio_in = true
 usb_audio_out = true
+boot_pack = true
 licence = "MPL-2.0"
 # Repository firmware sources are MPL/permissive; third-party terms are in LICENSING.md.
 
-# The base explicitly supports separate app-owned CPU1 hardware glue.
-vendored = ["hardware/"]
+# The base explicitly supports separate app-owned CPU1 hardware glue, and the Bluetooth stack and its radio drivers
+# (tools/base_overlay.py copies them into the base's bt/ble and bsp/chip).
+vendored = ["hardware/", "ble/"]
 
 ir_pass = "tools/ir_pass.py"

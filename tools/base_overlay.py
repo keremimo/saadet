@@ -2,11 +2,12 @@
 # Copyright (C) 2026 Kerem Kilic (Ellic Studio)
 """Checked adaptations of the pinned base; upstream files keep their notices.
 
-Two bases are pinned (tools/build_base.py): the FM-1's, and the newer one with the SMK-37 board layer. A patch that
-no longer matches its base fails the build. Where the two differ, a patch has an SMK equivalent or, where the SMK has
-nothing to patch, is skipped on purpose; each such place says so.
+Two bases are pinned (tools/build_base.py): upstream's for the FM-1, and the same commit with the SMK-37 board layer on
+top. A patch that no longer matches its base fails the build. Where the boards differ, a patch is skipped on purpose,
+and each such place says so.
 """
 from pathlib import Path
+import shutil
 
 
 def replace(s, old, new):
@@ -34,7 +35,7 @@ def function(s, name, body):
     return s[:start] + body.rstrip() + s[end:]
 
 
-def patch_usb(s, board="fm1"):
+def patch_usb(s):
     # Native stereo frames throughout both rings; format conversion at USB only.
     s = replace(s, '#define UAC_MAXP (UA_MAXF * 4u)', '#define UAC_MAXP (UA_MAXF * 6u)')
     s = replace(s, 'static uint32_t ua_ring[UA_N] FELUCCA_UAC_RING_ATTR;',
@@ -46,7 +47,6 @@ def patch_usb(s, board="fm1"):
     s = replace(s, 'static uint32_t uo_ring[UO_N];', 'static sd_pcm_frame uo_ring[UO_N] __attribute__((section(".pool")));')
     s = replace(s, 'static uint32_t ep4rx[UO_MAXF + 1u]', 'static uint32_t ep4rx[(UO_MAXP + 3u) / 4u + 1u]')
     # Both widths are selectable per direction; all formats remain 44.1 kHz.
-    marker = '#define D_AUDIO(a) D_AC(a) D_MIDI((a) + 1) D_AS((a) + 2) D_ASO((a) + 3)'
     alt = '''#define SD_AS24(s, terminal, ep, attr) \\
     9, 4, (s), 2, 1, 1, 2, 0, 0, \\
     7, 0x24, 1, (terminal), 1, 1, 0, \\
@@ -64,22 +64,17 @@ def patch_usb(s, board="fm1"):
 #define SD_PLAY24(s)
 #endif
 #define D_AUDIO(a) D_AC(a) D_MIDI((a) + 1) D_AS((a) + 2) SD_CAP24((a)+2) D_ASO((a) + 3) SD_PLAY24((a)+3)'''
-    if board == "smk37":
-        # The newer base numbers the interfaces (IF_AS, IF_ASO, IF_MIDI) and may put MIDI last; its AC header takes
-        # the terminals' length as a parameter.
-        alt = alt[:alt.rindex('#define D_AUDIO')]
-        s = replace(s, '/* audio + MIDI from interface a, in the order FELUCCA_UAC_MIDI_LAST picks */',
-                    alt + '/* audio + MIDI from interface a, in the order FELUCCA_UAC_MIDI_LAST picks */')
-        s = replace(s, '#define D_AUDIO(a) D_AC(a) D_AS((a) + IF_AS) D_ASO((a) + IF_ASO) D_MIDI((a) + IF_MIDI)',
-                    '#define D_AUDIO(a) D_AC(a) D_AS((a) + IF_AS) SD_CAP24((a)+IF_AS) D_ASO((a) + IF_ASO) SD_PLAY24((a)+IF_ASO) D_MIDI((a) + IF_MIDI)')
-        s = replace(s, '#define D_AUDIO(a) D_AC(a) D_MIDI((a) + IF_MIDI) D_AS((a) + IF_AS) D_ASO((a) + IF_ASO)',
-                    '#define D_AUDIO(a) D_AC(a) D_MIDI((a) + IF_MIDI) D_AS((a) + IF_AS) SD_CAP24((a)+IF_AS) D_ASO((a) + IF_ASO) SD_PLAY24((a)+IF_ASO)')
-        s = replace(s, '#define AUD_LEN (92 + (63 + FMT_LEN) * FELUCCA_UAC + 74 * FELUCCA_UAC_OUT - (FELUCCA_UAC_MIDI_LAST == 2))',
-                    '#define AUD_LEN (92 + (106 + FMT_LEN) * FELUCCA_UAC + 117 * FELUCCA_UAC_OUT - (FELUCCA_UAC_MIDI_LAST == 2))')
-    else:
-        s = replace(s, marker, alt)
-        s = replace(s, '#define AUD_LEN (92 + (63 + FMT_LEN) * FELUCCA_UAC + 74 * FELUCCA_UAC_OUT)',
-            '#define AUD_LEN (92 + (106 + FMT_LEN) * FELUCCA_UAC + 117 * FELUCCA_UAC_OUT)')
+    # The base numbers the interfaces (IF_AS, IF_ASO, IF_MIDI) and may put MIDI last; its AC header takes the terminals'
+    # length as a parameter.
+    alt = alt[:alt.rindex('#define D_AUDIO')]
+    s = replace(s, '/* audio + MIDI from interface a, in the order FELUCCA_UAC_MIDI_LAST picks */',
+                alt + '/* audio + MIDI from interface a, in the order FELUCCA_UAC_MIDI_LAST picks */')
+    s = replace(s, '#define D_AUDIO(a) D_AC(a) D_AS((a) + IF_AS) D_ASO((a) + IF_ASO) D_MIDI((a) + IF_MIDI)',
+                '#define D_AUDIO(a) D_AC(a) D_AS((a) + IF_AS) SD_CAP24((a)+IF_AS) D_ASO((a) + IF_ASO) SD_PLAY24((a)+IF_ASO) D_MIDI((a) + IF_MIDI)')
+    s = replace(s, '#define D_AUDIO(a) D_AC(a) D_MIDI((a) + IF_MIDI) D_AS((a) + IF_AS) D_ASO((a) + IF_ASO)',
+                '#define D_AUDIO(a) D_AC(a) D_MIDI((a) + IF_MIDI) D_AS((a) + IF_AS) SD_CAP24((a)+IF_AS) D_ASO((a) + IF_ASO) SD_PLAY24((a)+IF_ASO)')
+    s = replace(s, '#define AUD_LEN (92 + (63 + FMT_LEN) * FELUCCA_UAC + 74 * FELUCCA_UAC_OUT - (FELUCCA_UAC_MIDI_LAST == 2))',
+                '#define AUD_LEN (92 + (106 + FMT_LEN) * FELUCCA_UAC + 117 * FELUCCA_UAC_OUT - (FELUCCA_UAC_MIDI_LAST == 2))')
     s = replace(s, 'wvalue <= 1u && usb.config', 'wvalue <= 2u && usb.config')
     s = replace(s, 'uac.last = 0;', 'uac.last = (sd_pcm_frame){0,0};')
     s = replace(s, 'ua_ring[(r + i) & (UA_N - 1u)] = 0;', 'ua_ring[(r + i) & (UA_N - 1u)] = (sd_pcm_frame){0,0};')
@@ -143,10 +138,7 @@ static void sd_pcm_write(uint8_t *p,uint32_t width,int32_t v)
     s = replace(s, '(float)(int16_t)(a >> 16) + ((float)(int16_t)(b >> 16) - (float)(int16_t)(a >> 16))', '(float)a.r + ((float)b.r - (float)a.r)')
     s = replace(s, 'fm1_usb_ep4_send(ep4tx, n * 4u);', 'fm1_usb_ep4_send(ep4tx, n * (uac.alt==2u?6u:4u));')
     # Saadet's standard playback master mute/volume stays available to the OS.
-    if board == "smk37":
-        s=replace(s,'D_AC_HEADER((a), 42)','D_AC_HEADER((a), 52)')
-    else:
-        s=replace(s,'0x01, 53, 0, 3,','0x01, 63, 0, 3,')
+    s=replace(s,'D_AC_HEADER((a), 42)','D_AC_HEADER((a), 52)')
     s=replace(s,'9, 0x24, 3, 4, 0x01, 0x03, 0, 3, 0,', '10, 0x24, 6, 5, 3, 1, 3, 0, 0, 0, 9, 0x24, 3, 4, 0x01, 0x03, 0, 5, 0,')
     s=replace(s,'117 * FELUCCA_UAC_OUT', '127 * FELUCCA_UAC_OUT')
     s=replace(s,'static void ep0_service(void)', '#if FELUCCA_UAC_OUT\n#include "usb_volume.h"\n#endif\nstatic void ep0_service(void)')
@@ -183,18 +175,13 @@ def smk37_toml(source, model, name):
 
 def smk37_linker(source):
     """platform/app.ld (Saadet's sections) with the SMK's app slot, as the base's device/app_smk37.ld has it."""
-    text = replace(source, 'XIP    (rx)  : ORIGIN = 0x02000120, LENGTH = 0x8DFBC',
-                   'XIP    (rx)  : ORIGIN = 0x02000120, LENGTH = 0xA7FBC')
-    return replace(text, '    .pool (NOLOAD) :', '    _app_xip_end = ORIGIN(XIP) + 0x97FBC;\n    .pool (NOLOAD) :')
+    text = replace(source, 'XIP    (rx)  : ORIGIN = 0x02000120, LENGTH = 0xADFBC /* the app slot (0x8DFBC) and 128 KB',
+                   'XIP    (rx)  : ORIGIN = 0x02000120, LENGTH = 0xB7FBC /* the app slot (0x97FBC) and 128 KB')
+    return replace(text, '_app_xip_end = ORIGIN(XIP) + 0x8DFBC;', '_app_xip_end = ORIGIN(XIP) + 0x97FBC;')
 
 
 def apply(work, board="fm1", model=None, product="Saadet"):
     smk = board == "smk37"
-    # BLE-only builds have no sys_timer task. SDK timers naming that service
-    # belong to the main-loop timer pump, as unnamed BLE timers already do.
-    p=work/'ble/shim/systimer.c';s=p.read_text()
-    s=replace(s,'            tm[i].task = task;', '''            tm[i].task = !SHIM_WIFI && task && !strcmp(task, "sys_timer") ? 0 : task;''')
-    p.write_text('/* Saadet timer routing Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
     if smk:
         # The main loop starts after the jack's settling window (the boot's own delays are most of it), so the rest level
         # was never read: it stayed 0, any reading above the step read as the pedal down, sustain on for the first minute.
@@ -204,7 +191,6 @@ def apply(work, board="fm1", model=None, product="Saadet"):
             '    if (fm1_in.frames < SMK_SETTLE_FRAMES)\n        return;\n    if (!smk_pc) {\n        smk_pedal_rest = r;\n')
         p.write_text('/* Saadet pedal rest fix Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
     p=work/'tools/build.py';s=p.read_text()
-    s=replace(s,'("data.bin", "_data_load")):', '("data.bin", "_data_load"), ("audio.bin", "_sd_audio_load")):')
     s=replace(s,'    img = bytearray((OUT / "text.bin").read_bytes())', '    tc("common/bin/objcopy", "-O", "binary", "-j", ".audio_text", elf, OUT / "audio.bin")\n    img = bytearray((OUT / "text.bin").read_bytes())')
     s=replace(s,'    (OUT / (NAME + ".dis")).write_text(dis)', '    (OUT / (NAME + ".dis")).write_text(dis)\n    (OUT / (NAME + ".symbols")).write_text(syms)')
     if smk:
@@ -213,18 +199,22 @@ def apply(work, board="fm1", model=None, product="Saadet"):
         s=replace(s,'CONF = read_conf(APP / "fm1.toml")','CONF = read_conf(SRC / "saadet-fm1.toml")')
         s=replace(s,'    OUT = APP / "build"\n','    OUT = APP / "build" / f"smk37-{MODEL}"\n')
     p.write_text(s)
+    # boot_pack: the resident audio code is a load image too, and much the largest. Its own record after .data's.
+    p=work/'tools/boot_pack.py';s=p.read_text()
+    s=replace(s,"SECTIONS = ('ramtext.bin', 'data.bin')","SECTIONS = ('ramtext.bin', 'data.bin', 'audio.bin')")
+    p.write_text(s)
     p=work/'bsp/chip/fm1_guard.h';s=p.read_text()
     s=replace(s,'re = (uint32_t)(uintptr_t)_rt_end;', 're = (uint32_t)(uintptr_t)_sd_exec_end;')
     s=replace(s,'static void fm1_guard_enable(', 'extern uint32_t _sd_exec_end[];\nstatic void fm1_guard_enable(')
     p.write_text(s)
-    p=work/'bsp/chip/usb.c';s=patch_usb(p.read_text(),board);p.write_text('/* Saadet integration modifications Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
+    p=work/'bsp/chip/usb.c';s=patch_usb(p.read_text());p.write_text('/* Saadet integration modifications Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
     p=work/'device/main_fm1.c';s=p.read_text()
     # Use Melodee's complete stock V15 supply sequence and checked result,
     # rather than the base's two-rail-only raises. CPU1 stays held until the
     # DCDC/LDO mode, IO supplies and CPU/SRAM supplies have all verified.
     start=s.index('        for (rails_tries = 1;')
-    # The newer base starts the stock 360 MHz clock here too: the SMK keeps that, and only the supplies are Saadet's.
-    end=s.index('        fm1_clock_read(clock_boot);' if smk else '        flash_ok =',start)
+    # The base starts the stock 360 MHz clock here too: that stays, and only the supplies are Saadet's.
+    end=s.index('        fm1_clock_read(clock_boot);',start)
     s=s[:start]+'        rails_tries = 1;\n        sd_power_init(); /* Melodee stock V15 power setup; CPU1 held, IRQs off */\n'+s[end:]
     # Melodee firmware/src/main.c defers the PC limits until CPU1's bounded
     # handshake returns: CPU1 first executes mask-ROM outside our XIP/SRAM
@@ -245,32 +235,37 @@ def apply(work, board="fm1", model=None, product="Saadet"):
         '        for (k = (int)FM1_CRASH_CTX_N - 1;')
     s=replace(s,'static void render_block(int32_t *o)','#include "ceiling.h"\nstatic void render_block(int32_t *o)')
     ceiling='            sd_ceiling(o + 2u * k, REND_FRAMES); /* physical -6 dB ceiling after native USB capture/playback */\n'
-    if smk:
-        # The newer base's device/uac_mix.h already takes the capture before the computer's audio: only the ceiling.
-        s=replace(s,'#if FM1B_BT_AUDIO\n            if (own_bta_feed(', ceiling+'#if FM1B_BT_AUDIO\n            if (own_bta_feed(')
-        s=replace(s,'    us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;', '    us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;\n    saadet_deadline(us,budget);')
-    else:
-        start=s.index('#if FELUCCA_UAC_OUT\n            uac_play(');end=s.index('            if (full)',start)
-        s=s[:start]+'''#if FELUCCA_UAC
-            uac_tap(o + 2u * k, REND_FRAMES); /* synth capture precedes computer playback */
-#endif
-#if FELUCCA_UAC_OUT
-            uac_play(o + 2u * k, REND_FRAMES, full ? 4096u : master_pos * master_pos >> 12);
-#endif
-'''+s[end:]
-        s=replace(s,'    us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;', '    us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;\n    saadet_deadline(us,budget);')
-        s=replace(s,'            if (full) {', ceiling+'            if (full) {')
+    # The base's device/uac_mix.h already takes the capture before the computer's audio: only the ceiling.
+    s=replace(s,'#if FM1B_BT_AUDIO\n            if (own_bta_feed(', ceiling+'#if FM1B_BT_AUDIO\n            if (own_bta_feed(')
+    s=replace(s,'    us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;', '    us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;\n    saadet_deadline(us,budget);')
+    # The stack's counters on the log are BLE_DIAG's, which Saadet builds without (Melodee's setting).
+    s=replace(s,"#if FM1B_BLE_OWN\n    {   /* the own stack's link layer:","#if FM1B_BLE_OWN\n#if BLE_DIAG\n    {   /* the own stack's link layer:")
+    s=replace(s,"        log_line_send(b);\n    }\n#else\n    {   /* the radio's tasks' deepest stacks","        log_line_send(b);\n    }\n#endif\n#else\n    {   /* the radio's tasks' deepest stacks")
     # The platform's render/tick closure includes P33 and matrix helpers also
     # used during early boot. Initialize their code AND far-call pointers before
     # the first platform helper executes; clear POOL before copying code into it.
     start=s.index('void fm1_cstart(void)')
     clear=s.index('    for (d = _bss_start;',start)
     end=s.index('    fm1_mailbox_clear();',clear)
-    init=s[clear:end]+"    for(s=_sd_audio_load,d=_sd_audio_start;d<_sd_audio_end;s++,d++)*d=*s;\n"
+    init=s[clear:end]
+    # Every load image is packed (fm1.toml boot_pack), and a build that is not fails at its checks: the plain copy goes.
+    # .audio_text lies in the pool: the decoder's tables at its start are cleared after, around the code just unpacked.
+    i=init.index('    if (_rt_load[0] == BOOT_LZMA_MAGIC) {')
+    init=init[:i]+'''    {
+        const uint32_t *at = boot_image(_rt_load, _rt_start, _rt_end);
+        at = boot_image(at, _data_start, _data_end);
+        (void)boot_image(at, _sd_audio_start, _sd_audio_end);
+    }
+    for (d = _pool_start; d < _sd_audio_start; d++)
+        *d = 0;
+    for (d = _sd_audio_end; d < _pool_end; d++)
+        *d = 0;
+'''
     s=s[:clear]+s[end:]
     at=s.index('    fm1_time_init();',start)
     s=s[:at]+init+s[at:]
-    s=replace(s,'extern uint32_t _data_start[]', 'extern uint32_t _sd_audio_start[],_sd_audio_end[],_sd_audio_load[];\nextern uint32_t _data_start[]')
+    s=replace(s,'extern uint32_t _data_start[]', 'extern uint32_t _sd_audio_start[],_sd_audio_end[];\nextern uint32_t _data_start[]')
+    s=replace(s,'    uint32_t *s, *d, p3, src, wdt;\n#if FM1B_CPU2\n    fm1_cpu1_stop();','    uint32_t *d, p3, src, wdt;\n#if FM1B_CPU2\n    fm1_cpu1_stop();')
     p.write_text('/* Saadet integration modifications Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
 
     p=work/'bsp/chip/fm1_irq.h';s=p.read_text()
@@ -281,14 +276,7 @@ def apply(work, board="fm1", model=None, product="Saadet"):
         '    FM1_EMU_CON &= ~((1u << 2) | (31u << 16)); /* Melodee: div0 and fp32 traps off, stack guard retained */')
     s=replace(s,'void fm1_fault_c(uint32_t *f)\n{','void fm1_fault_c(uint32_t *f)\n{\n    if(sd_fault_frame(f))return;')
     p.write_text('/* Saadet CPU1 recovery modifications Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
-    p=work/'bsp/chip/fm1_vec.S';s=p.read_text()
-    restore=(Path(__file__).resolve().parents[1]/'firmware/hal/fm1_vec.S').read_text()
-    restore=restore[restore.index('\t/* fm1_fault_c returns'):]
-    if smk:
-        require(s,'fm1_fault_c returns only after a fault of the second core')  # upstream has the resume
-    else:
-        s=replace(s,'1:\tgoto 1b',restore)
-    p.write_text('/* Saadet CPU1 recovery modifications Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
+    require((work/'bsp/chip/fm1_vec.S').read_text(),'fm1_fault_c returns only after a fault of the second core')  # upstream has the resume
 
     if not smk:
         # Skipped on the SMK: its LEDs take the board's own levels (platform/app.c sd_lights), and the base's panel
@@ -301,202 +289,85 @@ def apply(work, board="fm1", model=None, product="Saadet"):
         s=replace(s,'    panel.magic = PANEL_MAGIC;\n    plat_store_save', '    panel.magic = PANEL_MAGIC;\n    saadet_panel_calibrated(panel.btn,panel.enc,panel.dir);\n    plat_store_save')
         p.write_text('/* Saadet calibration bridge Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
 
-    p=work/'ble/midi/le_midi.c';s=p.read_text()
-    # Keep the two BLE links distinct until Saadet has tracked physical holds.
-    if smk:
-        require(s,'static void midi_parse(const u8 *b, u16 len, u32 cable)')   # upstream tags the links the same way
-    else:
-        s=replace(s,'static void midi_parse(const u8 *b, u16 len)', 'static void midi_parse(const u8 *b, u16 len, u8 source)')
-        s=replace(s,'ble_midi_receive(0xFu |', 'ble_midi_receive(source | 0xFu |')
-        s=replace(s,'ble_midi_receive((uint32_t)cin_of', 'ble_midi_receive(source | (uint32_t)cin_of')
-        s=replace(s,'midi_parse(buffer, buffer_size);','midi_parse(buffer, buffer_size, 0);')
-        s=replace(s,'midi_parse(d->blob, d->blob_length);','midi_parse(d->blob, d->blob_length, 0x10);')
-    start=s.index('static void client_packet_handler(')
-    end=s.index('/* one HCI handler for both roles:',start)
-    s=s[:start]+replace(s[start:end],'        case HCI_SUBEVENT_LE_CONNECTION_COMPLETE:',
-        '        case HCI_SUBEVENT_LE_ENHANCED_CONNECTION_COMPLETE:\n        case HCI_SUBEVENT_LE_CONNECTION_COMPLETE:')+s[end:]
-    # Cancellation must resume advertising and must not trigger retry-on-0x3E.
-    s=replace(s,'int ble_midi_connect(int i)',
-        'static char sd_mc_peer_name[21];\nint ble_midi_connect(int i)')
-    s=replace(s,'    mc_tries = 3;\n    mc_create();',
-        '    memcpy(sd_mc_peer_name, mc_dev[i].name, sizeof sd_mc_peer_name);\n    mc_tries = 3;\n    mc_create();')
-    s=replace(s,'void ble_midi_disconnect(void)\n{', '''/* Main-loop bridge: persist only an acknowledged MIDI peer, never a scan
- * index or a failed selection. Reuse the address type as well as the address. */
-int saadet_ble_peer(u8 *address, u8 *type, char *name)
-{
-    if (!mc_ready()) return 0;
-    memcpy(address, mc_conn.peer_address, 6);
-    *type = mc_conn.peer_address_type;
-    memcpy(name, sd_mc_peer_name, 21);
-    name[20] = 0;
-    return 1;
-}
-int saadet_ble_connect_peer(const u8 *address, u8 type, const char *name)
-{
-    if (mc_handle || (mc_state != BLE_MC_OFF && mc_state != BLE_MC_SCANNING)) return -1;
-    ble_midi_scan(0);
-    memset(&mc_conn, 0, sizeof mc_conn);
-    mc_conn.conn_interval = 24;
-    mc_conn.supervision_timeout = 400;
-    mc_conn.peer_address_type = type;
-    memcpy(mc_conn.peer_address, address, 6);
-    memcpy(sd_mc_peer_name, name, 21);
-    sd_mc_peer_name[20] = 0;
-    mc_tries = 0; /* the app owns the backoff between automatic attempts */
-    mc_create();
-    return 0;
-}
-void ble_midi_disconnect(void)
-{''')
-    s=function(s,'void ble_midi_disconnect(void)', '''void ble_midi_disconnect(void)
-{
-    mc_tries = 0;
-    if (mc_handle)
-        ble_op_disconnect(mc_handle);
-    else if (mc_state == BLE_MC_CONNECTING) {
-        ble_op_create_connection_cancel();
-        mc_state = BLE_MC_OFF;
-        bt_ble_adv_enable(1);
+    # Bluetooth is the own stack (fm1.toml ble_stack = "own"): JieLi's libraries, shim and MIDI service are not built. Its
+    # files are Melodee's copy with fm1-base's link fixes, kept in platform/ble (docs/BLE_MIGRATION.md): they replace the
+    # base's bt/ble and the two radio drivers Melodee changed. fm1_rf_cal.h and the start-up tables stay felucca-bsp's,
+    # which are the same.
+    ble=Path(__file__).resolve().parents[1]/'platform/ble'
+    shutil.rmtree(work/'bt/ble')
+    (work/'bt/ble').mkdir()
+    for f in ble.iterdir():
+        if f.is_file():
+            shutil.copyfile(f,work/'bt/ble'/f.name)
+    for f in (ble/'hal').iterdir():
+        shutil.copyfile(f,work/'bsp/chip'/f.name)
+    # Melodee's settings for the stack (firmware/src/midi_ble.h): the read before the subscription, stock's radio-tested
+    # 27-octet PDUs, no diagnostics, and its big buffers in the pool. Saadet's name, as it has always been.
+    p=work/'device/bt_own.c';s=p.read_text()
+    s=replace(s,'#define BLE_DEVICE_NAME "FM-1" ',f"""#define BLE_NAME_HEX 0
+#define BLE_DIAG 0
+#define BLE_MIDI_INITIAL_READ 1
+#define BLE_LL_MAX_OCTETS 27u
+#define BLE_BARRIER() RING_PUBLISH()
+#define BLE_DMA_MEMORY __attribute__((section(".pool"), aligned(4)))
+#define FM1_RF_CAL_MEMORY __attribute__((section(".pool")))
+#define BLE_DEVICE_NAME "{product}" """)
+    s=replace(s,'#include "ble_stack.c"\n','#include "ble_stack.c"\n#include "ble_vm.c"\n')
+    # the calibration: stored first, then measured (ble_own.h); its copy kept with the address
+    s=replace(s,'    uint8_t bta_mem[4 * 40];','    uint8_t sd_rf[BLE_RF_COPY_SIZE];              /* the stock trims\' copy (ble_own.h) */\n    uint8_t bta_mem[4 * 40];')
+    s=replace(s,"""    fm1_rf_cal_on = 1;                            /* (our own measurement, not a stored 187) */
+    ble_hw_wl82_start(&OWN_TRIMS);                /* the radio's start-up, its calibration (crystal ramp from RAM) */
+    own_cal_log();
+""","""    {
+        struct ble_rf_trims trims;
+        sd_own_trims(&trims);                     /* stored, else measured (fm1_rf_cal_on) */
+        ble_hw_wl82_start(&trims);                /* the radio's start-up, its calibration (crystal ramp from RAM) */
     }
-}''')
-    # A successful profile search does not prove the peer accepted MIDI. Use
-    # the SDK's per-operation GATT callbacks to confirm read/subscription and
-    # request security only when the peer explicitly requires it.
-    client_header=Path(__file__).resolve().parents[1]/'platform/ble_client.h'
-    (work/'ble/midi/saadet_client.h').write_text(client_header.read_text())
-    s=replace(s,'void ble_midi_disconnect(void)\n{',
-        'static void sd_mc_reset(void);\nvoid ble_midi_disconnect(void)\n{\n    sd_mc_reset();')
-    s=replace(s,'void ble_midi_poll(void)\n{',
-        '#include "saadet_client.h"\n\nvoid ble_midi_poll(void)\n{\n    sd_mc_poll();')
-    s=replace(s,'mc_state == BLE_MC_SEARCHING && mc_handle && shim_ms() - mc_t0 > 5000u',
-        'mc_state == BLE_MC_SEARCHING && mc_handle && shim_ms() - mc_t0 > sd_mc_timeout()')
-    s=replace(s,'printf("central: search timed out\\n");',
-        'printf("MCTMO phase %u\\n", sd_mc_phase);\n        sd_mc_reset();')
-    s=function(s,'void user_client_report_search_result(search_result_t *r)',
-        'void user_client_report_search_result(search_result_t *r) { sd_mc_search(r); }')
-    s=function(s,'void user_client_report_descriptor_result(charact_descriptor_t *d)',
-        'void user_client_report_descriptor_result(charact_descriptor_t *d) { sd_mc_descriptor(d); }')
-    mc_connected='            mc_mtu = 20;\n' if smk else '            mc_value = 0;\n'
-    s=replace(s,mc_connected+'            printf("central: connected %x\\n", mc_handle);',
-        mc_connected+'            sd_mc_reset();\n            sd_mc_phase = SD_MC_DISCOVER;\n            printf("central: connected %x\\n", mc_handle);')
-    s=replace(s,'        mc_handle = 0;\n        mc_value = 0;',
-        '        mc_handle = 0;\n        mc_value = 0;\n        sd_mc_reset();')
-    start=s.index('static void client_packet_handler(')
-    end=s.index('/* one HCI handler for both roles:',start)
-    s=s[:start]+replace(s[start:end],'    case ATT_EVENT_MTU_EXCHANGE_COMPLETE:',
-        '''    case HCI_EVENT_ENCRYPTION_CHANGE:
-        /* The pinned SDK's le_hci_emit_event reports payload length + 1,
-         * excluding the event-type byte. Its complete event is length + 2.
-         * Normalize that convention here; GATT callbacks already use + 2. */
-        sd_mc_encryption(packet, size == (u16)packet[1] + 1u ? size + 1u : size);
-        break;
-    case ATT_EVENT_MTU_EXCHANGE_COMPLETE:''')+s[end:]
-    s=replace(s,'        printf("pairing %x on %x\\n", e->data[0], e->con_handle);',
-        '''        printf("pairing %x on %x\\n", e->data[0], e->con_handle);
-#if BLE_MIDI_CENTRAL
-        sd_mc_bond_event(e->con_handle, e->data[0]);
-#endif''')
-    s=replace(s,'    case SM_EVENT_PASSKEY_DISPLAY_NUMBER:\n    case SM_EVENT_PASSKEY_DISPLAY_CANCEL:',
-        '''    case SM_EVENT_PASSKEY_DISPLAY_NUMBER:
-#if BLE_MIDI_CENTRAL
-        sd_mc_passkey(packet, size, 1);
-#endif
-        break;
-    case SM_EVENT_PASSKEY_DISPLAY_CANCEL:
-#if BLE_MIDI_CENTRAL
-        sd_mc_passkey(packet, size, 0);
-#endif
-        break;''')
-    s=replace(s,'''    /* as a central: no pairing asked for (BLE MIDI needs none; an OXI E16 refuses it, and the service search did
-     * not survive the attempt); Just Works if a device asks, and again when it remembers a bond we lost */''',
-        '    /* Outgoing security stays on demand; retry a bond if the peer lost it. */')
-    s=replace(s,'    sm_set_master_io_capabilities(IO_CAPABILITY_NO_INPUT_NO_OUTPUT);',
-        '''    /* Saadet can display the SDK's random code for authenticated pairing.
-     * This changes only outgoing connections; pairing remains on demand. */
-    sm_set_master_io_capabilities(IO_CAPABILITY_DISPLAY_ONLY);
-    sm_set_master_authentication_requirements(SM_AUTHREQ_BONDING | SM_AUTHREQ_MITM_PROTECTION);''')
-    if smk:
-        # The newer base names each unit "FM-1 1F2D" and advertises the first four letters; here the product's name,
-        # its first word advertised (31 bytes hold no more), the whole in the scan response.
-        s=replace(s,'static char gap_device_name[10];',f'static const char gap_device_name[] = "{product}";')
-        s=replace(s,'#define GAP_NAME_LEN 9u','#define GAP_NAME_LEN (sizeof gap_device_name - 1u)')
-        s=replace(s,'#define GAP_NAME_SHORT 4u','#define GAP_NAME_SHORT 6u')
-        s=replace(s,'    ble_midi_name(gap_device_name);\n','')
-    else:
-        s=replace(s,'static const char gap_device_name[] = "FM-1";', f'static const char gap_device_name[] = "{product}";')
-    # A fresh link must negotiate its own subscription, MTU and parameters.
-    s=replace(s,'    set_ble_work_state(BLE_ST_CONNECT);', '''    CCC_SET(handle, H_CCC, 0);
-    send_mtu = 20;
-    connection_update_cnt = 0;
-    set_ble_work_state(BLE_ST_CONNECT);''')
-    s=replace(s,'return con_handle && CCC_GET(con_handle, H_CCC);', 'return con_handle && (CCC_GET(con_handle, H_CCC) & 1u);')
-    # ATT name reads may request a buffer larger than the remaining value.
-    s=replace(s,'        if (offset >= len || offset + buffer_size > len)\n            break;', '''        if (offset >= len)
-            return 0;
-        len -= offset;''')
-    s=replace(s,'            memcpy(buffer, &gap_device_name[offset], buffer_size);\n            len = buffer_size;', '''            if (len > buffer_size) len = buffer_size;
-            memcpy(buffer, &gap_device_name[offset], len);''')
-    # Reuse CTL's radio enable/disconnect lifecycle, keeping advertising enabled
-    # so the disconnect-complete event makes this peripheral discoverable again.
-    s += '''
-void ble_midi_drop_host(void)
-{
-    os_mutex_pend(&mutex, 0);
-    if (con_handle) ble_op_disconnect(con_handle);
-    os_mutex_post(&mutex);
-}
-int ble_midi_can_forget(void)
-{
-    if (con_handle) return 0;
-#if BLE_MIDI_CENTRAL
-    if (mc_handle || mc_state == BLE_MC_CONNECTING || mc_state == BLE_MC_SEARCHING) return 0;
-#endif
-    return 1;
-}
-int ble_midi_forget_all(void)
-{
-    if (!ble_midi_can_forget()) return 0;
-    return ble_list_clear_all(); /* SDK API clears bond keys in RAM and VM */
-}
-void ble_midi_reconnect(void)
-{
-    os_mutex_pend(&mutex, 0);
-    adv_ctrl_en = 1;
-#if BLE_MIDI_CENTRAL
-    if (mc_state == BLE_MC_CONNECTING || mc_state == BLE_MC_SEARCHING) {
-        if (con_handle) ble_op_disconnect(con_handle);
-        os_mutex_post(&mutex);
-        return; /* client search owns the advertising pause */
+    if (fm1_rf_cal_on)
+        own_cal_log();
+""")
+    s=replace(s,'static void ble_start(void)\n','static void sd_own_trims(struct ble_rf_trims *use);\nstatic void ble_start(void)\n')
+    # off while connecting out: the link layer stops initiating and does not tell the host, which would wait for ever
+    s=replace(s,"""        own_held(1);
+        ble_enable(on);
+        own_held(0);
     }
-#endif
-    if (con_handle)
-        ble_op_disconnect(con_handle);
-    else {
-        bt_ble_adv_enable(0);
-        bt_ble_adv_enable(1);
+    if (!on)
+        shim_log("switched off");""","""        own_held(1);
+        if (!on)
+            ble_central_cancel();
+        ble_enable(on);
+        own_held(0);
     }
-    os_mutex_post(&mutex);
-}
-'''
-    p.write_text('/* Saadet connection adaptations Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
-    p=work/'device/radio.c';s=p.read_text()
-    if smk:
-        # The newer base keeps the link's tag itself and reports it through plat_midi_in_from (platform/app.c).
-        require(s,'ble_in_q[bi_w % BQ] = pkt & ~0xE0u;')
-        s=replace(s,'            ble_midi_name(b + 25);\n',
-                  f'            {{ const char *n = "{product}"; char *q = b + 25; while (*n) *q++ = *n++; *q = 0; }}\n')
-    else:
-        s=replace(s,'ble_in_q[bi_w % BQ] = pkt & ~0xF0u;', 'ble_in_q[bi_w % BQ] = pkt; /* internal cable tag identifies the BLE link */')
-        s=replace(s,'BT ready: advertising as FM-1',f'BT ready: advertising as {product}')
-    s=replace(s,'static volatile uint8_t ble_state;', 'static volatile uint8_t ble_state;\nstatic uint8_t ble_off;')
-    s=replace(s,'static uint8_t ble_off;                           /* switched off by the player (plat_ble_enable) */', '')
-    ble_ready=('        bt_ble_init();\n        radio_cal_log();\n' if smk else '        bt_ble_init();\n')+'        ble_state = BLE_READY;'
-    s=replace(s,ble_ready, ble_ready.replace('        ble_state = BLE_READY;','''        if (ble_off) {
-            extern void ble_midi_enable(int on);
-            ble_midi_enable(0); /* an OFF requested during startup still wins */
-        }
-        ble_state = BLE_READY;'''))
-    p.write_text('/* Saadet radio naming Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
+    if (!on)
+        shim_log("switched off");""")
+    s=replace(s,'#include "bt_own_central.c"\n','#include "bt_own_central.c"\n#include "saadet_ble_own.h"\n')
+    p.write_text('/* Saadet settings, name and bridge Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
+    (work/'device/saadet_ble_own.h').write_text((Path(__file__).resolve().parents[1]/'platform/ble_own.h').read_text())
+    # The last device and the attempts are the bridge's (ble_own.h): its plat_ble_scan and plat_ble_connect, its rounds
+    # of scanning hidden from the page, which would stop them.
+    p=work/'device/bt_own_central.c';s=p.read_text()
+    s=replace(s,"    (void)k;                                      /* (a device's bond is not kept yet: it pairs again next time) */\n",
+              '    sd_own_keys(k);\n')
+    s=replace(s,'static struct ble_scan_tab own_scan;',"""static void sd_own_keys(const struct ble_keys *k);
+static void sd_own_poll(void);
+static uint8_t sd_relink_scanning(void);
+static struct ble_scan_tab own_scan;""")
+    s=replace(s,"""static void own_central_poll(void)                /* ble_poll: the scan's reports into the table */
+{
+""","""static void own_central_poll(void)                /* ble_poll: the scan's reports into the table */
+{
+    sd_own_poll();
+""")
+    for name in ('void plat_ble_scan(int on)','int plat_ble_connect(int i)'):
+        s=function(s,name,'')
+    s=replace(s,'return ble_ll_scanning() ? BLE_DEV_SCANNING : BLE_DEV_OFF;','return ble_ll_scanning() && !sd_relink_scanning() ? BLE_DEV_SCANNING : BLE_DEV_OFF;')
+    p.write_text('/* Saadet bridge calls Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
+    # A scan wished for while a computer was connected shows as off, so leaving the page must end it too: else the wish
+    # stays, and the radio scans instead of advertising when the computer goes.
+    p=work/'lib/btdev.c';s=p.read_text()
+    s=replace(s,'    } else if (!up && d == BLE_DEV_SCANNING) {\n','    } else if (!up && (d == BLE_DEV_SCANNING || bd.up)) {\n')
+    p.write_text('/* Saadet: the end of a scan wish Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
 
     p=work/'host/plat_host.c';s=p.read_text()
     s=replace(s,'        } else if (!strcmp(cmd, "midi")) {', '''        } else if (!strcmp(cmd, "mididev")) {
@@ -504,24 +375,12 @@ void ble_midi_reconnect(void)
             min_port[mi_w++ % MQ] = PORT_BLE;
             run_ms(2);
         } else if (!strcmp(cmd, "midi")) {''')
-    if smk:   # the newer base's expect_no_out is the same check; BLE stays either link, as the scripts mean it
-        s=replace(s,'uint32_t to = !strcmp(port, "BLE-DEV") ? TO_BLE_DEV : p >= 0 ? 1u << p : 0u, i;',
-                  'uint32_t to = !strcmp(port, "BLE-DEV") ? TO_BLE_DEV : !strcmp(port, "BLE") ? TO_BLE : p >= 0 ? 1u << p : 0u, i;')
-        s=replace(s,'''        } else if (!strcmp(cmd, "expect_out") || !strcmp(cmd, "expect_no_out")) {''','''        } else if (!strcmp(cmd, "expect_unsent")) {
+    # The base's expect_no_out is the same check; BLE stays either link, as the scripts mean it.
+    s=replace(s,'uint32_t to = !strcmp(port, "BLE-DEV") ? TO_BLE_DEV : p >= 0 ? 1u << p : 0u, i;',
+              'uint32_t to = !strcmp(port, "BLE-DEV") ? TO_BLE_DEV : !strcmp(port, "BLE") ? TO_BLE : p >= 0 ? 1u << p : 0u, i;')
+    s=replace(s,"""        } else if (!strcmp(cmd, "expect_out") || !strcmp(cmd, "expect_no_out")) {""","""        } else if (!strcmp(cmd, "expect_unsent")) {
             fails += expect_out(a, mk_pkt(b, c, d), 0);
-        } else if (!strcmp(cmd, "expect_out") || !strcmp(cmd, "expect_no_out")) {''')
-    else:
-      s=replace(s,'''        } else if (!strcmp(cmd, "expect_out")) {
-            fails += expect_out(a, mk_pkt(b, c, d));''','''        } else if (!strcmp(cmd, "expect_out")) {
-            fails += expect_out(a, mk_pkt(b, c, d));
-        } else if (!strcmp(cmd, "expect_unsent")) {   /* this message did not go out to PORT since the last "out" */
-            uint32_t i, pkt = mk_pkt(b, c, d);
-            int p = find_name(PORT_N, NPORTS, a), sent = p < 0;
-            for (i = 0; !sent && i < n_out; i++)
-                sent = ((out_pkt[i] ^ pkt) & 0xFFFFFF00u) == 0 && (out_to[i] >> p & 1u);
-            printf(sent ? "FAIL expect_unsent %s %02X %02X %02X: sent\\n" : "  ok unsent %s %02X %02X %02X\\n", a,
-                   (pkt >> 8) & 0xFF, (pkt >> 16) & 0xFF, pkt >> 24);
-            fails += sent;''')
+        } else if (!strcmp(cmd, "expect_out") || !strcmp(cmd, "expect_no_out")) {""")
     p.write_text('/* Saadet dual BLE ingress and thru fixture Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
 
     p=work/'bsp/chip/fm1_sys.h';s=p.read_text()

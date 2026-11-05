@@ -23,6 +23,9 @@
 #define APP_SYSEX
 #define APP_HOST_EXPECT
 #define APP_BTDEV
+#ifndef PLAT_HOST
+#define APP_SYS_TEXT                              /* the base's own screens in Saadet's faces (platform/app.c) */
+#endif
 /* Separate pairs outside all 24 live Saadet objects. IDs are base-local. */
 enum { OBJ_PANEL, OBJ_BLE, OBJ_BT_LAST, OBJ_NOBJ };
 #ifndef SAADET_SMK37

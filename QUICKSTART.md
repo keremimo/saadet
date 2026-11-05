@@ -66,6 +66,7 @@ holds all your sounds, favourites and settings.
 
 - **GLOBAL → BLE**: connect a phone or computer to "Saadet" (Mac: Audio MIDI Setup → MIDI Studio → Bluetooth).
 - **GLOBAL → DEV**: connect one Bluetooth MIDI keyboard or controller.
+- One link at a time: a computer or a device, not both.
 
 Details are in [the panel guide](docs/UI.md#bluetooth-experimental-platform-build).
 

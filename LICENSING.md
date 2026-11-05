@@ -231,8 +231,12 @@ the MIDI clock credit was corrected from source history. The compiler-dependency
 97 repository source files MPL/permissive, with no GPL exceptions. The app manifest declares MPL-2.0.
 See the clean-room records under `docs/cleanroom/` for provenance and verification.
 
-JieLi's linked Bluetooth libraries retain their own terms and notices, recorded in the pinned fm1-base
-dependency's `LICENSING.md`. The vendors' factory sound data remains separate from the source-code licence;
+Bluetooth is the own stack in `platform/ble`, by Henri David, from Optimist, offered under `GPL-3.0-only OR MPL-2.0`
+([w0ts/optimist#55](https://github.com/w0ts/optimist/issues/55)) and taken here under MPL-2.0, its files keeping that dual
+header. Melodee's changes to it are Kerem Kilic's own, and he took them here under MPL-2.0; `docs/BLE_MIGRATION.md` lists what
+comes from where. No JieLi library is linked. The radio's start-up tables and calibration in
+felucca-bsp come from JieLi's SDK and M-VAVE's stock firmware under Apache-2.0 (`LICENSES/Apache-2.0.txt`, and that
+dependency's `LICENSING.md` and `bsp/NOTICE`). The vendors' factory sound data remains separate from the source-code licence;
 this project does not grant rights to that data. Completing source relicensing does not establish hardware
 release qualification; the preparation tools supply the release-site licence/source bundle described above.
 

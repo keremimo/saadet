@@ -58,7 +58,12 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
 #ifdef SAADET_SMK37
     /* The SMK-37 (store_map.h, docs/SMK37_PORT.md section 5): the FM-1's address where it lies in a data window, a
      * new one where it does not. The retired identities have no sector here: st_retired stops them first */
-    if (obj >= OBJ_PERF0) return 0xAD000u + (obj - OBJ_PERF0) * 2u * ST_SECTOR + copy * ST_SECTOR;
+    if (obj >= OBJ_PERF0) {
+        /* 0xAF000 is the board's owner tag (FL_OWNER): a save there would read as another firmware's store at the next
+         * boot, and every window would be cleared. Its copy lies in the free sector above the performances. */
+        uint32_t off = 0xAD000u + (obj - OBJ_PERF0) * 2u * ST_SECTOR + copy * ST_SECTOR;
+        return off == 0xAF000u ? 0xB9000u : off;
+    }
     if (obj == OBJ_SYNTH) return 0xA1000u + copy * ST_SECTOR;
     if (obj == OBJ_SHARED_EXT) return 0x9D000u + copy * ST_SECTOR;
     if (obj >= OBJ_P5BANK0) return 0xA3000u + (obj - OBJ_P5BANK0) * 2u * ST_SECTOR + copy * ST_SECTOR;

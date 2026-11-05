@@ -45,6 +45,67 @@ factory sound data retain their own terms.
   precision tests use that bank without cache or auxiliary SRAM tails. This
   budget covers engine state only, not UI, USB, code, stacks or a Bluetooth stack.
 
+## The own Bluetooth stack (5 November 2026)
+
+Saadet no longer links JieLi's Bluetooth libraries or the base's shim. `platform/fm1.toml` sets `ble_stack = "own"` and
+`ble_pairing = true`. The sections below describe the JieLi build where they mention the SDK, its two links or `le_midi.c`;
+their history stands.
+
+**The stack is Melodee's copy, in `platform/ble`,** with fm1-base's link fixes merged in, and `tools/base_overlay.py` puts it
+in place of the base's `bt/ble` and of `fm1_ble.h` and `fm1_ble_rf.h`. It is Henri David's stack from Optimist. What Melodee
+adds to it is Kerem's (`fef995cd`, `0170859a`, `5320bc0d`, `ca6c5837`), and Kerem took it here under MPL-2.0 on 5 November 2026:
+
+- the MIDI characteristic is read before it is subscribed (`BLE_MIDI_INITIAL_READ`), and only a Write Response counts as the
+  subscription's answer;
+- an iPhone that refuses ATT while its bond settles gets five tries 200 ms apart, with no second pairing prompt;
+- a phone Saadet connected out to can connect back: the keys handed out are derived from one kept secret, and a central with an
+  unknown key is told Key Missing, shown as FORGET ON PEER;
+- the baseband block, the PLL table and the calibration's buffers in the pool; an iterative start-up replay, not a recursive one.
+
+What the base has and Melodee's copy lacked comes from Henri David's stack (fm1-base `0eec347` and its `bt/`): the window
+widening's floor and rounding, the transmit window after a connection update, the steady window, only a good CRC counting as the
+peer heard (a switched-off central otherwise stays connected for ever), and a null guard in `ble_att.c`. Every line of
+`platform/ble` is either in fm1-base's dual-licensed copy or one of Kerem's: `tests/base_ble_own_test.py` checks the marks of
+both, and that the build uses these files. The files carry `GPL-3.0-only OR MPL-2.0`, as fm1-base's do, taken here under
+MPL-2.0. `fm1_rf_cal.h`, the radio's measurement (Charles Vestal, Apache-2.0), and the start-up tables stay felucca-bsp's:
+they are the same in Melodee.
+
+**`platform/ble_own.h` is the bridge,** on the base's glue (`device/bt_own.c`), with Melodee's rules (`firmware/src/midi_ble.c`):
+
+- **Calibration.** The stock firmware's stored trims when they are still there, a copy kept in `OBJ_BLE` so they outlive that
+  sector, else measured at every start, as Melodee does.
+- **One link at a time,** a computer's or a device's; JieLi's kept both. A scan or a connection out stops advertising. The pages
+  say so (DEVICE LINK IN USE, COMPUTER CONNECTED).
+- **The last device is looked for, not called blind:** 10 s of scanning every 30 s, and a link once it is heard, behind a private
+  address too (its IRK). Between the rounds a computer can find Saadet, and with GLOBAL > BLE open there are no rounds, which
+  stands in for Melodee's VISIBLE mode without a new setting. It is kept with its bond in `OBJ_BT_LAST`; JieLi's `SBT1` record
+  reads as none.
+- **Never a new pairing loop:** a lost link is looked for again; a refusal, a wrong key or a code nobody entered is not, and the
+  page says why (PAIRING FAILED, FORGET ON PEER, NO MIDI SERVICE, CONNECTION TIMEOUT). An attempt gets 10 s, or 45 s while a
+  code waits. A device that refuses Just Works gets one new link that asks for the passkey.
+- **Settings from Melodee:** stock's radio-tested 27-octet PDUs, no diagnostics. `BLE_DIAG 0` also takes the "BT ll" line off the
+  radio's log; set it to 1 in `tools/base_overlay.py` when bringing up a new link problem.
+
+**What changes for a user.** `OBJ_BLE` is the stack's own record, so the radio address changes and old bonds are gone: forget
+Saadet on the phone or computer once.
+
+**The rest of the room.** `boot_pack = true` stores every load image LZMA-packed, including `.audio_text`, which the base's option
+does not cover: the overlay adds its record and the boot unpacks it into the pool, clearing around it. `APP_SYS_TEXT` draws the
+base's own screens in Saadet's Archivo, through Saadet's renderer, so the base's Barlow faces are not linked.
+
+Measured on these targets (the slot is 581564 B on the FM-1, 622524 B on the SMK-37):
+
+| | FM-1 image, free | Elite image, free | Low RAM (FM-1) | Pool (FM-1) |
+| --- | --- | --- | --- | --- |
+| JieLi's libraries (`2d13622`) | 577308 B, 4256 B | 594452 B, 28072 B | 92 KB | 238 KB |
+| The own stack | | 515468 B, 107056 B | 57 KB | 217 KB |
+| and every load image packed | 466576 B, 114988 B | 479040 B, 143484 B | | |
+| and no Barlow faces, Melodee's copy and settings | 425336 B, 156228 B | 437872 B, 184652 B | 52 KB | 220 KB |
+
+Not measured yet, and owed on a device: the boot's added time unpacking 94 KB, a Mac and an iPhone connecting with MIDI both ways,
+a device connecting and being found again, a pairing code, and the render deadlines with MIDI flowing over Bluetooth (the stack
+runs in the radio's two interrupts, below the audio and the tick). The simulator still models two links.
+
 ## Source records
 
 These upstream revisions were checked directly. MSFA and Dexed checkouts are
@@ -57,8 +118,8 @@ overlay and leaves their original sources unchanged.
 | [Google MSFA](https://github.com/google/music-synthesizer-for-android) | `f67d41d313b7dc85f6fb99e79e515cc9d208cfff` | Apache-2.0 DX7 algorithms/operator model, pitch and scaling, sine/frequency generation, envelopes and LFO. |
 | [Dexed](https://github.com/asb2m10/dexed) | `fea2f0f0f2c397799f59b27eb11c038cd34b22c5` | Only explicitly Apache-2.0 MSFA files provide retained synthesis/data references: `source/msfa/{dx7note.cc,env.cc,lfo.cc,pitchenv.cc,controllers.h,porta.cpp}` and MSFA kernel/table files. `source/engine/EngineMkI.cpp` and `EngineOpl.cpp` are GPL and are not retained implementations. |
 | [fm1-base](https://github.com/charlesvestal/fm1-base) | `93bee3fe9def08127dd5dff638df5bd57cebcc80` | `include/fastmath.h`, MPL-2.0, Charles Vestal. Imported at `firmware/src/x0x/fastmath.h` with Kerem's unsigned exponent-bit adjustment. The original Charles attribution is restored; no Leo authorship is inferred from shared licensing. |
-| fm1-base platform dependency | `6c0b47e4bfc56fd3cd5b34463210d0e7e0ce0431` | MPL-2.0. Updated for optional m-bootloader installation; the earlier fastmath import above retains its original source record. |
-| felucca-bsp nested in that base | `0f08fcaa6610b7cabe8cfdcc5c50d6facdae0e7f` | The BSP linked by the `platform/` target, including bootloader-only OTA staging and the loader progress screen; the legacy build is retired. |
+| fm1-base platform dependency | `3c4a57eea659f942b0c80a99949dddafc094a57b` | MPL-2.0. Upstream's, with the own Bluetooth stack (`bt/`). The earlier fastmath import above retains its original source record. |
+| felucca-bsp nested in that base | `41a6e86d921f842243bd01a48111832f7e55b4e2` | The BSP linked by the `platform/` target, with the radio drivers the own stack runs on; the legacy build is retired. |
 | [m-bootloader](https://github.com/jvitkauskas/m-bootloader/releases/tag/v1.2) | v1.2, source `22e2559906f9fc4e077f2d6aee20bf332300439e` | MIT, Julius Vitkauskas. Unmodified FM-1 `.fwsc` and `.boot` from the pinned base; SHA-256 checked against the author's release. Its full MIT notice accompanies the prepared artifacts. |
 | [MAME uPD933](https://github.com/mamedev/mame/blob/master/src/devices/sound/upd933.cpp) | Existing port; see `LICENSING.md` and `docs/CZ1_SYSEX.md` | BSD-3-Clause, Devin Acker. Existing native phase/envelope/amplitude implementation remains, with its notices. No new MAME import was made in this step. |
 

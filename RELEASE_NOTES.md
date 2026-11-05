@@ -10,6 +10,9 @@ This is an experimental release; the outstanding hardware checks are listed belo
   default, nothing changes and part B costs nothing. They share the voice budget, half guaranteed to each, the rest lent.
 - Performances: 12 named setups of both parts, saved from SAVE's PERFORM page and loaded from LIBRARY. Backups include them;
   an older backup restores and leaves them alone. A saved state from before this release loads as one part.
+- Bluetooth now runs on an open stack instead of JieLi's binary libraries, which frees about 150 KB of flash for new engines.
+  There is one Bluetooth link at a time: a phone or computer, or one external device, not both. After installing, forget
+  Saadet on your phone or computer once and connect again: the radio has a new address and old pairings are gone.
 - Overload no longer cuts voices, whatever a stored Melodee SAFETY setting says.
 - The limiter now takes only what goes over -2 dBFS, up from -5 dBFS, so at about 70 % of MASTER's travel a triad no longer
   pushes a held note down, except on JUNO-106. At full MASTER it still takes 1 to 2 dB off a triad on average (about 5 on

@@ -33,6 +33,10 @@ import sys
 import time
 
 HS_QUERY = bytes([0xF0, 0x00, 0x32, 0x45, 0x00, 0x00, 0x00, 0x40, 0x7F, 0xF7])
+# the handshake with the one-byte body 01: a firmware on felucca-bsp's chip/ota.c answers HS_QUERY with its name, '_' and
+# three digits only ("FM-1_900": M-UPGRADE 3.11 refuses more) and this one with its whole identity ("FM-1_9000200").
+# M-VAVE's firmware, the update loaders and older builds don't answer it (fm1-base tools/fm1_install.py, web/fm1ota.js)
+HS_FULL = bytes([0xF0, 0x00, 0x32, 0x45, 0x08, 0x00, 0x00, 0x40, 0x00, 0x7E, 0x01, 0xF7])
 UPGRADE = bytes([0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7])
 FINISH_CHECK, FINISH_WRITE = 0xE0000000, 0xF0000000
 MAXDATA = 512
@@ -51,7 +55,7 @@ PORT_RE = re.compile(r"saadet|fm-1|melodee|felucca|ota|composite|sinco|usb-midi"
 
 # seconds; the tests shorten them
 DELAY = {"open": 0.3, "start": 2.0, "reply": 0.01, "loader": 3.0, "reboot": 3.0, "retry": 1.0,
-         "poll": 1.0, "hs": 1.0, "idle_check": 8.0, "idle_write": 180.0,
+         "poll": 1.0, "hs": 1.0, "hs_full": 0.6, "idle_check": 8.0, "idle_write": 180.0,
          "wait_loader": 30.0, "wait_reboot": 40.0}
 
 EXIT = {"usage": 2, "badpkg": 2, "notfound": 3, "model": 6, "lost": 4, "stopped": 4, "badreq": 4,
@@ -242,19 +246,35 @@ class Device:
         self.link, self.id, self.name = link, ident, name
 
 
+def ask_identity(link, query, wait):
+    """the identity one query brings: None, no answer; False, the port is gone"""
+    if not link.send(query):
+        return False
+    end = time.monotonic() + wait
+    while (left := end - time.monotonic()) > 0:
+        p = link.read(left)
+        if p is None:
+            break
+        ident = parse_identity(p)
+        if ident:
+            return ident
+    return None
+
+
 def handshake(link, tries=3):
+    """the identity: HS_QUERY, then HS_FULL when the answer is NAME_ and three digits; the plain answer when nothing
+    answers HS_FULL"""
     link.drain()
     for _ in range(tries):
-        if not link.send(HS_QUERY):
+        ident = ask_identity(link, HS_QUERY, DELAY["hs"])
+        if ident is False:
             return None
-        end = time.monotonic() + DELAY["hs"]
-        while (left := end - time.monotonic()) > 0:
-            p = link.read(left)
-            if p is None:
-                break
-            ident = parse_identity(p)
-            if ident:
-                return ident
+        if ident is None:
+            continue
+        if ident.text.startswith("ota-") or not re.fullmatch(r"[^_]+_\d{3}", ident.text):
+            return ident
+        full = ask_identity(link, HS_FULL, DELAY["hs_full"])
+        return full if full and full.model == ident.model and full.text.startswith(ident.text) else ident
     return None
 
 

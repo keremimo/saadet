@@ -55,11 +55,10 @@ migration's current limits.
 ## fm1-base / BLE port (the default build)
 
 The `platform/` target uses the pinned fm1-base and felucca-bsp
-revisions in `tools/build_base.py` (fm1-base `6c0b47e4bfc5`, BSP `0f08fcaa6610`).
+revisions in `tools/build_base.py` (fm1-base `3c4a57eea659`, BSP `41a6e86d921f`).
 `./build.sh` runs that wrapper; it can also run directly. The wrapper fetches
 those revisions if absent, verifies a clean dependency checkout, regenerates
 Saadet's assets through `tools/generate_assets.py` and applies the checked overlay to a disposable build copy.
-A target build also recopies the SDK files it uses, so an old copy in the ignored build folder cannot reach a package.
 
 ```sh
 PYTHON="$PWD/build/venv/bin/python" ./build.sh --no-ble
@@ -78,7 +77,8 @@ PYTHON="$PWD/build/venv/bin/python" tests/run_smk37_tests.sh
 
 Device packages are `platform/build/saadet-usb.fwsc` and
 `platform/build/saadet.fwsc` (BLE). Both have development identity `FM-1_900`.
-The BLE target needs `AC79_SDK` (default `~/fw-AC79_AIoT_SDK`) and the same
+Device builds need `AC79_SDK` (default `~/fw-AC79_AIoT_SDK`), for the three files a package
+carries; no JieLi library is linked. They also need the
 JieLi toolchain (`JIELI_TOOLCHAIN`, default `~/.jieli/toolchain`). Simulator
 builds require neither the SDK nor the toolchain. Builds must run sequentially:
 the two variants share a disposable overlay and compiler outputs.
