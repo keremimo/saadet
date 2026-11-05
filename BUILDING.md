@@ -2,11 +2,12 @@
 
 Use the JieLi pi32v2 Linux toolchain and AC79 V1.2.1 SDK used by Melodee.
 On macOS, Docker or OrbStack must be running for the Linux compiler.
-Python requires Pillow with Raqm; the build also needs Node.js for editor tests.
+Python requires Pillow with Raqm and fontTools; the build also needs Node.js for editor tests. Pillow and fontTools are pinned
+because they make the UI font in the firmware: another Pillow gives the same source a different package hash.
 
 ```sh
 python3 -m venv build/venv
-build/venv/bin/pip install Pillow
+build/venv/bin/pip install Pillow==12.3.0 fonttools==4.66.1 mido python-rtmidi
 PYTHON="$PWD/build/venv/bin/python" ./build.sh
 npm ci --prefix web
 PATH="$PWD/build/venv/bin:$PATH" tests/run_tests.sh

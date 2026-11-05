@@ -34,10 +34,10 @@ if ! "$PY" -c 'import PIL, mido, rtmidi, fontTools' 2>/dev/null; then
     echo "== Python environment: $VENV"
     if command -v uv >/dev/null 2>&1; then
         [ -x "$PY" ] || uv venv -q --python 3.13 "$VENV"
-        uv pip install -q --python "$PY" Pillow mido python-rtmidi fonttools
+        uv pip install -q --python "$PY" Pillow==12.3.0 mido python-rtmidi fonttools==4.66.1
     else
         [ -x "$PY" ] || python3 -m venv "$VENV"
-        "$PY" -m pip install -q Pillow mido python-rtmidi fonttools
+        "$PY" -m pip install -q Pillow==12.3.0 mido python-rtmidi fonttools==4.66.1
     fi
 fi
 
