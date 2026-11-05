@@ -155,6 +155,7 @@ typedef struct {
     float vib0, dvib, w0, dw, g0, dg, a0, da, m0, dm;
     float saw, pulse, sub, noise, k, scale;
     float inc;
+    const float *dither;                      /* the voice's row of the dither table (dsp.c) */
 } j106_kernel_t;
 static __attribute__((section(".dsp_text"))) void j106_samples(j106_voice_t *restrict s, int32_t *restrict out, uint32_t n,
                                                                const j106_kernel_t *restrict c)
@@ -198,7 +199,7 @@ static __attribute__((section(".dsp_text"))) void j106_samples(j106_voice_t *res
          * voice ends. */
         dc += (u - dc) * 0.0014237444f;   /* 1 - exp(-2 pi 10 / FS) */
         float amp = (c->a0 + c->da * time) * (c->m0 + c->dm * time);
-        last = (int32_t)((u - dc) * amp * c->scale);
+        last = dith_cutf_d((u - dc) * amp * c->scale, c->dither[i]);
         out[i] += last;
     }
     s->z[0] = fm_flush(z0); s->z[1] = fm_flush(z1); s->z[2] = fm_flush(z2); s->z[3] = fm_flush(z3);
@@ -242,7 +243,7 @@ static void j106_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     float m0 = (float)m->amp0 * (1.0f / 32768.0f), m1 = (float)m->amp1 * (1.0f / 32768.0f);
     const j106_kernel_t c = {
         r->vib0, r->vib1 - r->vib0, 0.5f - 0.46f * pw0, 0.46f * (pw0 - pw1), s->g, g1 - s->g, a0, a1 - a0, m0, m1 - m0,
-        r->saw, r->pulse, r->sub, r->noise, r->k, 2.0f * VOICE_FS * AUDIO_ONE, inc
+        r->saw, r->pulse, r->sub, r->noise, r->k, 2.0f * VOICE_FS * AUDIO_ONE, inc, dith_row((uint32_t)m->amp1)
     };
     s->g = g1;
     void (*volatile run)(j106_voice_t *, int32_t *, uint32_t, const j106_kernel_t *) = j106_samples;
@@ -337,6 +338,7 @@ static void j106_post(track_t *t, int32_t *out, uint32_t n, uint32_t nr)
     }
     P->quiet = 0;
     uint32_t hpf = j106_hpf(j106_patch_of(t)->raw);
+    const float *d = dith_row((uint32_t)(t - trk) * 8u + 2u);
     if (hpf != P->hpf) { P->hp_x = P->hp_y = P->boost = 0.0f; P->hpf = (uint8_t)hpf; }
     if (hpf == 1u) return;
     if (hpf == 0u) {                          /* low shelf, about +4 dB below 80 Hz */
@@ -345,7 +347,7 @@ static void j106_post(track_t *t, int32_t *out, uint32_t n, uint32_t nr)
         for (uint32_t i = 0; i < n; i++) {
             float x = (float)out[i];
             lp += (x - lp) * a;
-            out[i] = (int32_t)(x + lp * 0.6f);
+            out[i] = dith_cutf_d(x + lp * 0.6f, d[i]);
         }
         P->boost = lp;
         return;
@@ -357,7 +359,7 @@ static void j106_post(track_t *t, int32_t *out, uint32_t n, uint32_t nr)
         float x = (float)out[i];
         y1 = (y1 + x - x1) * k;
         x1 = x;
-        out[i] = (int32_t)y1;
+        out[i] = dith_cutf_d(y1, d[i]);
     }
     P->hp_x = x1; P->hp_y = y1;
 }
@@ -381,6 +383,7 @@ static uint32_t j106_stereo(track_t *t, int32_t *out, int32_t *left, uint32_t n)
     const float rate = mode == 1u ? 0.5f : 0.83f, center = 3.5e-3f * FS, depth = (mode == 1u ? 1.65e-3f : 1.8e-3f) * FS;
     const float lp = 0.67f;                   /* 1 - exp(-2 pi 7.7 kHz / FS) */
     uint32_t w = P->ch_w, ph = P->ch_lfo, inc = (uint32_t)(rate * (4294967296.0f / FS));
+    const float *row = dith_row((uint32_t)(t - trk) * 8u + 6u);
     float l0 = P->ch_lp[0], l1 = P->ch_lp[1];
     for (uint32_t i = 0; i < n; i++) {
         float x = (float)out[i];
@@ -395,8 +398,8 @@ static uint32_t j106_stereo(track_t *t, int32_t *out, int32_t *left, uint32_t n)
         l0 += (a + (b - a) * f0 - l0) * lp;
         l1 += (c + (d - c) * f1 - l1) * lp;
         float L = (x + l0) * 0.7071f, R = (x + l1) * 0.7071f;
-        left[i] = (int32_t)L;
-        out[i] = (int32_t)(L + R);
+        left[i] = dith_cutf_d(L, row[i]);
+        out[i] = dith_cutf_d(L + R, row[i]);
         w = (w + 1u) & (J106_CH_LEN - 1u);
         ph += inc;
     }

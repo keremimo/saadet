@@ -4,12 +4,15 @@
  * keeping its retained formats/types apart from the base's internal names. */
 #include "bridge.h"
 #include "store_map.h"
+#ifdef PLAT_HOST
+#include "ceiling.h"
+#endif
 void app_init(void){saadet_init();}
 static void (*volatile sd_render_fn)(int32_t *,uint32_t,uint32_t)=saadet_render;
 void app_render(int32_t *lr,uint32_t n,uint32_t gain){
     sd_render_fn(lr,n,gain);
 #ifdef PLAT_HOST
-    for(uint32_t i=0;i<2u*n;i++)lr[i]>>=1;
+    sd_ceiling(lr,n);
 #endif
 }
 void app_panic(void){saadet_panic();}

@@ -11,6 +11,16 @@ This is an experimental release; the outstanding hardware checks are listed belo
 - Performances: 12 named setups of both parts, saved from SAVE's PERFORM page and loaded from LIBRARY. Backups include them;
   an older backup restores and leaves them alone. A saved state from before this release loads as one part.
 - Overload no longer cuts voices, whatever a stored Melodee SAFETY setting says.
+- The limiter now takes only what goes over -2 dBFS, up from -5 dBFS, so at about 70 % of MASTER's travel a triad no longer
+  pushes a held note down, except on JUNO-106. At full MASTER it still takes 1 to 2 dB off a triad on average (about 5 on
+  JUNO-106), and more with six notes or two layered parts.
+- CZ-1 plays 6 dB quieter, at the level of Prophet and FM6, so saved CZ-1 sounds and performances come out quieter.
+  JUNO-106 keeps its level and is now the loudest engine, by about 4 dB.
+- The level the limiter settles at rises from -6 to -3.6 dBFS, and brief peaks from about -3 to -2 dBFS. USB recordings show
+  that; the speaker and headphones keep their -6 dB ceiling below it.
+- The cuts to whole samples on the way out (each engine's output, the part's level, MASTER and the output ceiling) are
+  dithered, so a fading note's rounding error no longer follows it. That error sits at the last of the 24 bits, about
+  -138 dBFS, so no audible change is expected.
 - Hold ARP as a sustain pedal that latches, for a drone. The notes you play or let go of while ARP is down keep
   sounding after you let go of it, and the keys play over them, until you press ARP again. Striking a kept note
   again restarts it, and with the arp on, the arp keeps playing the kept notes. Their MIDI note-offs wait for
@@ -73,6 +83,8 @@ Final acceptance of this exact 0.2.0 package on an FM-1 remains to be recorded:
 4. Play and receive BLE notes, sustain and pitch bend; check that disconnect leaves no stuck notes.
 5. Reboot and test the remembered outgoing device, retries, manual Disconnect, Radio Off and Forget.
 6. Exercise USB/TRS/BLE together while playing all four engines, and check audio continuity under load.
+7. Hold a note and add a chord on each engine, with one part and with two layered, at full and at lower MASTER; compare
+   the engines' levels. The render time with the added dither has not been measured on a unit.
 7. Save/reopen sounds and settings, and check the normal update and recovery path.
 8. Two parts on the device, with CPU1 online: every pair of engines at the full budget, in LAYER and SPLIT, with USB audio on.
    Record the longest render against the 2902 us deadline and missed renders. Overload cuts no voice now, so this is the only

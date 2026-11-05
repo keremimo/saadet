@@ -498,11 +498,11 @@ static void levels(void)
     opp(1)[FP_RC] = 0;
     note_on(84, 100);
     render(wave, FS / 4);
-    lo = peak(wave, FS / 8, FS / 4);
+    lo = rms(wave, FS / 8, FS / 4);                      /* (about 25 LSBs: a peak would read the dither, dsp.c) */
     fresh();
     note_on(84, 100);
     render(wave, FS / 4);
-    hi = peak(wave, FS / 8, FS / 4);
+    hi = rms(wave, FS / 8, FS / 4);
     /* two octaves over the break point: group (84 - 39 - 17 + 1) / 3 = 9, 9 x 99 x 329 >> 12 = 71 steps of 0.75 dB */
     snprintf(what, sizeof what, "levels: key scaling -LIN 99, two octaves up: %.2f dB", db(lo / hi));
     check(what, fabs(db(lo / hi) + 71 * 32 / 256.0 * 6.0206) < 0.3);

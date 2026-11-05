@@ -94,7 +94,8 @@ The port includes:
 - Stereo 44.1 kHz USB PCM16/PCM24 in both directions, using native sample
   rings in POOL SRAM. PCM24 retains low bits; PCM16 capture keeps TPDF dither.
   Synth capture precedes computer playback. The physical output keeps its
-  inherited -6 dB ceiling after capture/mixing. Standard USB playback master
+  inherited -6 dB ceiling after capture/mixing, its one-bit cut dithered
+  (`platform/ceiling.h`). Standard USB playback master
   mute/volume is retained. Endpoint/interface numbering and the playback
   clock servo now follow the base, so physical host interoperability must be
   measured again.

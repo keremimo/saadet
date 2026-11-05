@@ -354,6 +354,7 @@ static __attribute__((section(".dsp_text"))) void p5_samples(p5_voice_t *restric
 {
     int32_t last=0;
     uint32_t fixed_pw_b=p5_pw(c->pwm_b);
+    const float *dither=dith_row((uint32_t)m->amp1);
     for(uint32_t i=0;i<n;i++){
         float time=(float)i*(1.0f/CTL);
         float fe=c->f0+(c->f1-c->f0)*time,ae=c->a0+(c->a1-c->a0)*time,sum=0.0f;
@@ -389,7 +390,7 @@ static __attribute__((section(".dsp_text"))) void p5_samples(p5_voice_t *restric
         sum*=1.0f/P5_OVERSAMPLE;
         float gain=ae*c->amp_velocity*(1.0f+(float)s->amp_drift/32768.0f);
         float amp=((float)m->amp0+(float)(m->amp1-m->amp0)*time)*(1.0f/32768.0f);
-        last=(int32_t)(sum*gain*amp*(2.0f*VOICE_FS*AUDIO_ONE));out[i]+=last;
+        last=dith_cutf_d(sum*gain*amp*(2.0f*VOICE_FS*AUDIO_ONE),dither[i]);out[i]+=last;
     }
     s->last_pcm=last;
 }

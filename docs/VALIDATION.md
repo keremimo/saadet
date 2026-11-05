@@ -1,5 +1,43 @@
 # Saadet validation — 23 October 2026
 
+## Limiter level, CZ-1 level and dither (host only, not installed)
+
+Melodee's `a93dd50f` (the limiter from -5.2 to -2 dBFS, CZ-1 down 6 dB) and `94fe79a8` (TPDF dither on the cuts to whole
+samples), ported to Saadet's Q23 path. Both are Kerem Kilic's commits. `tests/master_output_test.c` covers them at Q23 and
+in the Q15 fixtures' precision. Reverting each piece, one at a time, fails it: 26 mutations in all.
+
+The limiter keeps Saadet's own 46 ms hold (`92a9091`), which Melodee does not have. Saadet applies MASTER before the
+limiter and Melodee after it, so below full MASTER Saadet's limiter does less than Melodee's. MASTER is cut where it is.
+
+Gain the limiter takes, in dB, before and after (the mean of 9 factory sounds and the worst one; LAYER: 4 + 4 notes):
+
+| | Triad, MASTER 4096 | Triad, MASTER 2048 | Six notes, MASTER 4096 | LAYER, 4096 | LAYER, 2048 |
+| --- | --- | --- | --- | --- | --- |
+| Prophet | -2.8 / -6.3 -> -0.9 / -3.1 | -0.1 / -0.4 -> 0 | -6.0 / -10.6 -> -3.1 / -7.4 | -7.7 -> -4.6 | -2.1 -> 0 |
+| FM6 | -3.0 / -6.2 -> -1.1 / -3.0 | 0 / -0.2 -> 0 | -7.3 / -11.5 -> -4.5 / -8.3 | -3.5 -> -0.3 | 0 -> 0 |
+| CZ-1 | -10.9 / -13.7 -> -2.2 / -4.5 | -5.0 / -7.7 -> 0 | -16.0 / -19.8 -> -6.8 / -10.6 | -14.0 -> -4.8 | -8.0 -> 0 |
+| JUNO-106 | -7.6 / -12.7 -> -4.6 / -9.5 | -2.2 / -6.7 -> -0.6 / -3.5 | -12.0 / -17.7 -> -8.9 / -14.5 | -10.4 -> -7.2 | -4.3 -> -1.1 |
+
+A chord can still be limited at full MASTER. JUNO-106 is not changed and stays above the others: a single note peaks about
+4 dB over Prophet and FM6. The base simulator (`platform/tests/basic.txt`) reads, in dBFS after the -6 dB ceiling: Prophet
+-14.6, FM6 -15.0, CZ-1 -13.3 (was -11.4), JUNO-106 -10.5 (was -11.9, the limiter now passing its peak).
+
+The cuts dithered, in the shipped path: Prophet, FM6, CZ-1 and JUNO-106 voices; the JUNO-106's low shelf, high-pass and
+chorus; the part's level; MASTER (exact at full); and the -6 dB ceiling's one bit, which takes one random bit a frame
+(`platform/ceiling.h`), so it has no offset and leaves an exact 0 alone. A cut's LSB is Q23's: about -138 dBFS, 48 dB below
+Melodee's Q15 cuts. No physical noise floor was measured, and the added render time was not measured on a unit.
+
+The FM-1 BLE package had 844 B of flash left and has 124 B left: 581440 of 581564 B. To fit, the three pan paths share one
+level kernel (`mix_level` in `mix.c`), which works in place, and adds a loop per part per block; the JUNO-106's chorus uses
+one dither row for both its cuts; and MASTER moved into `master_samples`, so `mix_l` no longer carries MASTER.
+
+Not dithered, as in Melodee: pan, the limiter's gain and the master curve, which rounds. `uac_play`'s `(int32_t)` in the
+pinned base cuts only the computer's audio. The base's post-tap MASTER is not reached, since Saadet never calls
+`plat_usb_audio_full`. `voice_amp` in `dsp.c` is only used by retired engines. `usb_audio_stream.c` and `audio.c` are
+not in the fm1-base build (`MELODEE_USB_AUDIO` 0); the shipped PCM16 capture has its own dither in `tools/base_overlay.py`.
+
+`tests/fm6_test.c` now reads the key scaling depth by RMS: at about 25 LSBs a peak reads the dither.
+
 ## Panel SysEx send and native live editing (built, not installed)
 
 J106 3.4.2 lists Saadet's USB MIDI endpoints as `FM-1`. After the user selected

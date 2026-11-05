@@ -243,7 +243,8 @@ def apply(work, board="fm1", model=None, product="Saadet"):
         '          hexs(cause+4,fm1_crash.emu); cause[12]=\' \';\n'
         '          hexs(cause+17,fm1_crash.dbg); log_line_send(cause); }\n'
         '        for (k = (int)FM1_CRASH_CTX_N - 1;')
-    ceiling='            for(uint32_t i=0;i<2u*REND_FRAMES;i++){\n                int32_t v=o[2u*k+i];v=v>8388607?8388607:v<-8388608?-8388608:v;\n                o[2u*k+i]=v>>1; /* physical -6 dB ceiling after native USB capture/playback */\n            }\n'
+    s=replace(s,'static void render_block(int32_t *o)','#include "ceiling.h"\nstatic void render_block(int32_t *o)')
+    ceiling='            sd_ceiling(o + 2u * k, REND_FRAMES); /* physical -6 dB ceiling after native USB capture/playback */\n'
     if smk:
         # The newer base's device/uac_mix.h already takes the capture before the computer's audio: only the ceiling.
         s=replace(s,'#if FM1B_BT_AUDIO\n            if (own_bta_feed(', ceiling+'#if FM1B_BT_AUDIO\n            if (own_bta_feed(')

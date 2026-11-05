@@ -93,25 +93,25 @@ static void limiter_release(void)
     lim_env=AUDIO_Q15(env15);lim_hold=0;
     for(uint32_t i=0;i<20000u;i++){
         int32_t l=0,r=0;master_out(&l,&r);
-        if(env15>18000)env15-=((env15-18000)>>12)+1;
+        if(env15>26000)env15-=((env15-26000)>>12)+1;
         assert(lim_env==AUDIO_Q15(env15));
     }
     assert(lim_env==LIM_T);
     puts("Q23 limiter: release timing matches the Q15 envelope sample for sample");
-    /* a peak sets about 21000 (after the DC blocker); repeats within 1/16
-     * below it (19687) hold it, lower ones do not */
+    /* a peak sets about 27000 (after the DC blocker); repeats over the
+     * threshold and within 1/16 below it hold it, lower ones do not */
     int32_t l=AUDIO_Q15(30000),r=0;master_out(&l,&r);
     int32_t held=lim_env;
-    assert(held>AUDIO_Q15(20990) && held<=AUDIO_Q15(21000));
+    assert(held>AUDIO_Q15(26990) && held<=AUDIO_Q15(27000));
     for(uint32_t i=1;i<=20000u;i++){
-        l=i%1500u?0:AUDIO_Q15(i<10000u?19900:19400);r=0;master_out(&l,&r);
+        l=i%1500u?0:AUDIO_Q15(i<10000u?26500:25900);r=0;master_out(&l,&r);
         assert(lim_env==held || i>=9000u+LIM_HOLD);
     }
     assert(lim_env<held);
-    env15=21000;lim_env=AUDIO_Q15(env15);lim_hold=LIM_HOLD;
+    env15=29000;lim_env=AUDIO_Q15(env15);lim_hold=LIM_HOLD;
     for(uint32_t i=0;i<LIM_HOLD+20000u;i++){
         l=r=0;master_out(&l,&r);
-        if(i>=LIM_HOLD && env15>18000)env15-=((env15-18000)>>12)+1;
+        if(i>=LIM_HOLD && env15>26000)env15-=((env15-26000)>>12)+1;
         assert(lim_env==AUDIO_Q15(env15));
     }
     puts("Q23 limiter: peaks hold the envelope 46 ms, then it releases on the same schedule");

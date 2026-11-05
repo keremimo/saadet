@@ -35,6 +35,48 @@ static inline int32_t mulq16(int32_t a, uint32_t k)
 /* Shared sample helpers must inline so SRAM kernels never call into XIP. */
 static inline __attribute__((always_inline)) int32_t clamp(int32_t v, int32_t lo, int32_t hi) { return v < lo ? lo : v > hi ? hi : v; }
 
+/* TPDF dither: the cuts to whole samples (the engines' float output, the part's level, MASTER) rounded down or towards
+ * zero, so a fading note's error followed the note and its harmonics stood still while it decayed. +-1 LSB of triangular
+ * noise before each cut turns that error into a steady floor. The LSB is the cut's own: 2^-23 at the shipping precision,
+ * 2^-15 in the Q15 fixtures. One table a block (mix_block, before any engine renders; both cores read it), each cut at
+ * its own offset; an exact 0 stays 0, so silence stays silent */
+#define DITH_N 32u
+#define DITH_SEED 0x2545F491u
+_Static_assert(DITH_N == CTL, "a voice's dither row covers its block");
+static int16_t dith[DITH_N];                     /* a cut of 12 bits' 1/2 LSB and dither, in 1/4096 of its LSB */
+static float dith_f[2u * DITH_N];                /* the dither in LSBs, twice: a voice's row (dith_row) never wraps */
+static uint32_t dith_r = DITH_SEED;
+static __attribute__((noinline)) void dither_block(void)
+{
+    uint32_t r = dith_r;
+    for (uint32_t k = 0; k < DITH_N; k++) {      /* two uniforms from one LCG step: u1 - u2 is triangular */
+        r = r * 1664525u + 1013904223u;
+        int32_t d = (int32_t)(r >> 17) - (int32_t)((r >> 2) & 32767u);
+        dith[k] = (int16_t)((d >> 3) + 2048);
+        dith_f[k] = dith_f[k + DITH_N] = (float)d * (1.0f / 32768.0f);
+    }
+    dith_r = r;
+}
+/* (s * g + 1/2 LSB + dither) >> 12, on audio_mul's wide product (a Q12 gain); a product of 0 stays 0 */
+static inline __attribute__((always_inline)) int32_t dith_mul12(int32_t s, int32_t g, uint32_t k)
+{
+    int64_t p = (int64_t)s * g;
+    if (p)
+        p += dith[k & (DITH_N - 1u)];
+    return (int32_t)(p >> 12);
+}
+/* x to the nearest whole sample with dither d; 0.0f stays 0. dith_row(k)[i], i < CTL: a voice's dither for its block,
+ * read without a wrap (k: its offset, once a block). The rounding is explicit: adding 1.5 * 2^23 to round in the float's
+ * own add only holds below 2^22, and Q23 voices reach 2^24 */
+static inline __attribute__((always_inline)) const float *dith_row(uint32_t k) { return dith_f + (k & (DITH_N - 1u)); }
+static inline __attribute__((always_inline)) int32_t dith_cutf_d(float x, float d)
+{
+    if (x == 0.0f)
+        return 0;
+    x += d;
+    return (int32_t)(x + (x < 0.0f ? -0.5f : 0.5f));
+}
+
 /* Musical pitch only: leave dimensionless ratios (pow2_q16) at their original reference.
  * At 440 Hz this is bit-identical to pitch_inc, including its truncation. */
 static inline uint32_t tuned_pitch_inc(uint32_t p)

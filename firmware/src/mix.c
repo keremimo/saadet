@@ -30,7 +30,7 @@ static volatile uint32_t kb_mask, kb_layer, kb_pedal;   /* kb_pedal: the button 
 #endif
 #define KB_BIT(k) ((kb_word_t)1 << (k))
 static volatile uint8_t kb_lock, kb_sustain_end;        /* kb_sustain_end: ARP pressed again, what it kept ends (seq.c) */
-#define LIM_T AUDIO_Q15(18000)
+#define LIM_T AUDIO_Q15(26000)           /* -2 dBFS: only overs, a chord does not duck a held note */
 #define LIM_HOLD 2048u                   /* 46 ms: longer than a chord's repeat (30.6 ms for C major) */
 static int32_t lim_env = LIM_T;
 static uint32_t lim_hold;
@@ -128,6 +128,17 @@ static __attribute__((noinline)) void mix_cache_update(const track_t *t, mix_cac
     mc->lvl=LEVEL_Q12[mc->level & 127];
     mc->gl=4096-(mc->pan>0?mc->pan*64:0);mc->gr=4096+(mc->pan<0?mc->pan*64:0);
 }
+/* b (a part's sum) x lvl (Q12, up to +7.5 dB) in place, dithered from table place k (dsp.c): b = 0 or lvl = 0 stays 0.
+ * Returns pk raised to the loudest sample. One kernel for every pan path: their flash is short */
+static __attribute__((noinline,section(".dsp_text"))) int32_t mix_level(int32_t *b,uint32_t n,int32_t lvl,uint32_t k,int32_t pk)
+{
+    for(uint32_t i=0;i<n;i++){
+        int32_t x=audio_clamp(dith_mul12(audio_clamp(b[i],-884000,884000),lvl,i+k),-524287,524287),a=x<0?-x:x;
+        if(a>pk)pk=a;
+        b[i]=x;
+    }
+    return pk;
+}
 /* b: the part, spread_buf its left side; s: half the width, 64 = hard left and right of PAN */
 static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_t n, int32_t s)
 {
@@ -136,15 +147,13 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     int32_t pa=clamp(pan-s,-64,63),pb=clamp(pan+s,-64,63);
     int32_t gla=4096-(pa>0?pa*64:0),gra=4096+(pa<0?pa*64:0);
     int32_t glb=4096-(pb>0?pb*64:0),grb=4096+(pb<0?pb*64:0);
-    int32_t glm=(gla+glb)>>1,grm=(gra+grb)>>1,gld=(gla-glb)>>1,grd=(gra-grb)>>1,pk=AUDIO_Q15(t->peak);
-    for(uint32_t i=0;i<n;i++){
-        int32_t x=audio_clamp(audio_mul(audio_clamp(b[i],-884000,884000),lvl,12),-524287,524287);
-        int32_t y=audio_clamp(audio_mul(audio_clamp((d[i]*2)-b[i],-884000,884000),lvl,12),-524287,524287);
-        int32_t a=x<0?-x:x;
-        if(a>pk)pk=a;
-        mix_add(audio_mul(x,glm,12)+audio_mul(y,gld,12),audio_mul(x,grm,12)+audio_mul(y,grd,12),i);
-    }
-    t->peak=pk>>AUDIO_FRAC_BITS;
+    int32_t glm=(gla+glb)>>1,grm=(gra+grb)>>1,gld=(gla-glb)>>1,grd=(gra-grb)>>1;
+    uint32_t dk=(uint32_t)(t-trk)*8u;
+    for(uint32_t i=0;i<n;i++)d[i]=(d[i]*2)-b[i];
+    t->peak=mix_level(b,n,lvl,dk,AUDIO_Q15(t->peak))>>AUDIO_FRAC_BITS;
+    mix_level(d,n,lvl,dk+4u,0);
+    for(uint32_t i=0;i<n;i++)
+        mix_add(audio_mul(b[i],glm,12)+audio_mul(d[i],gld,12),audio_mul(b[i],grm,12)+audio_mul(d[i],grd,12),i);
 }
 #if MELODEE_MIX_FAST
 #define MIX_MONO_GENERAL mix_mono_general
@@ -153,13 +162,9 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
 #endif
 static __attribute__((noinline,section(".dsp_text"))) void MIX_MONO_GENERAL(track_t *t,int32_t *b,uint32_t n,const mix_cache_t *mc)
 {
-    int32_t lvl=mc->lvl,gl=mc->gl,gr=mc->gr,pk=AUDIO_Q15(t->peak);
-    for(uint32_t i=0;i<n;i++){
-        int32_t x=audio_clamp(audio_mul(audio_clamp(b[i],-884000,884000),lvl,12),-524287,524287),a=x<0?-x:x;
-        if(a>pk)pk=a;
-        mix_add(audio_mul(x,gl,12),audio_mul(x,gr,12),i);
-    }
-    t->peak=pk>>AUDIO_FRAC_BITS;
+    int32_t gl=mc->gl,gr=mc->gr;
+    t->peak=mix_level(b,n,mc->lvl,(uint32_t)(t-trk)*8u,AUDIO_Q15(t->peak))>>AUDIO_FRAC_BITS;
+    for(uint32_t i=0;i<n;i++)mix_add(audio_mul(b[i],gl,12),audio_mul(b[i],gr,12),i);
 }
 #undef MIX_MONO_GENERAL
 #if MELODEE_MIX_FAST
@@ -167,13 +172,8 @@ static __attribute__((noinline,section(".dsp_text"))) void mix_mono_samples(trac
 {
     if(mc->pan){mix_mono_general(t,b,n,mc);return;}
     /* Centre pan needs no extra channel multiplications. */
-    int32_t lvl=mc->lvl,pk=AUDIO_Q15(t->peak);
-    for(uint32_t i=0;i<n;i++){
-        int32_t x=audio_clamp(audio_mul(audio_clamp(b[i],-884000,884000),lvl,12),-524287,524287),a=x<0?-x:x;
-        if(a>pk)pk=a;
-        mix_add(x,x,i);
-    }
-    t->peak=pk>>AUDIO_FRAC_BITS;
+    t->peak=mix_level(b,n,mc->lvl,(uint32_t)(t-trk)*8u,AUDIO_Q15(t->peak))>>AUDIO_FRAC_BITS;
+    for(uint32_t i=0;i<n;i++)mix_add(b[i],b[i],i);
 }
 #endif
 
@@ -263,13 +263,21 @@ static __attribute__((noinline)) void mix_part(track_t *t,uint32_t n)
     AP_END(AP_MIX,mix_start);
     if(mod.on)mod_end(t);
 }
+/* MASTER on the mix, dithered with one row for both sides: mono stays L = R. Full MASTER has nothing to cut */
+static inline __attribute__((always_inline)) void master_gain(int32_t *l,int32_t *r,int32_t master,uint32_t i)
+{
+    if(master==4096)return;
+    *l=dith_mul12(*l,master,i+5u);*r=dith_mul12(*r,master,i+5u);
+}
 static __attribute__((noinline,section(".dsp_text"))) void master_samples(int32_t *out,uint32_t n)
 {
-    for(uint32_t i=0;i<n;i++){int32_t l=mix_l[i],r=mix_r[i];master_out(&l,&r);out[2u*i]=l;out[2u*i+1u]=r;}
+    int32_t master=(int32_t)song.master_q12;
+    for(uint32_t i=0;i<n;i++){int32_t l=mix_l[i],r=mix_r[i];master_gain(&l,&r,master,i);master_out(&l,&r);out[2u*i]=l;out[2u*i+1u]=r;}
 }
 static __attribute__((noinline)) void mix_block(int32_t *out,uint32_t n)
 {
     memset(mix_l,0,n*sizeof *mix_l);memset(mix_r,0,n*sizeof *mix_r);
+    dither_block();                                     /* (before any engine renders: dsp.c) */
     AP_START(events_start);events_block(n);AP_END(AP_EVENTS,events_start);
     uint32_t nt=trk_n();                                /* (the tracks not in use: none of their CPU) */
 #if MELODEE_BATCH_AUDIO && !MELODEE_LEGACY_EXTRAS
@@ -280,7 +288,6 @@ static __attribute__((noinline)) void mix_block(int32_t *out,uint32_t n)
     batch_ready=0;part_buf=part_storage;spread_buf=spread_storage;
 #endif
     /* The sole synth feeds the master directly. */
-    for(uint32_t i=0;i<n;i++){mix_l[i]=audio_mul(mix_l[i],(int32_t)song.master_q12,12);mix_r[i]=audio_mul(mix_r[i],(int32_t)song.master_q12,12);}
     void (*volatile run)(int32_t *,uint32_t)=master_samples;
     AP_START(output_start);run(out,n);AP_END(AP_OUTPUT,output_start);
 }

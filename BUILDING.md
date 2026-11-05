@@ -48,7 +48,9 @@ checks signed PCM24, low-level synthesis, dithered PCM16 export, and all four
 engines in a single 16 KiB resource bank without cache or auxiliary SRAM tails.
 The linker enforces that engine-state budget, with matching compile-time size
 checks. These checks do not measure physical noise floor or on-device render
-deadlines. See `docs/BLE_MIGRATION.md` for the migration's current limits.
+deadlines. `tests/master_output_test.c` runs in both precisions: the limiter's threshold, CZ-1's level, chords with one
+and two parts, and the dither of every cut to whole samples on the way out. See `docs/BLE_MIGRATION.md` for the
+migration's current limits.
 
 ## fm1-base / BLE port (the default build)
 
