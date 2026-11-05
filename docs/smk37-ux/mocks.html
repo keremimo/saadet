@@ -129,11 +129,11 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
 <table>
 <tr><th>SMK-37</th><th>Saadet</th></tr>
 <tr><td>Keys C3..C6</td><td>37 velocity keys. The middle 27 (F3..G5) are the FM-1's; the outer 10 play notes too, through scale, chord, octave and arp. No lights.</td></tr>
-<tr><td>16 pads</td><td>CHORDS or SOUNDS (AUTO follows the place; never a second keyboard); a held button's list; PATCH held the favourites; SCALE held a piano. Velocity and pressure. Lit in the engine's hue.</td></tr>
+<tr><td>16 pads</td><td>CHORDS, SOUNDS or FAVS (the player chooses for HOME, a page keeps its own; never a second keyboard); a held button's list; PATCH held the favourites; SCALE held a piano. Velocity and pressure. Lit in the engine's hue.</td></tr>
 <tr><td>K1..K4</td><td>The four values at the foot of the screen, or the knob bank's four.</td></tr>
 <tr><td>K5 / K6 / K7 / K8</td><td>MASTER (a virtual master, kept) / SELECT / ALGORITHM / PRESETS.</td></tr>
 <tr><td>Faders 1..4</td><td>The fader bank's four (default ENV: A D S R), soft pickup, gauges on the screen while they move.</td></tr>
-<tr><td>KNOB BANK / FADER BANK</td><td>Tap: the next bank. Held: the picker on the screen and the pads (top row banks, bottom row pad modes).</td></tr>
+<tr><td>KNOB BANK / FADER BANK</td><td>Tap: the next bank. Held: the picker on the screen and the pads (top row banks). Both together: the pad bank.</td></tr>
 <tr><td>&lt; / &gt;</td><td>One SELECT detent. On HOME: the previous / next sound. With a BANK button held: its bank.</td></tr>
 <tr><td>PATCH / BT</td><td>HOME / SAVE. PATCH held: the favourites on the pads.</td></tr>
 <tr><td>FX, SCALE, CHORD, NOTE REPEAT, PARA, GLOBE</td><td>LIBRARY, SCALE, ENV, LFO, EDIT, GLOBAL.</td></tr>
@@ -384,7 +384,7 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
     faders: [{ f: 0.6, v: 0.12, l: "ATK" }, { f: 0.2, v: 0.48, l: "DEC" }, { f: 0.8, v: 0.8, l: "SUS", hot: 1 }, { f: 0.4, v: 0.4, l: "REL" }] });
 
   S.push({ id: "edit_bank_filter", title: "EDIT > OSC A, knob bank FILTER", eng: "p5",
-    cap: "The place is EDIT, its page OSC A (the picture stays its own), but the knobs are pinned to the FILTER bank: the strip shows CUTOFF RES ENV AMT KEYS, K1 turning hot. The header carries the bank's name as a tag; the KNOB BANK LED is lit while the bank is not PAGE.",
+    cap: "The place is EDIT, its page OSC A (the picture stays its own), and KNOB BANK was tapped here, so the knobs are on the FILTER bank until the page changes: the strip shows CUTOFF RES ENV AMT KEYS, K1 turning hot. A page opens on its own four. The header carries the bank's name as a tag; the KNOB BANK LED is lit while the bank is not PAGE.",
     screen: function (s) { page(s, { eng: "p5", head: "EDIT", sub: "OSC A", dots: 2, dot: 0, tag: "FILTER", tagRight: 208, hot: 0, pic: "faders",
       cols: [{ l: "CUTOFF", v: "41", a: 0.41 }, { l: "RES", v: "1", a: 0.01 }, { l: "ENV AMT", v: "78", a: 0.78 }, { l: "KEYS", v: "FULL", bar: "steps", a: 2, b: 3 }] }); },
     pads: chordPads("p5", "DIA7", -1), leds: { "KNOB BANK": 1, SEQ: 1, "FADER BANK": 0 } });
@@ -430,13 +430,21 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
     leds: { SCALE: 1 } });
 
   S.push({ id: "pick_banks", title: "KNOB BANK held: the picker", eng: "fm6",
-    cap: "Holding KNOB BANK lists the eight banks over the picture, the current (LFO) marked; K1 or < > walk it, letting go keeps what is shown. On the pads the top row is the banks (LFO ACTIVE; FILTER dark: the FM6 has none) and the bottom row the pad modes (AUTO, CHORDS, SOUNDS; AUTO the current). A tap picks.",
+    cap: "Holding KNOB BANK lists the eight banks over the picture, the current (LFO) marked; K1 or < > walk it, letting go keeps what is shown. On the pads the top row is the banks (LFO ACTIVE; FILTER dark: the FM6 has none) and the bottom row is dark: the pad bank has its own gesture. A tap picks.",
     screen: function (s) { page(s, { eng: "fm6", head: "EDIT", sub: "OP1", dots: 6, dot: 0, tag: "LFO", tagRight: 170,
       picker: { eng: "fm6", items: [{ n: "PAGE" }, { n: "MACROS" }, { n: "FILTER", none: 1 }, { n: "ENV" }, { n: "LFO", cur: 1 }, { n: "ARP" }, { n: "CHORD" }] },
       cols: [{ l: "WAVE", v: "TRI", bar: "tick", a: 0.2 }, { l: "SPEED", v: "35", a: 0.35 }, { l: "DELAY", v: "0", a: 0 }, { l: "RESTART", v: "ON", bar: "steps", a: 1, b: 2 }] }); },
     pads: [padsRow(["PAGE", "MACRO", "FILT", "ENV", "LFO", "ARP", "CHORD", "MIX"], ["on", "on", "off", "on", "active", "on", "on", "on"], "fm6"),
-           padsRow(["AUTO", "CHRDS", "SNDS", "", "", "", "", ""], ["active", "on", "on", "none", "none", "none", "none", "none"], "fm6")],
+           padsRow(["", "", "", "", "", "", "", ""], ["none", "none", "none", "none", "none", "none", "none", "none"], "fm6")],
     leds: { "KNOB BANK": 2, PARA: 1 } });
+
+  S.push({ id: "pick_pads", title: "KNOB BANK + FADER BANK held: the pad bank", eng: "cz",
+    cap: "Both BANK buttons together choose what the pads are: CHORDS, SOUNDS or FAVS, on the screen and the first three pads (SOUNDS current). A pad, K1 or < > picks, a tap of both goes to the next, and neither knob nor fader bank moves. Chosen on HOME it stays, through power-off; chosen on a page it lasts until the page changes.",
+    screen: function (s) { page(s, { eng: "cz", head: "PAD BANK", tagRight: 170,
+      picker: { eng: "cz", items: [{ n: "CHORDS" }, { n: "SOUNDS", cur: 1 }, { n: "FAVS" }] }, cols: [] }); },
+    pads: [padsRow(["CHRDS", "SNDS", "FAVS", "", "", "", "", ""], ["on", "active", "on", "none", "none", "none", "none", "none"], "cz"),
+           padsRow(["", "", "", "", "", "", "", ""], ["none", "none", "none", "none", "none", "none", "none", "none"], "cz")],
+    leds: { "KNOB BANK": 2, "FADER BANK": 2 } });
 
   S.push({ id: "j106_env_faders", title: "J106 > ENV, the faders as A D S R", eng: "j106",
     cap: "The JUNO-106 is a slider synth, and on the ENV place with the fader bank at ENV the four faders are its ADSR. Every fader has taken over (the gauges in lilac), DECAY moving hot. The pads are CHORDS in lilac (MAJ in use): the hue follows the engine, as the screen does.",
@@ -446,8 +454,8 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
     pads: chordPads("j106", "MAJ", -1), leds: { CHORD: 1, SEQ: 1, "FADER BANK": 0 },
     faders: [{ f: 0.1, v: 0.1, l: "A" }, { f: 0.52, v: 0.52, l: "D", hot: 1 }, { f: 0.6, v: 0.6, l: "S" }, { f: 0.48, v: 0.48, l: "R" }] });
 
-  S.push({ id: "pads_override", title: "A pad mode picked by hand", eng: "cz",
-    cap: "SOUNDS was picked by hand (a BANK button held + its pad) and stays through place changes: here on HOME, where AUTO would show CHORDS, the pads are the FAVOURITES list, a sound launcher under the left hand while the right plays. While the pick differs from AUTO's choice the header carries its name as a tag, left of the engine's tag: state, not a message.",
+  S.push({ id: "pads_override", title: "HOME's pads: SOUNDS chosen", eng: "cz",
+    cap: "The pad bank chosen on HOME stays, through power-off: here SOUNDS, the sounds of the engine playing, a launcher under the left hand while the right plays. A page you open keeps its own pads. While the pads differ from the place's own the header carries the name as a tag, left of the engine's tag: state, not a message.",
     screen: function (s) { home(s, { eng: "cz", slot: "FACTORY 012", tag: "SOUNDS", name: "Glass Marimba", big: true, key: "G MAJOR", state: "ARP UP 1/16", root: 7, scale: MAJ, sounding: [], macro: [0.3, 0.6, 0.2, 0.7] }); },
     pads: [[{ l: "1", st: "on", hue: "p5" }, { l: "2", st: "on", hue: "fm6" }, { l: "3", st: "on", hue: "p5" }, { l: "4", st: "on", hue: "j106" }, { l: "5", st: "filled", hue: "cz" }, { l: "6", st: "on", hue: "j106" }, { l: "7", st: "on", hue: "fm6" }, { l: "8", st: "on", hue: "cz" }],
            [{ l: "9", st: "on", hue: "p5" }, { l: "", st: "off", hue: "cz" }, { l: "", st: "off", hue: "cz" }, { l: "", st: "off", hue: "cz" }, { l: "", st: "off", hue: "cz" }, { l: "", st: "off", hue: "cz" }, { l: "", st: "off", hue: "cz" }, { l: "", st: "off", hue: "cz" }]],
@@ -549,7 +557,7 @@ td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
   box(740, 186, 90, 26, "KNOB BANK", ""); box(840, 186, 90, 26, "<", "SELECT -"); box(940, 186, 90, 26, ">", "SELECT +");
   /* pads */
   for (var i = 0; i < 16; i++) { var px = 300 + (i % 8) * 52, py = 196 + Math.floor(i / 8) * 52; sv("rect", { x: px, y: py, width: 46, height: 46, rx: 6, fill: padColour(i === 4 ? "filled" : (i % 3 === 0 ? "on" : "off"), "p5") }); }
-  sv("text", { x: 300, y: 312, fill: "#a9a4b3", "font-size": "10", "font-family": "Archivo, Arial, sans-serif" }, "16 pads: CHORDS / SOUNDS, a held button's list, the favourites, the piano, the picker");
+  sv("text", { x: 300, y: 312, fill: "#a9a4b3", "font-size": "10", "font-family": "Archivo, Arial, sans-serif" }, "16 pads: CHORDS / SOUNDS / FAVS, a held button's list, the favourites, the piano, the picker");
   /* faders */
   for (var f = 0; f < 4; f++) { var fx = 760 + f * 78; sv("rect", { x: fx - 5, y: 226, width: 10, height: 70, rx: 5, fill: "#242227", stroke: "#312f36" }); sv("rect", { x: fx - 11, y: 240 + f * 8, width: 22, height: 8, rx: 3, fill: "#c9c4d2" });
     sv("text", { x: fx, y: 312, "text-anchor": "middle", fill: "#ff6b3d", "font-size": "9", "font-weight": "600", "font-family": "Archivo, Arial, sans-serif" }, ["A", "D", "S", "R"][f] + " (ENV)"); }

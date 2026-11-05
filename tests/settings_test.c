@@ -29,7 +29,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 #include "../firmware/src/panel.c"
 static void settings_save(void) {}
 #ifdef SAADET_SMK37
-static uint8_t settings_key_vel, settings_trs_off, settings_pad_lights = 2;
+static uint8_t settings_key_vel, settings_trs_off, settings_pad_lights = 2, settings_pad_bank;
 #endif
 static uint8_t settings_boot, settings_drumch = 10, settings_thru;  /* (params.c) */
 #define VOICE_BUDGET_DEFAULT 16u
@@ -179,6 +179,19 @@ int main(void)
         settings_key_vel = 0; settings_trs_off = 0;
         assert(settings_import(&q, sizeof q) && settings_key_vel == 2u && settings_trs_off == 1u);
         settings_key_vel = 0; settings_trs_off = 0;
+        settings_pad_bank = 2;
+        settings_export(&q);
+        assert(q.favorites.factory[15][25] == 0xC6u);
+        settings_pad_bank = 0;
+        assert(settings_import(&q, sizeof q) && settings_pad_bank == 2u);
+        settings_pad_bank = 0;
+        settings_export(&q);
+        assert(q.favorites.factory[15][25] == 0u);
+        q.favorites.factory[15][25] = 3u;               /* a byte that is not ours stays, and means nothing here */
+        assert(settings_import(&q, sizeof q) && settings_pad_bank == 0u);
+        settings_export(&q);
+        assert(q.favorites.factory[15][25] == 3u);
+        q.favorites.factory[15][25] = 0u;
 #endif
         settings_export(&q);
         assert(q.favorites.factory[15][24] == 0xBFu);

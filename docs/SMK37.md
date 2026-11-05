@@ -16,8 +16,9 @@ The panel guide, [UI.md](UI.md), still applies. This page is what the keyboard a
 | PATCH / BT | HOME / SAVE |
 | ARP / SEQ / SEQ PLAY / SEQ REC | ARP (held: sustain) / CHORD / PLAY / latch |
 | OCTAVE- / OCTAVE+ | As printed. Both at power-on: hardware calibration |
-| `<` `>` | The previous or next page. On HOME, the previous or next sound. With the pads on SOUNDS, the previous or next 16 |
+| `<` `>` | The previous or next page. On HOME, the previous or next sound. With the pads on SOUNDS or FAVS, the previous or next 16 |
 | KNOB BANK / FADER BANK | Tap: the next bank. Held: the picker, on the screen and the pads |
+| KNOB BANK + FADER BANK together | The pad bank: what the pads are. Tap: the next. Held: the picker |
 | Faders 1..4 | The fader bank's four: at power-on the envelope, ATTACK DECAY SUSTAIN RELEASE on most engines |
 | Pitch and mod wheels | Bend (two semitones; the Prophet and FM6 use their own range) and the mod wheel. On the CZ-1 the mod wheel is a vibrato unless the matrix uses it |
 | Sustain pedal | As ARP held. Plug it in before power-on, or hold it down for a minute once |
@@ -26,7 +27,8 @@ The panel guide, [UI.md](UI.md), still applies. This page is what the keyboard a
 ## Banks
 
 A bank is four values that K1..K4 or the faders reach from any place: PAGE, MACROS, FILTER, ENV, LFO, ARP, CHORD and MIX. The
-header names the knobs' bank. LIBRARY, SAVE and GLOBAL keep their own four knobs.
+header names the knobs' bank while it is in use. HOME keeps the bank. A page you open shows its own four knobs until you tap KNOB
+BANK or pick a bank there. LIBRARY, SAVE and GLOBAL always keep their own.
 
 A fader is away after its value changes some other way. It takes over when it crosses the value, so the sound never jumps. While a
 fader moves, the screen shows its bank's cards for a moment: a bar for the value and a tick for where the fader stands.
@@ -38,10 +40,12 @@ Hold NOTE REPEAT while moving a fader for an edit that lasts as long as the butt
 - **CHORDS**, wherever you play. The top row sets the chord type: OFF DIA3 DIA7 MAJ MIN DOM7 MAJ7 MIN7. The bottom row plays the
   scale's degrees, I to VII and I an octave up, with the chord, voicing and strum set on CHORD. With OFF, each degree plays
   its single note. Leaning on a pad strums faster, up to twice the rate set.
-- **SOUNDS**, on LIBRARY. Sixteen sounds of the list. A tap loads one at once.
+- **SOUNDS**. Sixteen sounds of the engine playing, or of the open list on LIBRARY. A tap loads one at once. `<` `>` turn the page.
+- **FAVS**. The same, with your favourites.
 
-Hold KNOB BANK or FADER BANK to pick a mode by hand: AUTO, CHORDS or SOUNDS, on the first three pads of the bottom row. A mode picked
-by hand stays, and the header names it while it differs from what AUTO would show.
+Press KNOB BANK and FADER BANK together to choose what the pads are. Tap both for the next, or hold both and tap one of the first
+three pads. On HOME your choice stays, even through power-off. On any other page it lasts until the page changes, and the page
+opens with its own pads: SOUNDS on LIBRARY, CHORDS everywhere else. The header names the bank while it differs from the page's own.
 
 | While | The pads are |
 | --- | --- |
@@ -49,7 +53,8 @@ by hand stays, and the header names it while it differs from what AUTO would sho
 | PATCH is held | Your favourites |
 | SCALE is held | A piano. A tap sets the root |
 | On SAVE | Letters. A tap sets the letter under the cursor, another within a second cycles it |
-| A BANK button is held | The top row the banks, the bottom row the pad modes |
+| A BANK button is held | The top row the banks |
+| Both BANK buttons are held | The first three pads: CHORDS, SOUNDS, FAVS |
 | A question waits (an import, a delete, an erase) | All breathing orange. The answer is the button's |
 
 The pads take the engine's colour. Dark ember: nothing there. Dim: something there. Full: the one in use. White-blue: happening now.

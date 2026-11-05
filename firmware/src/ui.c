@@ -27,6 +27,8 @@ static void ui_say(const char *a, const char *b);
 #ifdef SAADET_SMK37
 #define KB_LIST 16u                                /* a held button's list: the pads */
 static uint8_t smk_place_before;                   /* the place a button's press left */
+static uint8_t smk_knob_here;                      /* a bank was chosen on this page: until the page changes */
+static uint8_t smk_pad_here;                       /* .. a pad bank, its number + 1 */
 static int smk_knob_banked(void);                  /* ui_smk.c */
 static const ui_field_t *smk_knob_field(uint32_t k);
 static int smk_knob_taken(uint32_t k, int32_t s);
@@ -79,6 +81,9 @@ static uint32_t ui_stop(uint32_t p)
 }
 static void ui_open(uint32_t p)
 {
+#ifdef SAADET_SMK37
+    smk_knob_here = smk_pad_here = 0;                  /* a page opened shows its own four, its pads their own */
+#endif
     lib_delete_cancel();
     lib.erase = uix.erasing = 0;
     if (uix.place == PL_SAVE && p != PL_SAVE && sx_staged()) {   /* away from an import: it is dropped */
@@ -96,6 +101,9 @@ static void ui_open(uint32_t p)
 }
 static void ui_turn_page(uint32_t p, int32_t d)  /* the place's next (d > 0) or previous stop, round */
 {
+#ifdef SAADET_SMK37
+    smk_knob_here = smk_pad_here = 0;
+#endif
     lib_delete_cancel();
     lib.erase = uix.erasing = 0;
     ui_place_t pl = place_of(p);

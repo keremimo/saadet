@@ -221,7 +221,13 @@ void saadet_init(void)
     fm6_init();cz_init();
     for(uint32_t i=0;i<G_COUNT;i++)song.g[i]=GP[i].def;
     track_defaults(TSEL);set_engine_of(TSEL,TRK_DEF[0][0]);apply_preset_to(TSEL,TRK_DEF[0][1]);
-    TSEL->engine=TSEL->eng_req;song.master_q12=2048;state_boot();
+    TSEL->engine=TSEL->eng_req;song.master_q12=2048;
+#ifdef SAADET_SMK37
+    /* The engine's guard is .noinit and only firmware/src/main.c sets it, which is not built here: it reads what RAM
+     * held, and the last sound is skipped. The base's guard is the real one */
+    bootguard.failed=(uint32_t)sd_boot_failed();
+#endif
+    state_boot();
     ui.force=1;sd_poll();
 #ifndef PLAT_HOST
     uint32_t mult=fm1_clock_mult();vbudget_cpu1=VBUDGET*(mult?fm1_clock_mhz_of(mult):360u)/360u;

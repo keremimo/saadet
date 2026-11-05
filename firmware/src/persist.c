@@ -236,6 +236,9 @@ static void settings_poll(void)
 #if MELODEE_FLASH
     persist_t p;
     if (!persist_pending || !flash_ok || transport_busy() ||
+#ifdef SAADET_SMK37
+        sounding() ||                              /* a flash write stops the audio: 3 missed renders, measured on an Elite */
+#endif
         (persist_pending == 2u && (uint32_t)(fm1_ms - persist_retry_ms) < 1000u))
         return;
     if (template_old()) {                          /* an older firmware's record: never overwritten unasked, and */

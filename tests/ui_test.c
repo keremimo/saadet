@@ -619,7 +619,7 @@ int main(void)
             power_on();
             memset(uix.stop, 0, sizeof uix.stop);
             memset(&smk_in, 0, sizeof smk_in);
-            smk.kbank = BK_PAGE; smk.fbank = BK_ENV; smk.mode = PM_AUTO; smk.pick = 0;
+            smk.kbank = BK_PAGE; smk.fbank = BK_ENV; settings_pad_bank = PM_CHORDS; smk.pick = 0;
             song.octave = 0;
             TSEL->p[P_AHOLD] = TSEL->p[P_AMODE] = TSEL->p[P_QUANT] = 0;
             TSEL->p[P_STRUM] = 0;
@@ -627,6 +627,17 @@ int main(void)
             TSEL->p[P_ROOT] = (int16_t)root;
             engine_load_of(TSEL, ENGI_PROPHET, 1);
             frames(1200);
+
+            /* a fader standing high at power-on takes nothing, however late the first pass comes */
+            smk.fader_t0 = 0;
+            memset(smk.last, 0, sizeof smk.last);
+            smk.picked = 0;
+            smk_in.fader[3] = 127;
+            was = smk_fader_value(smk_fader_field(3));
+            frames(1200);
+            bad |= check("SMK faders: one standing high at power-on takes nothing", was < 127 && smk_fader_value(smk_fader_field(3)) == was && !smk.picked);
+            smk_in.fader[3] = 0;
+            smk.last[3] = 0;
 
             /* CHORDS: the pads' default wherever you play */
             bad |= check("SMK pads: chords on HOME, sounds on LIBRARY by AUTO", smk_map() == PMAP_CHORDS);
@@ -684,6 +695,11 @@ int main(void)
             smk.kbank = BK_FILTER;
             frames(2000);
             frame();
+            bad |= check("SMK banks: a page opened shows its own four", !lint_has("RES") && !lint_has("FILTER") && !smk_knob_banked());
+            X_DOWN(SMK_X_KBANK); X_UP(SMK_X_KBANK);
+            bad |= check(".. the first tap brings the bank back, not the next", smk.kbank == BK_FILTER && smk_knob_banked());
+            frames(2000);
+            frame();
             bad |= check("SMK banks: FILTER on EDIT, tag and cards", lint_has("FILTER") && lint_has("CUTOFF") && lint_has("RES") && lint_check("bank filter") == 0u);
             ui_png("smk_bank_filter");
             was = field_get(&CUT);
@@ -713,6 +729,42 @@ int main(void)
             engine_load_of(TSEL, ENGI_PROPHET, 1);
             frame();
 
+            {
+                static const ui_field_t CK = FG(G_CLOCK, "CLOCK");
+                song.g[G_CLOCK] = 1;
+                field_step(&CK, 1);
+                bad |= check("SMK CLOCK: TRS stepped over", song.g[G_CLOCK] != 2);
+                song.g[G_CLOCK] = 2;                     /* a song from elsewhere */
+                events_block(1);
+                bad |= check(".. and a song asking for it is on INT", song.g[G_CLOCK] == 0);
+            }
+            /* SCALE, as the page opens: its own four */
+            smk.kbank = BK_PAGE;
+            press(B_SCL);
+            frames(2000);
+            frame();
+            bad |= check("SMK SCALE: its own controls", uix.place == PL_SCL && lint_has("ROOT") && lint_has("SCALE") && lint_check("scale page") == 0u);
+            ui_png("smk_scale_page");
+            press(B_HOME);
+            smk.kbank = BK_CHORD;
+            press(B_SCL);
+            frames(2000);
+            frame();
+            bad |= check("SMK SCALE: any bank picked, the page still opens on its own controls", lint_has("ROOT") && lint_has("SCALE") && !lint_has("VOICING") && !lint_has("CHORD"));
+            ui_png("smk_scale_bank_chord");
+            X_DOWN(SMK_X_KBANK); X_UP(SMK_X_KBANK);
+            frames(2000);
+            frame();
+            bad |= check(".. chosen here, the bank takes over, its tag up", lint_has("VOICING") && lint_has("CHORD") && lint_check("scale bank") == 0u);
+            press(B_SCL);
+            frames(2000);
+            frame();
+            bad |= check(".. a page turned, its own again", !lint_has("VOICING"));
+            smk.kbank = BK_PAGE;
+            uix.stop[PL_SCL] = 0;
+            press(B_HOME);
+            frame();
+
             /* the picker: held, K1 and the pads walk it, letting go keeps it */
             X_DOWN(SMK_X_KBANK);
             frames(600);
@@ -724,15 +776,52 @@ int main(void)
             PAD_HIT(3, 100); PAD_UP(3);
             bad |= check(".. a top pad picks a bank", smk.kbank == BK_ENV);
             PAD_HIT(10, 100); PAD_UP(10);
-            bad |= check(".. a bottom pad picks a pad mode", smk.mode == PM_SOUNDS);
+            bad |= check(".. the bottom row is not the pads' any more", settings_pad_bank == PM_CHORDS && smk.kbank == BK_ENV);
             X_UP(SMK_X_KBANK);
             bad |= check(".. letting go keeps them", !smk.pick && smk.kbank == BK_ENV);
             frames(1600);
             smk.kbank = BK_PAGE;
             frame();
-            bad |= check("SMK tag: a pad mode by hand, on HOME", smk_map() == PMAP_SOUNDS && lint_has("SOUNDS") && lint_check("tag") == 0u);
+            bad |= check("SMK pads on HOME: chords until chosen", smk_map() == PMAP_CHORDS);
+            X_DOWN(SMK_X_KBANK);
+            X_DOWN(SMK_X_FBANK);
+            frames(600);
+            frame();
+            bad |= check("SMK pad bank: both BANK buttons, on the screen and the pads", smk.pick == 3u && smk_map() == PMAP_PICK && lint_has("PAD BANK") && lint_has("CHORDS") && lint_has("SOUNDS") && lint_has("FAVS") && lint_check("pad bank") == 0u);
+            ui_png("smk_pad_bank");
+            PAD_HIT(1, 100); PAD_UP(1);
+            bad |= check(".. a pad picks", settings_pad_bank == PM_SOUNDS);
+            X_UP(SMK_X_KBANK);
+            bad |= check(".. one let go: still the pad bank", smk.pick == 3u);
+            X_UP(SMK_X_FBANK);
+            bad |= check(".. both let go: it stays, and neither bank moved", !smk.pick && settings_pad_bank == PM_SOUNDS && smk.kbank == BK_PAGE && smk.fbank == BK_ENV);
+            frames(1600);
+            frame();
+            bad |= check("SMK tag: the pad bank, on HOME", smk_map() == PMAP_SOUNDS && smk_list() != LIB_FAV && lint_has("SOUNDS") && lint_check("tag") == 0u);
             ui_png("smk_tag_sounds");
-            smk.mode = PM_AUTO;
+            X_DOWN(SMK_X_FBANK);
+            X_DOWN(SMK_X_KBANK);
+            X_UP(SMK_X_FBANK);
+            X_UP(SMK_X_KBANK);
+            bad |= check(".. a tap of both: the next, no bank moved", settings_pad_bank == PM_FAVS && smk_list() == LIB_FAV && !smk.pick && smk.kbank == BK_PAGE && smk.fbank == BK_ENV);
+            press(B_SCL);
+            frames(2000);
+            frame();
+            bad |= check(".. a page opened keeps its own pads", smk_map() == PMAP_CHORDS);
+            X_DOWN(SMK_X_KBANK);
+            X_DOWN(SMK_X_FBANK);
+            PAD_HIT(1, 100); PAD_UP(1);
+            X_UP(SMK_X_KBANK);
+            X_UP(SMK_X_FBANK);
+            bad |= check(".. chosen on a page: there, HOME's untouched", smk_map() == PMAP_SOUNDS && settings_pad_bank == PM_FAVS);
+            press(B_SCL);
+            frames(2000);
+            bad |= check(".. a page turned, its own again", smk_map() == PMAP_CHORDS);
+            uix.stop[PL_SCL] = 0;
+            press(B_HOME);
+            frames(2000);
+            bad |= check(".. HOME: its own choice back", smk_map() == PMAP_SOUNDS && smk_list() == LIB_FAV);
+            settings_pad_bank = PM_CHORDS;
             frame();
             X_DOWN(SMK_X_FBANK);
             X_DOWN(SMK_X_RIGHT);

@@ -553,6 +553,10 @@ static void clock_advance(uint32_t n)
 static void events_block(uint32_t n)
 {
     uint32_t i, pr;
+#ifdef SAADET_SMK37
+    if (song.g[G_CLOCK] == 2)                          /* (a song from elsewhere, the editor) nothing can come in on TRS */
+        song.g[G_CLOCK] = 0;
+#endif
     uint32_t selected_clock = (uint32_t)song.g[G_CLOCK];
     if (midi_clock.selected != selected_clock) {
         transport_stop();

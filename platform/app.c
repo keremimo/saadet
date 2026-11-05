@@ -238,6 +238,13 @@ void app_cstart(void){sd_worker_stop();}
 void app_fault(const void *crash){(void)crash;sd_worker_crash();}
 int sd_worker_allowed(void){return fm1_power_ready&&!bootguard.failed;}
 #endif
+#ifdef SAADET_SMK37
+#ifdef PLAT_HOST
+int sd_boot_failed(void){return 0;}
+#else
+int sd_boot_failed(void){return bootguard.failed!=0u;}
+#endif
+#endif
 
 void sd_panel_set(const uint8_t *buttons,const uint8_t *enc,const int8_t *direction){
 #if !defined(PLAT_HOST)&&!defined(SAADET_SMK37) /* (the SMK's map is the base's alone: 18 buttons, its calibration) */

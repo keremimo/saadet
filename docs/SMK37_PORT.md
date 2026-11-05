@@ -208,8 +208,31 @@ bend and CC1 out, the CZ-1's wheel vibrato, `<` `>`, GLOBAL > KEYS, HOME's keybo
 
 Different on purpose: the encoders keep the FM-1's detent decoder (Melodee uses the stock one; same direction by the tables);
 the owner check clears the store at once, rather than keeping the stock mapping until the first write; Saadet's store layout
-is its own. Keys, buttons and knobs are confirmed on the Elite (2026-11-05). The pads, faders and BANK buttons (`SMK37_UX.md`) are built
-and host-tested, not yet tried on a unit. CLOCK still offers TRS, which has no input here.
+is its own. Keys, buttons, knobs, pads, faders and BANK buttons are confirmed on the Elite (2026-11-05). The pad bank (`SMK37_UX.md`
+section 2.4) is built and host-tested, not yet pressed on a unit. CLOCK steps over TRS, which has no input here, and a song asking
+for it runs on INT.
+
+Measured on the Elite, 2026-11-05 (the render counter of ED_AUDIO_STATS; `sd_xruns`):
+
+| What | Missed renders |
+| --- | --- |
+| Idle, 8 voices held, fast notes, on all four engines | 0 |
+| 8 sound loads under 8 held notes, on all four engines | 0 |
+| The autosave at rest | 0 |
+| A settings flash write under 8 held notes, before the fix | 3 for each write |
+| The same write, after the fix | 0 |
+
+Three fixes came of that, all SMK-only so the FM-1 build stays byte-identical:
+
+- **Settings writes wait for quiet.** A flash write stops the audio, and `settings_poll` waited only for the transport. It now
+  waits for `sounding()` as the autosave does. Such a save answers status 4 (pending) until the notes end.
+- **A fader takes nothing at power-on.** The settle window was `fm1_ms < 1000`, and the clock is past that by the first pass, so
+  `smk.last` was still 0 and a fader standing above its value looked as if it had crossed it. Melodee seeds on the first pass
+  (`last[i] == 0xFF`); the window now starts there too. Fader 4 at the top set the Prophet's amp RELEASE to 127, a 68-second tail
+  that also held off the autosave.
+- **The last sound comes back.** `bootguard` is `.noinit`, and only `firmware/src/main.c` sets it, which the platform does not
+  build. It read what RAM held, so `state_boot` skipped the sound. `saadet_init` now takes the base's guard. The FM-1 build has the
+  same code and was left alone: not measured there.
 
 Install fm1-base packages with the base's own installer, `build/fm1-base-smk37-platform/tools/fm1_install.py`, not
 `tools/fm1_install.py`. If the running firmware refuses an update, `tools/fm1_recover.py` writes the app area from ROM update

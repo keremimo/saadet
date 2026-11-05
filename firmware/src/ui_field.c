@@ -171,6 +171,10 @@ static int field_step(const ui_field_t *f, int32_t steps)
         if (f->id == G_A4) {
             tuning_a4 = (int16_t)v;
             settings_save();
+#ifdef SAADET_SMK37
+        } else if (f->id == G_CLOCK && v == 2) {       /* the TRS jack only sends here: no clock to follow, so step over it */
+            song.g[G_CLOCK] = song.g[G_CLOCK] < 2 && global_desc(G_CLOCK)->max > 2 ? 3 : 1;
+#endif
         } else {
             song.g[f->id] = (int16_t)v;
         }

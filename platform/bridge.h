@@ -48,6 +48,9 @@ int sd_fault_frame(const uint32_t *frame);
 void sd_worker_stop(void);
 void sd_worker_crash(void);
 int sd_worker_allowed(void);
+#ifdef SAADET_SMK37
+int sd_boot_failed(void);
+#endif
 int sd_power_init(void);
 
 int sd_ble_connected(void);

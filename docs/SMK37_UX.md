@@ -5,8 +5,8 @@ pads, the knob and fader banks, the four faders, the two wheels and the pedal do
 sequencer, so the controls the keyboard adds carry real functionality from the first release. The FM-1 build is
 untouched by any of it.
 
-Status (2026-11-05): built (`firmware/src/ui_smk.c`), covered by the host tests, not yet tried on a unit. Keys, buttons and
-knobs are confirmed on an Elite; the pads, faders and BANK buttons still need that. Mocks: `docs/smk37-ux/mocks.html`
+Status (2026-11-05): built (`firmware/src/ui_smk.c`), covered by the host tests. Keys, buttons, knobs, pads, faders and BANK
+buttons are confirmed on an Elite; the pad bank is built and waits for that. Mocks: `docs/smk37-ux/mocks.html`
 (composed in HTML on the screen's own geometry, the pads beside each screen). Where the build differs from the first
 design, the text below says what was built.
 
@@ -18,10 +18,10 @@ once; the content is Saadet's.
 
 Four things are in play at any moment, each with a default that follows the page, and an override:
 
-| Axis | Values | Default (AUTO) | Picked by |
+| Axis | Values | Default | Picked by |
 | --- | --- | --- | --- |
 | Place | as the FM-1 (HOME and the ten places, their pages) | - | the place buttons, SELECT, `<` `>` |
-| Pad mode | CHORDS, SOUNDS | from the place (section 2.4) | a BANK button held + a bottom-row pad |
+| Pad bank | CHORDS, SOUNDS, FAVS | HOME: CHORDS until chosen, then what was chosen; a page: its own (section 2.4) | KNOB BANK + FADER BANK together: tap (next), held (picker) |
 | Knob bank (K1..K4) | PAGE, MACROS, FILTER, ENV, LFO, ARP, CHORD, MIX | PAGE | KNOB BANK tap (next), held (picker) |
 | Fader bank (faders 1..4) | the same eight | ENV | FADER BANK tap (next), held (picker) |
 
@@ -75,8 +75,9 @@ send no aftertouch. The keys keep playing single notes (or the chord, as CHORD i
 chord and a right-hand line. With CHORD OFF the bottom row plays the degree's single root note, so the pads still
 give the scale under the hand without being a keyboard.
 
-**SOUNDS** (`library_sounds`, `patch_held_favs`): 16 sounds of the LIBRARY list on the screen (FAVOURITES, USER,
-P5, FM6, CZ-1, J106), a page of 16 from the first, pad 1 top left to pad 16 bottom right; `<` `>` turn the list's page
+**SOUNDS** and **FAVS** (`library_sounds`, `patch_held_favs`): 16 sounds. In LIBRARY, of the list on the screen (FAVOURITES,
+USER, P5, FM6, CZ-1, J106). Elsewhere SOUNDS is the engine playing's own list and FAVS the favourites, opening on the page of
+the sound playing. A page of 16, pad 1 top left to pad 16 bottom right; `<` `>` turn the list's page
 of 16 and the screen's chosen sound follows, without loading it. SELECT still turns LIBRARY's lists, as on the FM-1. A tap loads the sound at once (no rest wait: a tap is a
 choice). Lights: a slot with a sound ON (FAVOURITES and USER: in its engine's hue), the sound playing FILLED, a pad
 held ACTIVE, an empty slot OFF. Starred sounds are not told apart on the pads: the screen's disc does that.
@@ -93,19 +94,25 @@ These take the pads for as long as they last, whatever the mode, and give them b
 | ARP held | the pedal (as the FM-1): the pads keep their mode; chords struck are sustained | as today |
 | BT (SAVE) with a dump waiting, DELETE armed, ERASE armed | every pad WAITING until the press confirms or the arming cancels | as today |
 | SAVE's name | pad 1..16: the letter groups ABC DEF GHI JKL MNO PQR STU VWX YZ 123 456 789 0.# &+/ - and space: a tap sets the letter under the cursor, another within a second cycles it; K2 moves the cursor | SAVE as today |
-| KNOB BANK or FADER BANK held | top row the eight banks (the current ACTIVE, one the engine lacks OFF), bottom row AUTO CHORDS SOUNDS (the current ACTIVE), five pads dark; a tap picks (`pick_banks`) | the bank picker (section 3) |
+| KNOB BANK or FADER BANK held | top row the eight banks (the current ACTIVE, one the engine lacks OFF), the bottom row dark; a tap picks (`pick_banks`) | the bank picker (section 3) |
+| KNOB BANK + FADER BANK held | the first three pads CHORDS SOUNDS FAVS (the current ACTIVE), the rest dark; a tap picks (`pick_pads`) | the pad bank, as a list (section 2.4) |
 
-### 2.4 AUTO: which mode the place picks
+### 2.4 The pad bank: what the pads are
 
-| Place | Mode |
+KNOB BANK and FADER BANK pressed together are the pad bank, whichever came first and whatever it had begun. Held: the list on the
+screen and on the first three pads, opening at once; a pad, K1 or `<` `>` picks. Tapped: the next. Until both are up neither is a
+BANK button, so neither bank moves. Letting go keeps what is shown (`pick_pads`).
+
+| Place | The pads |
 | --- | --- |
-| HOME, CHORD, ENV, LFO, EDIT, SCALE, ARP, PLAY, GLOBAL, SAVE | CHORDS |
-| LIBRARY | SOUNDS |
+| HOME | The pad bank chosen on HOME: CHORDS until then. It stays, through power-off (favourites row 15, byte 25) |
+| LIBRARY | SOUNDS, unless the pad bank is chosen there |
+| Every other page | CHORDS, unless the pad bank is chosen there |
 
-The rule: where you play, the pads are chords; where you choose a sound, they are sounds. A mode picked by hand
-stays through place changes until AUTO is picked again (SOUNDS on HOME: a sound launcher under the left hand while
-the right plays), and the header carries its name as a tag while it differs from AUTO's choice (`pads_override`:
-state, not a message; left of the engine's tag, the label face, the engine's colour; the octave pill gives way).
+Decided 2026-11-05: the player chooses what the pads do on HOME (Kerem). A bank chosen on a page lasts until the page changes, as
+the knobs' does, so HOME's choice never takes a page's own pads away. There is no AUTO to pick any more: this replaces the BANK
+pickers' bottom row. The header carries the name as a tag while the pads differ from the place's own (`pads_override`: state, not
+a message; left of the engine's tag, the label face, the engine's colour; the octave pill gives way).
 
 ### 2.5 What leaves the keys
 
@@ -135,7 +142,10 @@ edits follow with no new path:
 | CHORD | CHORD: CHORD VOICING STRUM STROKE | | | |
 | MIX | GLOBAL > OUTPUT: LEVEL PAN SPREAD, and MASTER as K4 (the virtual master, section 6) | | | |
 
-LIBRARY, SAVE and GLOBAL keep their own four whatever bank is picked, with no tag: what they edit is not the sound.
+LIBRARY, SAVE and GLOBAL keep their own four whatever bank is picked, with no tag: what they edit is not the sound. On every
+other page, opening or turning it shows its own four, so its controls can always be reached: the bank takes over only when it is
+chosen on that page (the first tap of KNOB BANK brings the picked bank back, the next goes on), until the page changes. HOME
+keeps the bank, for playing. The LED says a bank is picked.
 
 A bank the engine has nothing for ("-") is skipped when cycling and dark on the picker's pad; its name stays in
 the picker's list, dim. FM6 has no FILTER bank; its ENV bank is the EG of the operator the EDIT place shows, so
@@ -173,9 +183,10 @@ fader reaches, through the same field a knob would.
 
 | Button | Tap | Held |
 | --- | --- | --- |
-| KNOB BANK | next knob bank | the bank picker; + pad: pick (top row a bank, bottom row a pad mode); + `<` `>`: previous / next bank |
+| KNOB BANK | next knob bank | the bank picker; + a top-row pad: pick; + `<` `>`: previous / next bank |
 | FADER BANK | next fader bank | the same for the faders |
-| `<` `>` | one SELECT detent: the previous / next page of the place; on HOME, where SELECT does nothing, the previous / next sound of the engine (PRESETS' step, the sound loads at rest); with the pads on SOUNDS, the previous / next 16 | with a BANK button: its bank |
+| KNOB BANK + FADER BANK | next pad bank | the pad bank; + one of the first three pads: pick; + `<` `>`: previous / next |
+| `<` `>` | one SELECT detent: the previous / next page of the place; on HOME, where SELECT does nothing, the previous / next sound of the engine (PRESETS' step, the sound loads at rest); with the pads on SOUNDS or FAVS, the previous / next 16 | with a BANK button: its bank; with both: the pad bank |
 
 PATCH held lists the favourites (HOME held). LEDs: KNOB BANK lit off PAGE, FADER BANK lit off ENV, both blink while
 held; ARP flashes with the arp's notes; SEQ REC lit while the latch holds; SEQ (CHORD) lit while a chord type is on;
@@ -205,8 +216,8 @@ ERASE countdown.
 
 All composed from what exists; no new component, no hint rows, no text panels:
 
-1. **Header tags** (`vm_header`): the knob bank's name, FADERS while the faders' cards are up, the pad mode while
-   set by hand. Left of the engine's tag on HOME, right of the page's name elsewhere, the label face, the engine's
+1. **Header tags** (`vm_header`): the knob bank's name, FADERS while the faders' cards are up, the pad bank while
+   it differs from the place's own. Left of the engine's tag on HOME, right of the page's name elsewhere, the label face, the engine's
    colour; the octave pill gives way; a toast wins.
 2. **The strip** shows the bank's cards, or for 1.5 s after a fader moves the fader bank's cards with the pickup
    gauge (a 2 px bar and a tick under the value: `vm_bar` gets a pickup argument). HOME: the cards drop in over the
@@ -263,7 +274,7 @@ are the original plan.
 - Done: the mocks `edit_bank_filter`, `home_faders_env`, `j106_env_faders`, `pick_banks` match the device.
 
 **Phase 2: pad modes and the momentary maps, ~3 KB flash, ~64 B RAM.**
-- `ui_smk.c`: the mode state and AUTO; the lights (CHORDS from the scale, the chord type and the struck chord,
+- `ui_smk.c`: the pad bank; the lights (CHORDS from the scale, the chord type and the struck chord,
   SOUNDS from the list) in the engine's hue (RGB565 to the pads' 8-bit, the PAD LIGHTS level); the pad maps (pad to
   degree, pad to list entry, pad to letter); the taps.
 - `seq.c`: pad notes and chords into the note path with their velocity; pressure into the AT source; the pedal

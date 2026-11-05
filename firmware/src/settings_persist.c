@@ -103,6 +103,7 @@ static int settings_import(persist_t *p, int length)
     settings_key_vel = (p->favorites.factory[15][29] & 0xFCu) == 0xA4u ? p->favorites.factory[15][29] & 3u : 0u;
     settings_trs_off = p->favorites.factory[15][30] == 0xA9u;
     settings_pad_lights = (p->favorites.factory[15][31] & 0xF8u) == 0xB0u && (p->favorites.factory[15][31] & 7u) <= 4u ? p->favorites.factory[15][31] & 7u : 2u;
+    settings_pad_bank = (p->favorites.factory[15][25] & 0xFCu) == 0xC4u && (p->favorites.factory[15][25] & 3u) <= 2u ? p->favorites.factory[15][25] & 3u : 0u;
 #endif
     const uint8_t *costs = p->favorites.factory[8] + 8;
     int cost_tag = costs[0] == 'W' && costs[1] == 1;
@@ -158,6 +159,11 @@ static void settings_export(persist_t *p)
             uint8_t *pads = &p->favorites.factory[15][31];
             if (settings_pad_lights != 2u) *pads = (uint8_t)(0xB0u | (settings_pad_lights & 7u));
             else if ((*pads & 0xF8u) == 0xB0u && (*pads & 7u) <= 4u && (*pads & 7u) != 2u) *pads = 0u;
+        }
+        {
+            uint8_t *bank = &p->favorites.factory[15][25];
+            if (settings_pad_bank) *bank = (uint8_t)(0xC4u | (settings_pad_bank & 3u));
+            else if (*bank == 0xC5u || *bank == 0xC6u) *bank = 0u;
         }
     }
 #endif
