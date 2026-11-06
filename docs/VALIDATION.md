@@ -1247,3 +1247,25 @@ of c333332: by symbol sizes the new code is about 3 KB, and the audio path gains
 Not checked: any unit, timing with user waves (the audio work per block is unchanged: a bank change copies 512 B per user row,
 as a patch load does), the web panel against a unit (its drawing was checked in a harness with a simulated unit; the repaint on
 a light / dark switch was not seen), and the sound by ear.
+
+## 6 November 2026: HYDRA's WAVE LAB on the panel (host only)
+
+On `hydra-user-waves` after 644a4b2: EDIT > WAVE LAB (`firmware/src/hydra_lab.c`, six pages, as `docs/hydra-lab/mocks.html`
+drew them) and the slots' cycles on OSC 1 and 2's SLOTS pages. Not flashed, not run on a unit.
+
+All three suites passed: `ALL HOST TESTS PASSED`, `ALL SMK-37 TESTS PASSED`, `ALL BASE PORT TESTS PASSED` (after
+`./build.sh --host`). New checks in `tests/hydra_test.c`, the lab driven through its pages and knobs: neutral values give the
+start back within 1 LSB and MIX at 100 % gives FROM within 2; the first turn on BELL copies it into U1, points the slot there
+and says `BELL › U1`; a turn is heard at once; REVERT plays the start and, left there, keeps it; a session ends keeping what
+plays and the next starts neutral; with the bank full a turn changes nothing and says BANK FULL; a drawbar gives a sine its
+second harmonic at H1's level; the edits are in flash once the unit rests. Two faults found on the way and fixed: SHAPE's
+cycle came back at the wrong level (every drawbar read OFF), and the at-rest autosave ran once a rest, so a wave edited after
+it waited for the next key; a change to the bank now counts as activity.
+
+Sizes: FM-1 app 505,596 B of 581,564 (13.2 KB more than the bank alone), engine arena 86,048 B; SMK-37 packages
+519,004-519,052 B of 622,524, engine arena 84,608 B. The lab keeps 9.3 KB in the pool (the start, the result, two 1024-point
+cycles).
+
+Not checked: any unit; the time a render takes on the device (main loop only, at most one each 25 ms while a knob turns;
+about 250,000 multiply-adds with SHAPE in use, fewer without); the audio while a session renders; the pages on the panel
+itself (host renders only); the SMK-37's faders on the drawbars; the sound by ear.

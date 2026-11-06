@@ -5,7 +5,10 @@
  * SAVE, ui_lib.c). It
  * is read, stepped and written the way the web editor does it (editor.c SET, its native pages, its preferences), so a
  * change from the panel and one from the editor are the same change, and the editor sees it. */
-enum { FK_NONE, FK_TRACK, FK_GLOBAL, FK_P5, FK_FM6OP, FK_FM6V, FK_FM6FN, FK_CZ, FK_DEV, FK_LIB, FK_BLE, FK_J106, FK_HY };
+enum { FK_NONE, FK_TRACK, FK_GLOBAL, FK_P5, FK_FM6OP, FK_FM6V, FK_FM6FN, FK_CZ, FK_DEV, FK_LIB, FK_BLE, FK_J106, FK_HY, FK_HYLAB };
+/* HYDRA's WAVE LAB (hydra_lab.c): the user wave edited, then one chain from the wave it started as */
+enum { HL_WAVE, HL_FROM, HL_MIX, HL_REVERT, HL_SKEW, HL_SYNC, HL_FOLD, HL_CRUSH, HL_TILT, HL_EVENS, HL_FORM, HL_PEAK,
+       HL_H1, HL_CURSOR = HL_H1 + 8, HL_LETTER, HL_N };
 typedef struct { uint8_t kind, id; const char *label; uint8_t sub; } ui_field_t;   /* label: 0 = the descriptor's own;
                                                                                      * sub: FM6's operator 0..5 (OP1..) */
 /* the device's settings (kept with the settings, not the sound): screen sleep, the LEDs' level, the voice budget,
@@ -41,6 +44,12 @@ static const param_desc_t *lib_desc(uint32_t id);        /* ui_lib.c: FK_LIB */
 static int32_t lib_get(uint32_t id);
 static void lib_step(uint32_t id, int32_t steps);
 static void lib_text(uint32_t id, char *val, char *unit);
+static const param_desc_t *hylab_desc(uint32_t id);      /* hydra_lab.c: FK_HYLAB */
+static int32_t hylab_get(uint32_t id);
+static void hylab_step(uint32_t id, int32_t steps);
+static void hylab_text(uint32_t id, char *val, char *unit);
+static int hylab_active(uint32_t id);
+static void hylab_wave_field(uint32_t id);               /* .. a wave field turned: where the lab starts */
 
 static uint32_t ui_tr(void) { return song.sel % NTRK; }
 static const uint8_t *fm6_op_bytes(uint32_t op) { return &fm6_patch[ui_tr()][(5u - op % 6u) * FP_OP]; }   /* (OP6 first) */
@@ -65,6 +74,7 @@ static const param_desc_t *field_desc(const ui_field_t *f)
     case FK_CZ: if (e == ENGI_CZ && f->id < LCZ_NP && CZ_PD[f->id].label) d = &CZ_PD[f->id]; break;
     case FK_J106: if (e == ENGI_J106 && f->id < J106_FIELDS) d = &J106_PANEL[f->id]; break;
     case FK_HY: if (e == ENGI_HYDRA && hy_field_ok(f->id)) d = hy_desc(TSEL, f->id); break;
+    case FK_HYLAB: if (e == ENGI_HYDRA) d = hylab_desc(f->id); break;
     case FK_DEV: d = f->id < DEV_N && (f->id != DEV_PART || trk_n() > 1u) ? &DEV_D[f->id] : 0; break;
     case FK_LIB: d = lib_desc(f->id); break;
 #ifdef SAADET_FM1_BASE
@@ -101,6 +111,7 @@ static int32_t field_get(const ui_field_t *f)
     }
     case FK_J106: return j106_get(TSEL, f->id);
     case FK_HY: return hy_get(TSEL, f->id);
+    case FK_HYLAB: return hylab_get(f->id);
     case FK_DEV:
         if (f->id == DEV_PART) return song.sel;
 #ifdef SAADET_SMK37
@@ -128,6 +139,7 @@ static int field_active(const ui_field_t *f)
     case FK_CZ: return cz_ed_active(cz_patch[ui_tr()].raw, f->id);
     case FK_J106: return j106_ed_active(TSEL, f->id);
     case FK_HY: return hy_ed_active(TSEL, f->id);
+    case FK_HYLAB: return hylab_active(f->id);
     case FK_FM6OP: return f->id == FP_OP || ((fm6_on[ui_tr()] >> (5u - f->sub % 6u)) & 1u);
     case FK_GLOBAL:                                   /* (the parts' settings that do nothing in this mode) */
         return f->id == G_PSPLIT ? parts_mode() == PT_SPLIT : f->id == G_PCH2 ? parts_mode() != PT_ONE : 1;
@@ -143,6 +155,10 @@ static int field_step(const ui_field_t *f, int32_t steps)
     int32_t from, v;
     if (f->kind == FK_LIB) {                          /* (the library's own steps: ui_lib.c) */
         lib_step(f->id, steps);
+        return 1;
+    }
+    if (f->kind == FK_HYLAB) {                        /* (the lab's: hydra_lab.c) */
+        if (TSEL->eng_req == ENGI_HYDRA && steps) hylab_step(f->id, steps);
         return 1;
     }
 #ifdef SAADET_FM1_BASE
@@ -195,6 +211,7 @@ static int field_step(const ui_field_t *f, int32_t steps)
         break;
     case FK_HY:                                       /* (an edit, not a load: the notes sounding follow it) */
         hy_edit_value(TSEL, f->id, v);
+        hylab_wave_field(f->id);
         break;
     case FK_FM6OP:                                    /* (an edit, not a load: the notes sounding follow it) */
         if (f->id == FP_OP) {
@@ -254,6 +271,10 @@ static void field_text(const ui_field_t *f, const param_desc_t *d, char *val, ch
 #endif
     if (f->kind == FK_LIB) {
         lib_text(f->id, val, unit);
+        return;
+    }
+    if (f->kind == FK_HYLAB) {
+        hylab_text(f->id, val, unit);
         return;
     }
     if (f->kind == FK_FM6OP)

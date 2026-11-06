@@ -1,0 +1,417 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HYDRA Wave Lab Mocks</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75,700;85,600;100,500;100,800&display=swap">
+<style>
+/* Layout as docs/smk37-ux/mocks.html: each scene is the 240 x 240 screen at 2x with its caption. The screen keeps
+   Saadet's STAGE palette (tools/gen_ui_palettes.py) in either theme, as the panel has one look; the desk around it
+   follows the reader's light or dark setting. */
+:root {
+  color-scheme: dark;
+  --z: 2;
+  --desk: #121113; --desk-2: #1a191c; --rule: #312f36; --bezel: #2a2830;
+  --ink: #ece9f0; --ink-2: #a9a4b3; --ink-3: #6f6a7a; --accent: #48d6a0;
+  --bg: #050506;
+  --ui: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --desk: #f3f1f5; --desk-2: #ffffff; --rule: #dcd8e1; --bezel: #2b2930;
+    --ink: #1b1a1f; --ink-2: #4f4b57; --ink-3: #7a7583; --accent: #137a55;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --desk: #f3f1f5; --desk-2: #ffffff; --rule: #dcd8e1; --bezel: #2b2930;
+  --ink: #1b1a1f; --ink-2: #4f4b57; --ink-3: #7a7583; --accent: #137a55;
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--desk); color: var(--ink); font-family: var(--ui); font-weight: 500;
+  padding: 28px 16px 64px; }
+main { max-width: 1040px; margin: 0 auto; }
+h1 { font-size: 28px; font-weight: 800; margin: 0 0 6px; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 15px; font-weight: 600; font-stretch: 85%; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-2); margin: 44px 0 18px; padding-top: 16px; border-top: 1px solid var(--rule); }
+p, li { line-height: 1.5; color: var(--ink-2); }
+p { max-width: 72ch; margin: 0 0 10px; }
+.lead { font-size: 16px; }
+strong { color: var(--ink); font-weight: 600; }
+code { font-family: var(--mono); font-size: 0.9em; color: var(--ink); }
+ul.notes { padding-left: 18px; max-width: 80ch; margin: 14px 0 0; font-size: 14px; }
+ul.notes li { margin-bottom: 6px; }
+
+.sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(240px * var(--z)), 1fr)); gap: 28px 32px; }
+.fig { margin: 0; min-width: 0; }
+.shell { width: calc(240px * var(--z)); height: calc(240px * var(--z)); border-radius: 10px; overflow: hidden;
+  background: var(--bg); box-shadow: 0 0 0 1px #000, 0 0 0 5px var(--bezel); position: relative; }
+.fig figcaption { margin-top: 14px; max-width: calc(240px * var(--z)); font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.fig figcaption b { color: var(--ink); font-weight: 700; font-stretch: 85%; letter-spacing: 0.04em; margin-right: 6px; }
+
+/* the panel's own screen: positions in its pixels, faces as gfx.c's roles */
+.screen { width: 240px; height: 240px; position: relative; transform: scale(var(--z)); transform-origin: 0 0;
+  background: var(--bg); font-family: var(--ui); color: #fff; overflow: hidden; }
+.screen * { position: absolute; white-space: nowrap; line-height: 1; margin: 0; }
+.screen svg { left: 0; top: 0; overflow: visible; }
+.hd { font-size: 14px; font-weight: 800; font-stretch: 100%; }   /* TY_HD */
+.tx { font-size: 14px; font-weight: 500; font-stretch: 100%; }   /* TY_TX */
+.lb { font-size: 13px; font-weight: 600; font-stretch: 85%; }    /* TY_LB */
+.rw { font-size: 18px; font-weight: 600; font-stretch: 85%; }    /* TY_RW */
+.vl { font-size: 22px; font-weight: 700; font-stretch: 75%; }    /* TY_VL */
+.nm { font-size: 32px; font-weight: 700; font-stretch: 75%; }    /* TY_NM */
+.rect { display: block; }
+.measure { position: absolute; left: -9999px; top: 0; visibility: hidden; transform: none; }
+
+@media (max-width: 560px) { :root { --z: 1.5; } }
+@media (max-width: 400px) { :root { --z: 1.375; } }
+</style>
+
+<main>
+<h1>HYDRA, WAVE LAB</h1>
+<p class="lead">Mocks of the user wave bank's editing pages (phase 2) on the panel's own 240 × 240 geometry, for review before any of it is written in firmware. The header, the four cards and the faces are drawn by the rules of <code>ui_view.c</code>; the waves and spectra are computed here from the factory shapes in <code>tools/gen_hy_waves.py</code> (64 harmonics), so what changes on a page is what the edit would do.</p>
+<ul class="notes">
+  <li><strong>Where.</strong> EDIT on a HYDRA sound: OSC 3, then the group WAVE LAB (six pages), then MIXER. SELECT turns the pages, K1..K4 edit the four cards, and on the SMK-37 the four faders follow the cards.</li>
+  <li><strong>Header.</strong> As the firmware draws a page: EDIT, the group, six dots. The pages leave the HYDRA tag off. The green already says HYDRA, and with the tag <code>vm_header</code>'s room rule cuts the group to "WAVE L" (see the last section). A second part's PART A tag would cut it too; naming the group LAB would avoid both. The page's own name has no room in the header either, so it stands over the picture on the left (a proposal), and the wave being edited stands on the right.</li>
+  <li><strong>One chain from the start wave.</strong> MIX, then SHAPE, then SPECTRUM, then H1..H8. Every picture shows the end of the chain; grey is the start, the wave as it was when the session began. Each mock is one moment of a session: WAVE before the spectrum was touched, SPECTRUM before the drawbars. The result is stored into the user wave once the knobs rest. K4 REVERT on WAVE: one detent to START plays the start (A/B), and leaving it there takes the session back.</li>
+  <li><strong>Drawbar levels are measured against the start wave's H1, not as a trim.</strong> A trim could never add a harmonic the wave lacks (a sine's H2..H8), so a NEW wave could not be built from drawbars. This is the decision to look at.</li>
+  <li><strong>Copy on edit.</strong> The first turn on a factory wave copies it into the first free user wave. The toast uses the firmware's single angle (›); its font has no arrow.</li>
+  <li><strong>Fitting.</strong> A value wider than 54 px drops to the row face, then the label face, as <code>vm_cols</code> does. That is why "U5 BELL" is small on K1. The ODD/EVEN label is 60 px, wider than a column's 59 px, so SPECTRUM's K2 is EVENS (−40: the evens down, +40: the odds down, H1 kept). FORMANT (57 px) would touch PEAK, so it is FORMNT, as the factory wave of that name is spelled.</li>
+</ul>
+
+<h2>The six pages</h2>
+<div class="sheet" id="pages"></div>
+<h2>Copy on edit</h2>
+<div class="sheet" id="states"></div>
+<h2>OSC 1, SLOTS 1-4</h2>
+<div class="sheet" id="slots"></div>
+<h2>The header with the HYDRA tag</h2>
+<div class="sheet" id="tagged"></div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  /* STAGE, and HYDRA's colour as T_THEME */
+  var C = { bg: "#050506", text: "#ffffff", mid: "#a3a3ab", dim: "#7a7a84", faint: "#55555e", fill: "#5c5c66",
+            lit: "#4a4a54", off: "#3a3a42", line: "#222227", well: "#1c1c21", theme: "#48d6a0" };
+
+  /* ------------------------------------------------------------- waves --- */
+  /* a wave as its 64 harmonics: w(x) = sum c[k] cos(2 pi k x) + s[k] sin(2 pi k x), as gen_hy_waves.py keeps them */
+  var H = 64, OS = 1024, TAU = 2 * Math.PI;
+  function W0() { return { c: new Float64Array(H + 1), s: new Float64Array(H + 1) }; }
+  function spectrum(parts) {                       /* {k: amp} or {k: [amp, phase]}: amp sin(2 pi k x + phase) */
+    var w = W0();
+    Object.keys(parts).forEach(function (key) {
+      var k = +key, a = parts[key], amp = Array.isArray(a) ? a[0] : a, ph = Array.isArray(a) ? a[1] : 0;
+      if (k < 1 || k > H) return;
+      w.s[k] += amp * Math.cos(ph); w.c[k] += amp * Math.sin(ph);
+    });
+    return w;
+  }
+  function series(fn, phase) { var p = {}; for (var k = 1; k <= H; k++) p[k] = [fn(k), phase ? phase(k) : 0]; return spectrum(p); }
+  function schroeder(k) { return Math.PI * k * k / H; }
+  function formants(peaks, tilt) {                 /* a buzz at 130 Hz through resonances [Hz, gain, width] */
+    var p = {};
+    for (var k = 1; k <= H; k++) {
+      var f = 130 * k, g = 0.02;
+      peaks.forEach(function (q) { g += q[1] * Math.exp(-0.5 * Math.pow((f - q[0]) / q[2], 2)); });
+      p[k] = [g / Math.pow(k, tilt), schroeder(k)];
+    }
+    return spectrum(p);
+  }
+  function analyse(xs) {                           /* one cycle in time -> its first 64 harmonics */
+    var n = xs.length, w = W0();
+    for (var k = 1; k <= H; k++) {
+      var re = 0, im = 0;
+      for (var i = 0; i < n; i++) { var t = TAU * k * i / n; re += xs[i] * Math.cos(t); im += xs[i] * Math.sin(t); }
+      w.c[k] = re * 2 / n; w.s[k] = im * 2 / n;
+    }
+    return w;
+  }
+  function samples(w, n) {
+    var out = new Float64Array(n);
+    for (var i = 0; i < n; i++) {
+      var v = 0;
+      for (var k = 1; k <= H; k++) if (w.c[k] || w.s[k]) { var t = TAU * k * i / n; v += w.c[k] * Math.cos(t) + w.s[k] * Math.sin(t); }
+      out[i] = v;
+    }
+    return out;
+  }
+  function peak(w) { var xs = samples(w, 512), m = 1e-9; for (var i = 0; i < xs.length; i++) m = Math.max(m, Math.abs(xs[i])); return m; }
+  function gain(w, g) { var r = W0(); for (var k = 1; k <= H; k++) { r.c[k] = w.c[k] * g; r.s[k] = w.s[k] * g; } return r; }
+  function norm(w) { return gain(w, 1 / peak(w)); }
+  function lerp(a, b, m) { var r = W0(); for (var k = 1; k <= H; k++) { r.c[k] = a.c[k] + (b.c[k] - a.c[k]) * m; r.s[k] = a.s[k] + (b.s[k] - a.s[k]) * m; } return r; }
+  function mag(w, k) { return Math.hypot(w.c[k], w.s[k]); }
+  function db(x) { return 20 * Math.log10(Math.max(x, 1e-12)); }
+
+  /* SHAPE: in time, then back to 64 harmonics. skew -1..1 moves the cycle's middle, sync 1..8 reads it faster from
+     each start, fold 0..1 folds what passes full scale back in, crush 0..1 holds samples and drops bits */
+  function shapeFx(w, o) {
+    var src = samples(w, OS), pk = 1e-9, xs = [], p = 0.5 + 0.45 * o.skew, i;
+    for (i = 0; i < OS; i++) pk = Math.max(pk, Math.abs(src[i]));
+    function at(x) { x -= Math.floor(x); var f = x * OS, j = Math.floor(f), r = f - j; return (src[j % OS] * (1 - r) + src[(j + 1) % OS] * r) / pk; }
+    var hold = Math.max(1, Math.round(Math.pow(2, o.crush * 6))), levels = Math.pow(2, 8 - 6 * o.crush) / 2;
+    for (i = 0; i < OS; i++) {
+      var x = Math.floor(i / hold) * hold / OS;
+      var xw = x < p ? 0.5 * x / p : 0.5 + 0.5 * (x - p) / (1 - p);
+      var v = at(xw * o.sync);
+      if (o.fold) { v *= 1 + 4 * o.fold; v = 1 - Math.abs((((v + 1) % 4) + 4) % 4 - 2); }
+      if (o.crush) v = Math.round(v * levels) / levels;
+      xs.push(v);
+    }
+    return analyse(xs);
+  }
+  /* SPECTRUM: tilt dB an octave from H1, oe -1 (odd only) .. +1 (even only, H1 kept), a peak of `pk` dB round
+     harmonic fk, half an octave wide */
+  function spectrumFx(w, o) {
+    var r = W0();
+    for (var k = 1; k <= H; k++) {
+      var g = Math.pow(10, o.tilt * Math.log2(k) / 20), d = (Math.log2(k) - Math.log2(o.fk)) / 0.4;
+      if (o.oe < 0 && k % 2 === 0) g *= 1 + o.oe;
+      if (o.oe > 0 && k % 2 === 1 && k > 1) g *= 1 - o.oe;
+      g *= Math.pow(10, o.pk * Math.exp(-0.5 * d * d) / 20);
+      r.c[k] = w.c[k] * g; r.s[k] = w.s[k] * g;
+    }
+    return r;
+  }
+  /* H1..H8: a harmonic set to a level in dB against ref (the start's H1); null: OFF */
+  function drawbars(w, lv, ref) {
+    var r = gain(w, 1);
+    Object.keys(lv).forEach(function (key) {
+      var k = +key, m = mag(r, k), t = lv[key] == null ? 0 : ref * Math.pow(10, lv[key] / 20);
+      if (m > 1e-9) { r.c[k] *= t / m; r.s[k] *= t / m; } else { r.c[k] = 0; r.s[k] = t; }
+    });
+    return r;
+  }
+
+  var F = {                                        /* the factory shapes, from tools/gen_hy_waves.py */
+    SINE: norm(spectrum({ 1: 1 })),
+    SAW: norm(series(function (k) { return 1 / k; })),
+    BELL: norm(spectrum({ 1: 0.6, 3: 0.4, 5: 0.6, 7: 0.3, 11: 0.45, 13: 0.3, 17: 0.25, 23: 0.2 })),
+    VOXA: norm(formants([[730, 1, 90], [1090, 0.6, 110], [2440, 0.35, 160]], 1))
+  };
+  /* the session on U5: BELL copied, 35 % toward SAW, the spectrum leaned and peaked at H12, H2 pulled, H7 pushed in */
+  var U5 = { start: F.BELL, ref: mag(F.BELL, 1) };
+  U5.mixed = lerp(U5.start, F.SAW, 0.35);
+  U5.spec = spectrumFx(U5.mixed, { tilt: -2, oe: -0.4, fk: 12, pk: 9 });
+  U5.end = drawbars(U5.spec, { 2: -4, 7: null }, U5.ref);
+  U5.out = norm(U5.end);
+  U5.mixOut = norm(U5.mixed);                      /* (the pages are moments of the session: WAVE before the */
+  U5.specOut = norm(U5.spec);                      /* spectrum was touched, SPECTRUM before the drawbars) */
+  /* the session on U2: SINE copied, skewed and folded */
+  var U2 = { start: F.SINE };
+  U2.out = norm(shapeFx(U2.start, { skew: 0.18, sync: 1, fold: 0.62, crush: 0 }));
+  var FIRST = norm(lerp(F.BELL, F.SAW, 0.01));     /* U5 one detent after the copy */
+
+  function level(k) { return db(mag(U5.end, k) / U5.ref); }
+  function levelText(d) { if (d < -48) return "OFF"; var r = Math.round(d); return r > 0 ? "+" + r : String(r); }
+  function harmCard(k) {
+    var d = level(k), t = levelText(d);
+    return { l: "H" + k, v: t, u: t === "OFF" ? "" : "dB", bar: "fill", a: t === "OFF" ? 0 : Math.max(0, Math.min(1, (d + 48) / 60)) };
+  }
+
+  /* ------------------------------------------------------------ screen --- */
+  function el(tag, cls, style, txt) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (style) for (var k in style) e.style[k] = style[k];
+    if (txt != null) e.textContent = txt;
+    return e;
+  }
+  var meter = el("div", "screen measure");
+  function measure(face, str) {
+    if (!meter.parentNode) document.body.appendChild(meter);
+    var e = el("span", face, null, str); meter.appendChild(e);
+    var w = e.getBoundingClientRect().width; meter.removeChild(e); return w;
+  }
+  function fit(face, str, maxw) {                  /* text_fit: cut at the end until it fits */
+    var s = str;
+    while (s.length && measure(face, s) > maxw) s = s.slice(0, -1);
+    return s.replace(/\s+$/, "");
+  }
+  function rect(s, x, y, w, h, c) { s.appendChild(el("i", "rect", { left: x + "px", top: y + "px", width: w + "px", height: h + "px", background: c })); }
+  function text(s, x, y, face, str, c) { s.appendChild(el("span", face, { left: x + "px", top: y + "px", color: c }, str)); return x + measure(face, str); }
+  function textR(s, x, y, face, str, c) { s.appendChild(el("span", face, { right: (240 - x) + "px", top: y + "px", color: c }, str)); }
+  function textFit(s, x, y, face, str, c, maxw) { return text(s, x, y, face, fit(face, str, maxw), c); }
+  function disc(s, cx, cy, d, c) { s.appendChild(el("i", "rect", { left: (cx - d / 2) + "px", top: (cy - d / 2) + "px", width: d + "px", height: d + "px", borderRadius: d / 2 + "px", background: c })); }
+  var NS = "http://www.w3.org/2000/svg";
+  function poly(s, pts, c, w) {
+    var svg = document.createElementNS(NS, "svg"), p = document.createElementNS(NS, "polyline");
+    svg.setAttribute("width", "240"); svg.setAttribute("height", "240");
+    p.setAttribute("points", pts.map(function (q) { return q[0].toFixed(2) + "," + q[1].toFixed(2); }).join(" "));
+    p.setAttribute("fill", "none"); p.setAttribute("stroke", c); p.setAttribute("stroke-width", w);
+    p.setAttribute("stroke-linejoin", "round"); p.setAttribute("stroke-linecap", "round");
+    svg.appendChild(p); s.appendChild(svg);
+  }
+
+  /* vm_header: the place, its object, the tag where there is room, the dots; a toast stands in for all of it */
+  function header(s, o) {
+    if (o.toast) { textFit(s, 10, 8, "tx", o.toast, C.text, 220); return; }
+    var x = text(s, 10, 8, "hd", o.head, C.text);
+    var right = o.ndots > 1 ? 216 - 10 * o.ndots : 230, w = o.tag ? measure("lb", o.tag) : 0;
+    var room = right - w - 6 - x - 8;
+    if (o.tag && (!o.sub || room >= 40)) {
+      textR(s, right, 9, "lb", o.tag, C.theme);
+      if (o.sub) textFit(s, x + 8, 8, "tx", o.sub, C.mid, room);
+    } else if (o.sub) textFit(s, x + 8, 8, "tx", o.sub, C.mid, (o.ndots > 1 ? 216 - 10 * o.ndots : 220) - x);
+    for (var i = 0; o.ndots > 1 && i < o.ndots; i++) disc(s, 227 - 10 * (o.ndots - 1 - i), 16, 6, i === o.dot ? C.text : C.off);
+  }
+  /* vm_cols: label y 184, value y 199 (too wide: the row face, then the label face, on its baseline), bar y 231 */
+  function cols(s, o) {
+    for (var i = 0; i < 4; i++) {
+      var c = o.cols[i]; if (!c) continue;
+      var x = 7 + 59 * i, hot = i === o.hot, ink = hot ? C.theme : c.dim ? C.dim : C.text;
+      var bar = hot ? C.theme : c.dim ? C.line : C.fill;
+      text(s, x, 184, "lb", c.l, c.dim ? C.dim : C.mid);
+      var face = "vl";
+      if (measure("vl", c.v) > 54) face = measure("rw", c.v) > 54 ? "lb" : "rw";
+      var end = textFit(s, x, 199 + (face === "rw" ? 3 : face === "lb" ? 6 : 0), face, c.v, ink, 54);
+      if (c.u && end - x + 2 + measure("lb", c.u) <= 54) text(s, end + 2, 205, "lb", c.u, C.mid);
+      rect(s, x, 231, 50, 2, C.line);
+      if (c.bar === "fill") rect(s, x, 231, Math.round(c.a * 50), 2, bar);
+      else if (c.bar === "bip") { rect(s, x + 24, 228, 1, 8, C.fill); var e = 25 + Math.round(c.a * 25); rect(s, x + Math.min(25, e), 231, Math.abs(e - 25), 2, bar); }
+      else if (c.bar === "tick") rect(s, x + Math.round(c.a * 44), 231, 6, 2, bar);
+      else if (c.bar === "steps") { var sw = Math.floor((50 - 2 * (c.b - 1)) / c.b); for (var k = 0; k < c.b; k++) rect(s, x + k * (sw + 2), 231, sw, 2, k === c.a ? bar : C.line); }
+    }
+  }
+
+  /* ---------------------------------------------------------- pictures --- */
+  function lab(dot, tag) { return { head: "EDIT", sub: "WAVE LAB", ndots: 6, dot: dot, tag: tag || "" }; }
+  function labels(s, page, wave) {                 /* the page's name (no room for it in the header) and the wave */
+    text(s, 10, 32, "lb", page, C.dim);
+    if (wave) textR(s, 230, 32, "lb", wave, C.mid);
+  }
+  function cycle(w, x0, width, cy, amp) {
+    var n = width / 2, xs = samples(w, n), pts = [];
+    for (var i = 0; i <= n; i++) pts.push([x0 + 2 * i, cy - xs[i % n] * amp]);
+    return pts;
+  }
+  /* one cycle across 12..228, the start in grey behind (pic_lfo's frame: a rule through the middle) */
+  function picCycle(s, w, start) {
+    rect(s, 12, 104, 216, 1, C.line);
+    if (start) poly(s, cycle(start, 12, 216, 104, 50), C.fill, 1.5);
+    poly(s, cycle(w, 12, 216, 104, 50), C.theme, 2);
+  }
+  /* 64 bars, 3 px apart from x 24, in dB from -72 (the floor) to full scale */
+  function barX(k) { return 24 + 3 * (k - 1); }
+  function barH(w, k, h) { return Math.max(0, Math.min(h, Math.round((db(mag(w, k)) + 72) / 72 * h))); }
+  function picSpectrum(s, w, start, fk) {
+    var base = 156, h = 100, k;
+    rect(s, barX(fk) + 1, 50, 1, base - 50, C.mid);                 /* the formant's harmonic */
+    for (k = 1; k <= H; k++) { var bh = barH(w, k, h); if (bh) rect(s, barX(k), base - bh, 2, bh, C.theme); }
+    for (k = 1; k <= H; k++) { var sh = barH(start, k, h); if (sh) rect(s, barX(k), base - sh - 2, 2, 1, C.text); }   /* the start */
+    disc(s, barX(fk) + 1.5, 50, 7, C.theme);
+    rect(s, 12, base + 1, 216, 1, C.line);
+    [1, 8, 16, 24, 32, 40, 48, 56, 64].forEach(function (q) { rect(s, barX(q), base + 3, 1, 3, C.off); });
+  }
+  /* four drawbars over the knobs (out: louder; a tick at 0 dB, the start's H1), the 64 bars under them */
+  function picHarm(s, w, first, hot) {
+    var rail = 50, len = 56, i, k;
+    rect(s, 12, rail - 2, 216, 2, C.line);
+    for (i = 0; i < 4; i++) {
+      var x = 7 + 59 * i, d = level(first + i), out = d < -48 ? 0 : Math.round(Math.max(0, Math.min(1, (d + 48) / 60)) * len);
+      var ink = i === hot ? C.theme : C.fill, zero = rail + Math.round(48 / 60 * len);
+      rect(s, x + 24, rail, 2, len + 8, C.well);                    /* (the travel, as BAR_TICK's track) */
+      if (out) rect(s, x + 18, rail, 14, out, ink);
+      rect(s, x + 12, rail + out, 26, 8, out ? ink : i === hot ? C.theme : C.off);
+      rect(s, x + 7, zero, 4, 1, C.mid); rect(s, x + 39, zero, 4, 1, C.mid);
+    }
+    var base = 160, bh = 30;
+    for (k = 1; k <= H; k++) { var b = barH(w, k, bh); if (b) rect(s, barX(k), base - b, 2, b, k >= first && k < first + 4 ? C.theme : C.fill); }
+    rect(s, 12, base + 1, 216, 1, C.line);
+  }
+  /* SAVE's name: TY_NM at y 48, the letter under the cursor marked at y 92, three lines under it */
+  function picName(s, name, cursor, lines) {
+    var x0 = 10 + measure("nm", name.slice(0, cursor)), cw = measure("nm", name[cursor] || " ");
+    rect(s, Math.round(x0), 92, Math.max(8, Math.round(cw)), 3, C.theme);
+    textFit(s, 10, 48, "nm", name, C.text, 220);
+    textFit(s, 10, 112, "tx", lines[0], C.mid, 220);
+    textFit(s, 10, 134, "tx", lines[1], C.text, 220);
+    textFit(s, 10, 156, "lb", lines[2], C.dim, 220);
+  }
+  /* the slots' cycles over their knobs, the hot one in the engine's colour, an empty one a flat rule */
+  function picSlots(s, waves, hot) {
+    for (var i = 0; i < 4; i++) {
+      var x = 7 + 59 * i;
+      rect(s, x, 102, 50, 1, C.line);
+      if (waves[i]) poly(s, cycle(waves[i], x, 50, 102, 42), i === hot ? C.theme : C.fill, 2);
+    }
+  }
+
+  /* -------------------------------------------------------------- cards --- */
+  var NWAVE = 56, NUSER = 14;
+  function userTick(u) { return u / NUSER; }                        /* K1 WAVE: NEW, U1..U14 */
+  function waveTick(id) { return id / (NWAVE + NUSER - 1); }        /* any wave: the 56 factory, then the user */
+  var REVERT = { l: "REVERT", v: "EDIT", bar: "steps", a: 0, b: 2 };
+
+  /* ------------------------------------------------------------- scenes --- */
+  function wavePage(s, tag) {
+    header(s, lab(0, tag)); labels(s, "WAVE", "U5 BELL"); picCycle(s, U5.mixOut, U5.start);
+    cols(s, { hot: 2, cols: [{ l: "WAVE", v: "U5 BELL", bar: "tick", a: userTick(5) }, { l: "FROM", v: "SAW", bar: "tick", a: waveTick(2) },
+      { l: "MIX", v: "35", u: "%", bar: "fill", a: 0.35 }, REVERT] });
+  }
+  var PAGES = [
+    { t: "WAVE", cap: "Morph U5, a copy of BELL, 35 % toward SAW; grey is where it started.",
+      draw: function (s) { wavePage(s, ""); } },
+    { t: "SHAPE", cap: "A copy of SINE skewed and folded, kept to 64 harmonics.",
+      draw: function (s) { header(s, lab(1)); labels(s, "SHAPE", "U2 SINE"); picCycle(s, U2.out, U2.start);
+        cols(s, { hot: 2, cols: [{ l: "SKEW", v: "+18", bar: "bip", a: 0.18 }, { l: "SYNC", v: "1.0", u: "x", bar: "fill", a: 0 },
+          { l: "FOLD", v: "62", bar: "fill", a: 0.62 }, { l: "CRUSH", v: "0", bar: "fill", a: 0 }] }); } },
+    { t: "SPECTRUM", cap: "Leaned 2 dB an octave, the evens down, +9 dB round H12; white ticks: the start.",
+      draw: function (s) { header(s, lab(2)); labels(s, "SPECTRUM", "U5 BELL"); picSpectrum(s, U5.specOut, U5.start, 12);
+        cols(s, { hot: 2, cols: [{ l: "TILT", v: "-2", u: "dB", bar: "bip", a: -2 / 12 }, { l: "EVENS", v: "-40", bar: "bip", a: -0.4 },
+          { l: "FORMNT", v: "H12", bar: "tick", a: 11 / 63 }, { l: "PEAK", v: "+9", u: "dB", bar: "bip", a: 9 / 24 }] }); } },
+    { t: "HARMONICS 1-4", cap: "Drawbars over the knobs, the tick at 0 dB (the start's H1); H2 pulled to -4 dB.",
+      draw: function (s) { header(s, lab(3)); labels(s, "HARMONICS 1-4", "U5 BELL"); picHarm(s, U5.out, 1, 1);
+        cols(s, { hot: 1, cols: [harmCard(1), harmCard(2), harmCard(3), harmCard(4)] }); } },
+    { t: "HARMONICS 5-8", cap: "The same for H5..H8, H7 pushed all the way in; on the SMK-37 the faders are these drawbars.",
+      draw: function (s) { header(s, lab(4)); labels(s, "HARMONICS 5-8", "U5 BELL"); picHarm(s, U5.out, 5, 2);
+        cols(s, { hot: 2, cols: [harmCard(5), harmCard(6), harmCard(7), harmCard(8)] }); } },
+    { t: "NAME", cap: "Seven letters, as the factory waves have, drawn as SAVE draws a name.",
+      draw: function (s) { header(s, lab(5)); labels(s, "NAME", ""); picName(s, "BELLSAW", 4, ["User wave 5 of 14", "In OSC 1, SLOT 2", "Stored a moment after the last turn"]);
+        cols(s, { hot: 1, cols: [{ l: "CURSOR", v: "5", u: "/7", bar: "tick", a: 4 / 6 }, { l: "LETTER", v: "S", bar: "tick", a: 19 / 36 }] }); } }
+  ];
+  var STATES = [
+    { t: "BELL › U5", cap: "The first turn on factory BELL copies it into U5, and the slot follows.",
+      draw: function (s) { header(s, { toast: "BELL › U5" }); labels(s, "WAVE", "U5 BELL"); picCycle(s, FIRST, F.BELL);
+        cols(s, { hot: 2, cols: [{ l: "WAVE", v: "U5 BELL", bar: "tick", a: userTick(5) }, { l: "FROM", v: "SAW", bar: "tick", a: waveTick(2) },
+          { l: "MIX", v: "1", u: "%", bar: "fill", a: 0.01 }, REVERT] }); } },
+    { t: "BANK FULL", cap: "With all 14 user waves in use the turn changes nothing, and BELL stays factory.",
+      draw: function (s) { header(s, { toast: "BANK FULL" }); labels(s, "WAVE", "BELL"); picCycle(s, F.BELL, null);
+        cols(s, { hot: 2, cols: [{ l: "WAVE", v: "BELL", bar: "none" }, { l: "FROM", v: "SAW", bar: "tick", a: waveTick(2) },
+          { l: "MIX", v: "0", u: "%", bar: "fill", a: 0 }, { l: "REVERT", v: "–", bar: "none", dim: 1 }] }); } }
+  ];
+  var SLOTS = [
+    { t: "OSC 1 · SLOTS 1-4", cap: "A new picture for this page: each slot's cycle over its knob, the hot one in green.",
+      draw: function (s) { header(s, { head: "EDIT", sub: "OSC 1", ndots: 4, dot: 2 }); picSlots(s, [F.SAW, U5.out, F.VOXA, null], 1);
+        cols(s, { hot: 1, cols: [{ l: "SLOT 1", v: "SAW", bar: "tick", a: 3 / 70 }, { l: "SLOT 2", v: "U5 BELL", bar: "tick", a: 61 / 70 },
+          { l: "SLOT 3", v: "VOX A", bar: "tick", a: 17 / 70 }, { l: "SLOT 4", v: "EMPTY", bar: "tick", a: 0, dim: 1 }] }); } }
+  ];
+
+  var TAGGED = [
+    { t: "WAVE, tagged", cap: "With the tag in T_THEME, the room rule leaves 57 px of the 71 that WAVE LAB needs.",
+      draw: function (s) { wavePage(s, "HYDRA"); } }
+  ];
+
+  function build() {
+    [["pages", PAGES], ["states", STATES], ["slots", SLOTS], ["tagged", TAGGED]].forEach(function (g) {
+      var host = document.getElementById(g[0]); host.textContent = "";
+      g[1].forEach(function (sc) {
+        var fig = el("figure", "fig"), shell = el("div", "shell"), scr = el("div", "screen");
+        sc.draw(scr); shell.appendChild(scr); fig.appendChild(shell);
+        var cap = el("figcaption"); cap.appendChild(el("b", "", null, sc.t)); cap.appendChild(document.createTextNode(sc.cap));
+        fig.appendChild(cap); host.appendChild(fig);
+      });
+    });
+  }
+  build();
+  if (document.fonts) {                            /* measured again once Archivo's faces are in */
+    var again = 0;
+    document.fonts.addEventListener && document.fonts.addEventListener("loadingdone", function () { clearTimeout(again); again = setTimeout(build, 30); });
+    document.fonts.ready.then(build);
+  }
+})();
+</script>

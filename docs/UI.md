@@ -27,7 +27,7 @@ exception: holding it is the sustain pedal, and the keys play.
 | SEL | SCALE | Scale, root, key mode, shift; the MPC degree. |
 | ENV | ENV | The engine's own envelopes (P5 filter and amp; FM6 pitch EG; the CZ-1's six 8-stage envelopes; the J106's one ADSR with its VCA mode, VCF amount and polarity; HYDRA's ENV 1 and what it moves), then the common MOD ENV (on HYDRA, AMP ENV: the voice's amplitude). |
 | LFO | LFO | The engine's own LFO (P5 LFO, FM LFO, CZ-1 vibrato, J106 LFO rate, delay and its DCO and VCF depths; HYDRA has the common one alone), the common LFO, and the four-route matrix. HYDRA's macros follow it: MACRO 1–8, each a NAME, its VALUE and up to three destinations with their depths. |
-| EDIT | EDIT | The engine's own panel. P5: oscillators, mixer, filter, poly mod, wheel mod, play. FM6: voice and algorithm, OP1–OP6, macros, function settings. CZ-1: tone, detune, line 1 and line 2. J106: DCO waves and modulation, VCF cutoff and modulation (with the HPF), VCA mode, level and chorus. HYDRA: OSC 1 with mutants 1 and 2, OSC 2 with mutants 3 and 4, OSC 3, the mixer, FILTER 1, FILTER 2. A value that has no effect on the sound as it stands is shown dim, but you can still edit it. |
+| EDIT | EDIT | The engine's own panel. P5: oscillators, mixer, filter, poly mod, wheel mod, play. FM6: voice and algorithm, OP1–OP6, macros, function settings. CZ-1: tone, detune, line 1 and line 2. J106: DCO waves and modulation, VCF cutoff and modulation (with the HPF), VCA mode, level and chorus. HYDRA: OSC 1 with mutants 1 and 2, OSC 2 with mutants 3 and 4, OSC 3, the WAVE LAB (its user waves, below), the mixer, FILTER 1, FILTER 2. A value that has no effect on the sound as it stands is shown dim, but you can still edit it. |
 | GLO | GLOBAL | Tempo, output, the parts, tuning, MIDI channels and thru, voice budget, display, erase everything. |
 | SAVE | SAVE | Choose a slot, set the name letter by letter (CURSOR, LETTER), and star it if you like. Press SAVE again to store. |
 | ARP | ARP | Pattern and feel. Its LED flashes with the arp's notes. Tap ARP to open it or turn its page. Hold ARP as a sustain pedal that latches, a drone: the notes you play or let go of while it is down keep sounding after you let go of ARP, and the keys play over them, until you press ARP again. That press ends them instead of opening the page, and what you play while still holding it becomes the new drone. Striking a kept note again restarts it, and it stays. With the arp on, the arp keeps playing the kept notes. While notes are kept, HOME shows SUSTAIN and the LED stays lit (with the arp on, it flashes with the arp). Loading another sound ends them. |
@@ -116,7 +116,25 @@ and OSC 3's WAVE list the factory waves first, then the user waves, each by its 
 is one cycle of 256 points, kept as the factory waves are: its first 64 harmonics, no offset, the same peak level. A user
 wave that was never written plays a sine.
 
-You make and change user waves in the web editor's HYDRA panel (draw a wave, shape its harmonics, start from a factory wave,
+On the panel, **EDIT > WAVE LAB** (after OSC 3) edits one user wave by ear. OSC 1 and OSC 2's SLOT pages show each slot's
+cycle over its knob.
+
+| Page | K1 | K2 | K3 | K4 |
+| --- | --- | --- | --- | --- |
+| WAVE | WAVE: the user wave edited | FROM: any wave | MIX: toward FROM, 0–100 % | REVERT: EDIT or START |
+| SHAPE | SKEW: a bend in the cycle | SYNC: the cycle read 1.0–8.0 times | FOLD | CRUSH |
+| SPECTRUM | TILT: dB an octave | EVENS: −40 the evens down, +40 the odds | FORMNT: the harmonic a peak stands on | PEAK: its dB |
+| HARMONICS 1-4, 5-8 | H1..H8: each a level against the start's H1, OFF to +12 dB | | | |
+| NAME | CURSOR | LETTER | | |
+
+The lab starts on the wave of the wave field you turned last (OSC 1/2 WAVE or a SLOT, OSC 3 WAVE). A factory wave there is
+copied into the first free user wave at your first turn and the field then plays the copy (the header says BELL › U5); with
+all 14 in use it says BANK FULL and nothing changes. The values are one chain from the wave as the session found it (the
+grey cycle): MIX, then SHAPE, then SPECTRUM, then the drawbars. Every turn is heard at once. REVERT at START plays the wave
+as it was, to compare; leaving the lab there keeps it as it was. Leaving the lab, or turning WAVE, keeps what plays and
+the next session starts from it with every value back at neutral.
+
+You also make and change user waves in the web editor's HYDRA panel (draw a wave, shape its harmonics, start from a factory wave,
 import a .wav: one cycle, or a wavetable's frames as a scan list). A change is heard at once in every sound that uses the
 wave, on both parts. Saadet keeps the bank once it rests (nothing touched for 3 s, nothing sounding), so a write never
 interrupts playing; the editor's KEEP NOW writes it at once. A sound only names its user waves: changing U3 changes every

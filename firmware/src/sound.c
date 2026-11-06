@@ -161,16 +161,18 @@ static int sounding(void)                               /* a voice of any part, 
 }
 static void autosave_poll(uint32_t active)
 {
-    static uint32_t t0, rx;
+    static uint32_t t0, rx, ug;
     static uint8_t done;
 #if MELODEE_UART
     uint32_t r = usb.rx_pkts + um.bytes;
 #else
     uint32_t r = usb.rx_pkts;
 #endif
-    if (active || r != rx || transport_busy() || sounding()) {
+    if (active || r != rx || hy_ugen != ug || transport_busy() || sounding()) {   /* (HYDRA's user waves changing: the
+                                                                                    * WAVE LAB's knobs, so not once a rest) */
         t0 = fm1_ms;
         rx = r;
+        ug = hy_ugen;
         done = 0;
         return;
     }

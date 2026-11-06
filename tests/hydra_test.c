@@ -1010,9 +1010,118 @@ static void the_bank(void)
     }
 }
 
+/* the WAVE LAB (hydra_lab.c), driven as the panel drives it: a page of EDIT > WAVE LAB, its knobs */
+static uint32_t lab_stop(const char *page)
+{
+    ui_place_t pl = place_of(PL_EDIT);
+    for (uint32_t i = 0; i < pl.n; i++)
+        if (str_eq(pl.stop[i].obj, "WAVE LAB") && str_eq(pl.stop[i].page, page)) return i;
+    return 0;
+}
+static void lab_go(const char *page)                   /* (a frame first: another engine opens EDIT on its first page) */
+{
+    frame();
+    uix.place = PL_EDIT; uix.stop[PL_EDIT] = (uint8_t)lab_stop(page);
+    frames(64);
+}
+static void lab_knob(uint32_t k, int32_t s) { field_step(&place_of(PL_EDIT).stop[ui_stop(PL_EDIT)].f[k], s); frames(64); }
+static int lab_near(const int16_t *a, const int16_t *b, int32_t tol)
+{
+    for (uint32_t i = 0; i < HY_PTS; i++)
+        if (abs(a[i] - b[i]) > tol) return 0;
+    return 1;
+}
+static float lab_h(const int16_t *w, uint32_t k)       /* harmonic k's level */
+{
+    float re[HL_H + 1u], im[HL_H + 1u];
+    hl_spectrum(w, re, im);
+    return fm_sqrtf(re[k] * re[k] + im[k] * im[k]);
+}
+/* neutral values give the start back, MIX at 100 % gives FROM; the first turn on a factory wave copies it into a free
+ * user wave and points the slot there, a full bank leaves all as it was; REVERT at START plays the start and, left there,
+ * keeps it; a drawbar gives a sine the harmonic it lacked; what plays while the knobs turn is the bank's */
+static void the_lab(void)
+{
+    track_t *t;
+    uint8_t *r;
+    int ok;
+    uint32_t i;
+    power_on();
+    memset(nor, 255, sizeof nor);
+    hy_bank_boot();
+    hl_take(HY_WAVES[HYW_BELL]);
+    check("lab: neutral values give the start back", lab_near(hl_out, HY_WAVES[HYW_BELL], 1));
+    hl.from = HYW_SAW + 1u; hl.mix = 100; hl_render();
+    check("lab: MIX at 100 % gives FROM", lab_near(hl_out, HY_WAVES[HYW_SAW], 2));
+    hl.on = 0;
+
+    t = hy_fresh(0);
+    r = hy_raw(t);
+    r[HY_O1 + HO_MODE] = 1;
+    r[HY_O1 + HO_L0 + 1] = HYW_BELL + 1;
+    hylab_wave_field(HY_O1 + HO_L0 + 1);               /* (as turning SLOT 2 does) */
+    lab_go("WAVE");
+    ok = hl.on && hl.k < 0 && hl.src == HYW_BELL + 1 && hylab_get(HL_WAVE) == 0;
+    lab_knob(2, 35);
+    check("lab: the first turn copies BELL into U1 and points the slot there",
+          ok && hl.k == 0 && hy_uwave(0)->used && !strcmp(hy_uwave(0)->name, "BELL") && r[HY_O1 + HO_L0 + 1] == HY_USER0 &&
+          !strcmp(uix.toast, "BELL \x9b U1"));
+    check("lab: a turn is heard at once", !lab_near(hy_uwave(0)->pts, HY_WAVES[HYW_BELL], 1) && lab_near(hy_uwave(0)->pts, hl_out, 0));
+    lab_knob(3, 1);                                    /* REVERT: START */
+    ok = lab_near(hy_uwave(0)->pts, HY_WAVES[HYW_BELL], 0);
+    lab_knob(3, -1);
+    ok &= lab_near(hy_uwave(0)->pts, hl_out, 0);
+    check("lab: REVERT plays the start, EDIT the result", ok);
+    lab_knob(3, 1);
+    uix.place = PL_HOME; frames(64);                   /* (left at START: the session ends on the start) */
+    check("lab: left at START, the start is kept", !hl.on && lab_near(hy_uwave(0)->pts, HY_WAVES[HYW_BELL], 0));
+
+    lab_go("WAVE");
+    ok = hl.k == 0 && hylab_get(HL_MIX) == 0 && hylab_get(HL_REVERT) == 0;   /* (a new session: neutral) */
+    lab_knob(2, 50);
+    uix.place = PL_HOME; frames(64);
+    check("lab: a session ends keeping what plays, the next starts neutral from it",
+          ok && !lab_near(hy_uwave(0)->pts, HY_WAVES[HYW_BELL], 1) && hy_uwave(0)->used);
+
+    for (i = 1; i < HY_UWAVES; i++) hy_uset(i, HY_WAVES[HYW_TRI], "FULL", 1);
+    r[HY_O1 + HO_L0 + 2] = HYW_GLASS + 1;
+    hylab_wave_field(HY_O1 + HO_L0 + 2);
+    lab_go("WAVE");
+    ok = hl.k < 0;
+    lab_knob(2, 20);
+    check("lab: with the bank full a turn changes nothing", ok && hl.k < 0 && r[HY_O1 + HO_L0 + 2] == HYW_GLASS + 1 &&
+                                                            !strcmp(uix.toast, "BANK FULL") && hylab_get(HL_MIX) == 0);
+    uix.place = PL_HOME; frames(64);
+
+    hy_uclear(5);                                      /* a sine in U6, given its second harmonic */
+    hy_uset(5, HY_WAVES[HYW_SINE], "PURE", 1);
+    r[HY_O1 + HO_L0 + 3] = (uint8_t)(HY_USER0 + 5u);
+    hylab_wave_field(HY_O1 + HO_L0 + 3);
+    lab_go("HARMONICS 1-4");
+    ok = hl.k == 5 && hylab_get(HL_H1) == 0 && hylab_get(HL_H1 + 1) == HL_OFF;
+    for (i = 0; i < 61u; i++) lab_knob(1, 1);          /* H2 up from OFF to 0 dB: the start's H1 */
+    frames(64);
+    {
+        float h1 = lab_h(hy_uwave(5)->pts, 1), h2 = lab_h(hy_uwave(5)->pts, 2);
+        printf("  drawbar: H2 %.0f against H1 %.0f\n", h2, h1);
+        check("lab: a drawbar gives a sine the harmonic it lacked", ok && h2 > 0.89f * h1 && h2 < 1.12f * h1);
+    }
+    uix.place = PL_HOME; frames(3500);                 /* (at rest: ui_input's autosave writes the bank) */
+    {
+        int16_t keep[HY_PTS];
+        memcpy(keep, hy_uwave(5)->pts, sizeof keep);
+        memset(hy_ubank, 0, sizeof hy_ubank);          /* (a power cycle) */
+        hy_bank_boot();
+        check("lab: the edits are in flash once the unit rests", lab_near(hy_uwave(5)->pts, keep, 0) && hy_uwave(0)->used &&
+                                                                !strcmp(hy_uwave(0)->name, "BELL"));
+    }
+    hy_quiet(t);
+}
+
 int main(void)
 {
     power_on();
+    the_lab();
     the_state();
     the_sound();
     the_panel();

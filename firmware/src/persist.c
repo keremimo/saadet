@@ -18,6 +18,7 @@ static union { uint32_t align; uint8_t raw[8192]; } transfer_scratch __attribute
 static uint32_t transfer_gen;
 static uint8_t *transfer_borrow(void) { transfer_gen++; return transfer_scratch.raw; }
 #include "hydra_bank.c"                           /* HYDRA's user waves (hydra_bank.h) */
+#include "hydra_lab.c"                            /* .. and the panel's WAVE LAB */
 
 
 /* the main firmware's template (its project.c tmpl_t) after the settings: kept as read. Its size and its magic

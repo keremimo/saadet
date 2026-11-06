@@ -9,7 +9,8 @@
 enum { PL_HOME, PL_LIB, PL_SCL, PL_ENV, PL_LFO, PL_EDIT, PL_GLO, PL_SAVE, PL_ARP, PL_SEQ, PL_PLAY, PL_N };
 /* the picture between the header and the values (ui_pics.c); a stop's arg says which envelope, operator or filter */
 enum { PIC_NONE, PIC_ENV, PIC_LFO, PIC_MATRIX, PIC_ARP, PIC_SCALE, PIC_CHORD, PIC_VOICES, PIC_READOUT, PIC_LIB,
-       PIC_FADERS, PIC_P5ENV, PIC_FILTER, PIC_ALGO, PIC_FMEG, PIC_CZEG, PIC_ERASE, PIC_BLE, PIC_BTDEV };
+       PIC_FADERS, PIC_P5ENV, PIC_FILTER, PIC_ALGO, PIC_FMEG, PIC_CZEG, PIC_ERASE, PIC_BLE, PIC_BTDEV,
+       PIC_HYSLOTS, PIC_HYWAVE, PIC_HYSPEC, PIC_HYNAME };   /* (HYDRA's slots' waves; the WAVE LAB's, hydra_lab.c) */
 typedef struct { const char *obj, *page; uint8_t pic; ui_field_t f[4]; uint8_t arg; } ui_stop_t;   /* obj "": the
                                                                                                 * place is one object */
 typedef struct { const char *name; const ui_stop_t *stop; uint8_t n; } ui_place_t;
@@ -24,6 +25,7 @@ typedef struct { const char *name; const ui_stop_t *stop; uint8_t n; } ui_place_
 #define FH(id, l) {FK_HY, (uint8_t)(id), l, 0}
 #define FD(id, l) {FK_DEV, (uint8_t)(id), l, 0}
 #define FL(id, l) {FK_LIB, (uint8_t)(id), l, 0}
+#define FW(id, l) {FK_HYLAB, (uint8_t)(id), l, 0}
 #define F0 {FK_NONE, 0, 0, 0}
 
 /* the library's lists (ui_lib.c); its fields, SAVE's and an import's */
@@ -252,8 +254,8 @@ static const ui_stop_t ST_SEQ[] = {
 #define HY_OSC_STOPS(n, b) \
     {n, "WAVE", PIC_FADERS, {FH(b + HO_MODE, "MODE"), FH(b + HO_WAVE, "WAVE"), FH(b + HO_SCAN, "SCAN"), FH(b + HO_SEMI, "SEMI")}}, \
     {n, "TUNE", PIC_FADERS, {FH(b + HO_CENT, "CENT"), FH(b + HO_KEY, "KEYS"), F0, F0}}, \
-    {n, "SLOTS 1-4", PIC_FADERS, {FH(b + HO_L0, "SLOT 1"), FH(b + HO_L0 + 1, "SLOT 2"), FH(b + HO_L0 + 2, "SLOT 3"), FH(b + HO_L0 + 3, "SLOT 4")}}, \
-    {n, "SLOTS 5-8", PIC_FADERS, {FH(b + HO_L0 + 4, "SLOT 5"), FH(b + HO_L0 + 5, "SLOT 6"), FH(b + HO_L0 + 6, "SLOT 7"), FH(b + HO_L0 + 7, "SLOT 8")}}
+    {n, "SLOTS 1-4", PIC_HYSLOTS, {FH(b + HO_L0, "SLOT 1"), FH(b + HO_L0 + 1, "SLOT 2"), FH(b + HO_L0 + 2, "SLOT 3"), FH(b + HO_L0 + 3, "SLOT 4")}}, \
+    {n, "SLOTS 5-8", PIC_HYSLOTS, {FH(b + HO_L0 + 4, "SLOT 5"), FH(b + HO_L0 + 5, "SLOT 6"), FH(b + HO_L0 + 6, "SLOT 7"), FH(b + HO_L0 + 7, "SLOT 8")}}
 #define HY_MUT_STOPS(n, b) \
     {n, "MODE", PIC_FADERS, {FH(b + HM_MODE, "MODE"), FH(b + HM_DEPTH, "DEPTH"), FH(b + HM_RATIO, 0), FH(b + HM_WET, "WET")}}, \
     {n, "SOURCE", PIC_FADERS, {FH(b + HM_SRC, "FROM"), FH(b + HM_AUX, 0), F0, F0}}
@@ -261,6 +263,13 @@ static const ui_stop_t ST_EDIT_HY[] = {
     HY_OSC_STOPS("OSC 1", HY_O1), HY_MUT_STOPS("MUTANT 1", HY_M1), HY_MUT_STOPS("MUTANT 2", HY_M2),
     HY_OSC_STOPS("OSC 2", HY_O2), HY_MUT_STOPS("MUTANT 3", HY_M3), HY_MUT_STOPS("MUTANT 4", HY_M4),
     {"OSC 3", "WAVE", PIC_FADERS, {FH(HY_O3_WAVE, "WAVE"), FH(HY_O3_SEMI, "SEMI"), FH(HY_O3_CENT, "CENT"), FH(HY_O3_KEY, "KEYS")}},
+    /* the WAVE LAB (hydra_lab.c): one user wave by ear, a chain from the wave it started as (arg: the spectrum's page) */
+    {"WAVE LAB", "WAVE", PIC_HYWAVE, {FW(HL_WAVE, "WAVE"), FW(HL_FROM, "FROM"), FW(HL_MIX, "MIX"), FW(HL_REVERT, "REVERT")}},
+    {"WAVE LAB", "SHAPE", PIC_HYWAVE, {FW(HL_SKEW, "SKEW"), FW(HL_SYNC, "SYNC"), FW(HL_FOLD, "FOLD"), FW(HL_CRUSH, "CRUSH")}},
+    {"WAVE LAB", "SPECTRUM", PIC_HYSPEC, {FW(HL_TILT, "TILT"), FW(HL_EVENS, "EVENS"), FW(HL_FORM, "FORMNT"), FW(HL_PEAK, "PEAK")}},
+    {"WAVE LAB", "HARMONICS 1-4", PIC_HYSPEC, {FW(HL_H1, "H1"), FW(HL_H1 + 1, "H2"), FW(HL_H1 + 2, "H3"), FW(HL_H1 + 3, "H4")}, 1},
+    {"WAVE LAB", "HARMONICS 5-8", PIC_HYSPEC, {FW(HL_H1 + 4, "H5"), FW(HL_H1 + 5, "H6"), FW(HL_H1 + 6, "H7"), FW(HL_H1 + 7, "H8")}, 2},
+    {"WAVE LAB", "NAME", PIC_HYNAME, {FW(HL_CURSOR, "CURSOR"), FW(HL_LETTER, "LETTER"), F0, F0}},
     {"MIXER", "LEVELS", PIC_FADERS, {FH(HY_LVL, "OSC 1"), FH(HY_LVL + 1, "OSC 2"), FH(HY_LVL + 2, "OSC 3"), FH(HY_AMP, "LEVEL")}},
     {"MIXER", "RING", PIC_FADERS, {FH(HY_LVL + 3, "RING"), FH(HY_RING_A, "RING A"), FH(HY_RING_B, "RING B"), F0}},
     {"MIXER", "NOISE", PIC_FADERS, {FH(HY_LVL + 4, "NOISE"), FH(HY_NOISE, "COLOR"), F0, F0}},

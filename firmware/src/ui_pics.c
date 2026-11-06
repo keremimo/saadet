@@ -62,6 +62,8 @@ static void pic_route(char *b, const track_t *t, uint32_t k)   /* "LFO > PITCH",
     str_cpy(b + str_len(b), d && d[0] && !str_eq(d, "-") ? d : N_MDST[clamp(dst, 0, (int32_t)NELEM(N_MDST) - 1)],
             24 - str_len(b));
 }
+static void hylab_pic(ui_vm_t *v, const ui_stop_t *st);   /* hydra_lab.c: HYDRA's slots, the WAVE LAB */
+static void hylab_draw(const ui_vm_t *v);
 static void pic_build(ui_vm_t *v, const ui_stop_t *st)
 {
     const track_t *t = TSEL;
@@ -128,6 +130,9 @@ static void pic_build(ui_vm_t *v, const ui_stop_t *st)
 #endif
     case PIC_ENV:
         v->pv[0] = t->p[P_ATK]; v->pv[1] = t->p[P_DEC]; v->pv[2] = t->p[P_SUS]; v->pv[3] = t->p[P_REL];
+        break;
+    case PIC_HYSLOTS: case PIC_HYWAVE: case PIC_HYSPEC: case PIC_HYNAME:
+        hylab_pic(v, st);
         break;
     case PIC_LFO:
         v->pv[0] = t->p[P_LWAVE]; v->pv[1] = t->p[P_LFADE]; v->pv[2] = t->p[P_LPOL]; v->pv[3] = t->p[P_LPHASE];
@@ -562,5 +567,6 @@ static void pic_draw(const ui_vm_t *v)
     case PIC_FMEG: pic_fmeg(v); break;
     case PIC_CZEG: pic_czeg(v); break;
     case PIC_READOUT: pic_readout(v); break;
+    case PIC_HYSLOTS: case PIC_HYWAVE: case PIC_HYSPEC: case PIC_HYNAME: hylab_draw(v); break;
     }
 }

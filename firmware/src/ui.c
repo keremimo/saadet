@@ -364,9 +364,11 @@ static void ui_knob(uint32_t k, int32_t s)
     uix.pop = uix.place == PL_HOME;
 #endif
 }
+static void hylab_poll(void);                    /* hydra_lab.c: the WAVE LAB's session, its renders */
 static void ui_timers(void)
 {
     uint32_t now = fm1_ms;
+    hylab_poll();
 #ifdef SAADET_FM1_BASE
     uint32_t picture=uix.place==PL_GLO?place_of(PL_GLO).stop[ui_stop(PL_GLO)].pic:PIC_NONE;
     const char *event=sd_ble_page(picture==PIC_BTDEV&&!uix.reveal,picture==PIC_BLE&&!uix.reveal);
