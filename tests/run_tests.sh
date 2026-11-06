@@ -25,6 +25,40 @@ run installer python3 tests/install_test.py
 run recovery python3 tests/recovery_test.py
 run editor-protocol node web/test_synth.mjs
 run editor-dom node web/test_dom.mjs
+# The editor bridge (tests/editor_bridge.c, at shipping precision): an external editor's session tests drive editor.c
+# through it. INFO, PING and WATCH; a SET's echo and no CHANGED for the editor's own change; a knob's turn of ATTACK,
+# CHANGED at the next pass. (INFO's reply past its name changes with the firmware: the name alone is compared.)
+"$CC" -O2 -w -Ibuild/gen -Ifirmware/src tests/editor_bridge.c -lm -pthread -o "$OUT/editor_bridge" >"$LOG/editor_bridge.compile.log" 2>&1 || { cat "$LOG/editor_bridge.compile.log"; exit 1; }
+editor_bridge_test() {
+ got=$("$OUT/editor_bridge" <<'EOF' | sed '1s/^\(F0 7D 46 4C 01\( [2-7][0-9A-F]\)* 00\) .* F7$/\1 .. F7/'
+F0 7D 46 4C 01 F7
+F0 7D 46 4C 19 F7
+F0 7D 46 4C 16 01 F7
+F0 7D 46 4C 03 00 01 28 40 F7
+#tick 20
+#sync
+#field 0 track 1 3
+#tick 20
+#sync
+EOF
+)
+ want='F0 7D 46 4C 01 53 41 41 44 45 54 20 54 45 53 54 00 .. F7
+#ok
+F0 7D 46 4C 19 00 F7
+#ok
+F0 7D 46 4C 16 01 F7
+#ok
+F0 7D 46 4C 03 00 01 28 40 F7
+#ok
+#ok
+#ok
+#ok
+#ok
+F0 7D 46 4C 17 00 01 2B 40 F7
+#ok'
+ [ "$got" = "$want" ] || { printf '%s\n' "$want" >"$LOG/editor_bridge.want"; printf '%s\n' "$got" | diff -u "$LOG/editor_bridge.want" -; }
+}
+run editor-bridge editor_bridge_test
 # Bounds checks are separate from sample/cost tests so instrumentation cannot skew their timings.
 "$CC" -O1 -g -DAUDIO_FRAC_BITS=0 -w -fsanitize=address -fno-omit-frame-pointer -Ibuild/gen -Ifirmware/src tests/synth_test.c -lm -o "$OUT/synth_asan"
 run synth-address "$OUT/synth_asan"
