@@ -17,7 +17,7 @@
 #define SXQ 1024u
 static uint32_t so_w, so_r, wire_n;
 static uint8_t wire[2048];
-static void ota_wire_send(const uint8_t *p, uint32_t n) { assert(n <= sizeof wire); memcpy(wire, p, n); wire_n = n; }
+static int ota_wire_send(const uint8_t *p, uint32_t n) { assert(n <= sizeof wire); memcpy(wire, p, n); wire_n = n; return 0; }
 #define ED_BK_FLASH_PTR(off) (nor + (off))
 static int ota_frame_get(const uint8_t **p, uint32_t *n) { (void)p; (void)n; return 0; }
 static void ota_frame_done(void) {}

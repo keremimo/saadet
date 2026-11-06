@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Kerem Kilic (Ellic Studio)
  * Portions Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* Editor protocol: the FM6 patches (EDITOR_PROTOCOL.md "FM6 patches", cmds 68..71). A patch travels as the
- * 128-byte packed record (every byte 7-bit: no pack7). Targets: 0 a track's own patch (index 0..3), 1 the patch bank
+/* Editor protocol: the FM6 patches (EDITOR_PROTOCOL.md "FM6 patches", cmds 68..71; 82 a part's function settings).
+ * A patch travels as the 128-byte packed record (every byte 7-bit: no pack7). Targets: 0 a track's own patch (index 0..3), 1 the patch bank
  * (retired in 1.0.3: GET / PUT / ERASE answer rc 3, "no bank"; LIST counts 0 bank slots), 2 a factory patch
  * (0..FM6_NFAC-1, read only), 3 a user preset's patch (0..UP_SLOTS-1: an FM6 user preset; native_presets.c). */
-enum { ED_FM6_GET = 68, ED_FM6_PUT, ED_FM6_LIST, ED_FM6_ERASE };
+enum { ED_FM6_GET = 68, ED_FM6_PUT, ED_FM6_LIST, ED_FM6_ERASE, ED_FM6_FN = 82 };
 enum { ED_FM6_TRACK, ED_FM6_BANK, ED_FM6_FACTORY, ED_FM6_USER };
 #define ED_FM6_NOBANK 3u                                   /* rc: this firmware has no patch bank */
 
@@ -74,6 +74,25 @@ static int ed_fm6_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
         for (i = 0; i < FM6_NFAC; i++) {
             ed_b(1);
             fm6_factory(i, pk); ed_fm6_name(pk);
+        }
+        return 1;
+    case ED_FM6_FN:                                        /* 0 GET track -> op, track, rc, the function settings, the
+                                                              operator switches; 1 SET track, setting, value (FM6_NFN: the
+                                                              switches, bit 0 OP6 .. bit 5 OP1) -> op, track, rc */
+        rc = n < 2u || a[1] >= NTRK || a[0] > 1u || (a[0] == 0u && n != 2u) ||
+             (a[0] == 1u && (n != 4u || a[2] > FM6_NFN || (a[2] < FM6_NFN && a[3] > FM6_FNMAX[a[2]]) || (a[2] == FM6_NFN && a[3] > FM6_ON_ALL)));
+        if (!rc && a[0] == 1u) {
+            if (a[2] < FM6_NFN)
+                fm6_fn_set(a[1], a[2], a[3]);
+            else
+                fm6_on[a[1]] = (uint8_t)(a[3] & FM6_ON_ALL);
+            ui.force = 1;
+        }
+        ed_b(n ? a[0] : 127u); ed_b(n > 1u ? a[1] : 127u); ed_b(rc);
+        if (!rc && a[0] == 0u) {
+            for (i = 0; i < FM6_NFN; i++)
+                ed_b(fm6_fn[a[1]][i]);
+            ed_b(fm6_on[a[1]]);
         }
         return 1;
     case ED_FM6_ERASE:                                     /* bank index -> index, rc (no bank: 3) */

@@ -7,7 +7,9 @@ Hardware protocol behavior has not been verified for Saadet.
 
 Frames use `F0 7D 46 4C command arguments… F7`. All payload bytes are seven-bit
 safe. Signed parameter values use two least-significant-first seven-bit bytes,
-offset by 8192. Replies echo the command. WATCH enables parameter/reload pushes.
+offset by 8192. Replies echo the command. WATCH enables parameter/reload pushes (bit 1 adds TRACK_CHANGED, bit 2
+PUSH: see "Pushes"). A push the unit could not send (the host stopped reading for 200 ms) stays due and goes out at a later
+pass, so a client watching never misses a change it was owed.
 
 INFO identifies `SAADET`, two parts, zero steps, synth marker `53 01` (hex), native
 engine capabilities, and shared-library marker `55 01` with a two-byte total of
@@ -18,6 +20,11 @@ announces HYDRA: engine 25, favourites namespace 26, command 97 and a patch of 1
 is reserved (the Prophet's user namespace), as are 22 (the JUNO-106's) and 23 and 24. Reserved identities do not expose
 additional engines or parts. Globals 10, 11 and 24 are the parts mode (0 ONE, 1 MULTI, 2 SPLIT, 3 LAYER), the split note
 and part B's MIDI channel. With the mode at ONE, only part zero can be selected.
+
+After HYDRA's user-wave marker, `45 01 features 63 64 65 52 0C` (hex) announces the editor features: a mask (1 PUSH, 2
+performances, 4 the voice budget, 8 a CZ-1 tone into a playing part without a cut, 16 FM6's function settings, 32 global
+BUDGET is the instrument's voice budget), then the commands for performances (99), PUSH (100), VOICES (101) and FM6's
+function settings (82), and the number of performances (12). Firmware without the marker has none of these.
 
 | Commands | Purpose |
 |---|---|
@@ -37,6 +44,10 @@ and part B's MIDI channel. With the mode at ONE, only part zero can be selected.
 | 96 | Native JUNO-106 transfers |
 | 97 | Native HYDRA transfers |
 | 98 | HYDRA user waves |
+| 82 | A part's FM6 function settings and operator switches |
+| 99 | Performances: list, load, store, rename, delete |
+| 100 | PUSH: the parts' native patches and sounds, HYDRA's user waves |
+| 101 | VOICES: the shared voice budget as it plays |
 
 Command 72 answers on both builds with the same layout (`tools/usb_audio_stats.py`
 reads it; flag 1 resets the maxima, 2 adds voices, 4 the second core, 8 memory,
@@ -142,6 +153,54 @@ Files carry user waves as Saadet's own message, `F0 7D 48 59 02`, the id, the se
 (600 bytes). A file with HYDRA sounds lists the waves first, numbered in the file, then the patches naming them by those
 ids; a client that imports it puts each wave into the unit's bank (one with the same points is reused, others take free
 waves) and rewrites the patches' ids. The unit itself does not read these messages.
+
+## Pushes
+
+WATCH with bit 2 (`WATCH 05` or `07`) adds command 100 pushes; the reply carries bit 2 when the firmware has them. Each
+names what changed, and the client reads it again:
+
+- `100 0 part engine`: part's native patch changed (Prophet program, JUNO-106 tone, HYDRA patch, CZ-1 tone, FM6 voice with
+  its function settings and operator switches), from the panel, MIDI controllers, a native SysEx message or anything else.
+  At most one every 30 ms per part: a knob turning is followed, not echoed byte by byte.
+- `100 1 part engine preset_low preset_high`: a part other than the selected one took another sound (a performance load,
+  a slot load to part B). The selected part's still pushes RELOAD.
+- `100 2`: HYDRA's user waves changed (WAVE LAB, a restore): read the list (command 98) and the waves whose CRC changed.
+
+The unit follows each part's native patch by a hash, so every edit path is seen. The client's own requests for a part's
+native patch (95, 96, 97 and 98, 68 and 69 for a part, 75 and 76 for a part, 82) mark it as known: no push echoes them.
+
+Command 100 as a request (no arguments) answers the part count, then per part its engine and the native patch's hash
+(five seven-bit digits, low first), then HYDRA's user wave generation (five digits): a client that polls instead of
+watching compares these and reads only what changed.
+
+## Performances
+
+Command 99 takes an operation and a slot (0–11), and answers the operation, the slot and a result (0 done, 1 refused,
+2 stop playback first, 3 the flash write failed). 0 LIST (slot 0): then the count (12), the slot loaded or stored last
+plus 1 (0 none), and per slot used, part A's engine and the name (up to 12 characters, 0-terminated). 1 LOAD: both parts
+take the performance's sounds, the parts mode, the split and part B's channel, as the LIBRARY page loads it (RELOAD and
+PUSH follow). 2 STORE, then a name of 1–12 printable characters: the setup as it stands. 3 RENAME, then the name.
+4 DELETE.
+
+## Voices
+
+Command 101 without arguments answers the shared voice budget as it plays, in quarter steps (a voice of cost 1 is VQ):
+VQ, the budget and the ceiling (two seven-bit digits each), the parts sounding, the part count, then per part its cost per
+note (two digits), the voices playing, the voices fading, the notes waiting for a voice, the cost its notes claim and its
+guaranteed share (two digits each). The budget bounds polyphony before a note starts; nothing is cut mid-note. Global 41
+(BUDGET, 8–32) is the instrument's own budget setting, as the VOICES page sets it, and is saved with the settings.
+
+## FM6 function settings
+
+Command 82: `0 part` reads a part's function settings (16 bytes: bend up, bend down, bend step, portamento mode, time,
+glissando, then wheel, foot, breath and aftertouch range and target, velocity scaling, renderer) and its operator switches
+(bit 0 OP6 … bit 5 OP1). `1 part setting value` sets one; setting 16 is the switches. Replies: operation, part, result.
+
+## CZ-1 tones without a cut
+
+Command 76 with target 3 puts a tone into a part that plays a native CZ-1 tone now, as the panel's own edits change it:
+sounding notes go on, E1–E8 stay, and COMP keeps the tone from before the first change. Any other part answers result 1;
+target 0 still loads a tone whole (notes cut, E1–E8 reset).
 
 ## Backups
 

@@ -22,12 +22,17 @@ enum { ED_INFO = 1, ED_GET, ED_SET, ED_DUMP, ED_DESC, ED_STEP_GET, ED_STEP_SET, 
        ED_TRACK_PARAM, ED_TRACK_CHANGED, ED_SONG,
        ED_UI_STATE, ED_UI_SET, ED_UI_PALETTES, ED_FAV_GET, ED_FAV_SET,
        ED_MOTION = 64, ED_BACKUP_LIST, ED_BACKUP_GET, ED_BACKUP_PUT,                               /* v6: song chain */
-       ED_AUDIO_STATS = 72, ED_PATTERN, ED_BANK_SONG, ED_BATTERY = 81 };                        /* USB audio diagnostics (68..71: FM6, editor_fm6.c) */
+       ED_AUDIO_STATS = 72, ED_PATTERN, ED_BANK_SONG, ED_BATTERY = 81,                          /* USB audio diagnostics (68..71: FM6, editor_fm6.c) */
+       ED_PERF = 99, ED_PUSH, ED_VOICES };                 /* performances, the parts' native pushes, the voice budget */
 #if MELODEE_CORE1_TEST && MELODEE_DUAL_CORE
 enum { ED_CORE1_TEST = 79 };                         /* test builds only: CPU1 failure injection */
 static void core1_test_stall(void *unused) { (void)unused; for (;;) ; }
 #endif
 
+/* INFO's editor features (tag 0x45): 1 PUSH (WATCH bit 2, command 100), 2 performances (99), 4 the voice budget (101),
+ * 8 a CZ-1 tone into a playing part without a cut (76, target 3), 16 FM6's function settings and operator switches
+ * (82), 32 the voice budget is a setting (global BUDGET) */
+#define ED_FEATURES 63u
 static uint8_t ed_out[1024];                        /* the longest: a NAMES page (PROPHET pages its 201) */
 static uint32_t ed_n;
 
@@ -58,10 +63,10 @@ static void ed_str(const char *s, uint32_t max)   /* ASCII, 0-terminated */
         ed_b((uint8_t)s[i] & 0x7Fu);
     ed_b(0);
 }
-static void ed_send(void)
+static int ed_send(void)                               /* < 0: not sent (the host stopped taking SysEx) */
 {
     ed_out[ed_n++] = 0xF7;
-    ota_wire_send(ed_out, ed_n);
+    return ota_wire_send(ed_out, ed_n);
 }
 static int32_t ed_rv(const uint8_t *p) { return (int32_t)(p[0] | p[1] << 7) - 8192; }
 
@@ -85,6 +90,10 @@ static uint8_t ed_smp_buf[512] __attribute__((aligned(4)));
 static uint32_t ed_eng(const track_t *t) { return t->eng_req % NENGINES; }
 
 /* ---- live sync (v2): while the editor WATCHes, device-side changes are pushed.
+ * WATCH bit 2 (value 4) adds PUSH (100): a part's native patch changed (the panel, MIDI, a native message: kind 0), a
+ * part other than the selected one took another sound (kind 1), HYDRA's user waves changed (kind 2). A part's native
+ * patch is followed by a hash, so every path that edits it is seen without a hook in each; the editor reads the patch
+ * again. A push that could not be sent stays due and goes at a later pass.
  * Shadows of the selected track's p[] + song.g[] and of its steps are kept in step
  * with what the editor knows (its own SET / STEP_SET update them); the main loop
  * compares and pushes CHANGED / STEP_CHANGED, or RELOAD after a load or when another
@@ -98,17 +107,49 @@ static const uint8_t ED_TIDS[3] = {P_LEVEL, P_PAN, P_MUTE};
 static struct {
     uint8_t on, eng, preset, sel;
     uint8_t v4;                                          /* WATCH bit 1: TRACK_CHANGED pushes too */
+    uint8_t push;                                        /* WATCH bit 2: PUSH too */
     uint32_t pos, last_ms, run_ms, resets;
     int16_t v[ED_NV];                                    /* TSEL->p[], then song.g[] */
     uint16_t t[ED_NV];                                   /* ms (low 16 bits) of the last push */
     int16_t tv[ED_NT];                                   /* v4: trk[k].p[ED_TIDS[j]] at k * 3 + j */
     uint16_t tt[ED_NT];
     uint32_t tpos;
+    uint32_t nh[NTRK];                                   /* PUSH: the parts' native patches' hashes */
+    uint16_t nt[NTRK];
+    uint8_t peng[NTRK], ppre_hi[NTRK], ppre[NTRK];       /* the parts' engines and presets (kind 1) */
+    uint32_t ugen;                                       /* hy_ugen as the editor knows it (kind 2) */
 } ed_w;
 
-static int16_t *ed_val(uint32_t i)
+static int16_t *ed_val(uint32_t i)                      /* A4 and the voice budget are the instrument's own settings */
 {
-    return i < P_COUNT ? &TSEL->p[i] : i == P_COUNT + G_A4 ? &tuning_a4 : &song.g[i - P_COUNT];
+    return i < P_COUNT ? &TSEL->p[i] : i == P_COUNT + G_A4 ? &tuning_a4 : i == P_COUNT + G_BUDGET ? &settings_budget
+         : &song.g[i - P_COUNT];
+}
+static uint32_t ed_fnv(uint32_t h, const void *p, uint32_t n)
+{
+    const uint8_t *b = (const uint8_t *)p;
+    while (n--)
+        h = (h ^ *b++) * 16777619u;
+    return h;
+}
+/* a hash of what part tr's engine keeps of its sound outside p[]: its native patch (FM6: with its function settings and
+ * operator switches), 0 for an engine without one */
+static uint32_t ed_native_hash(uint32_t tr)
+{
+    const track_t *t = &trk[tr % NTRK];
+    uint32_t e = ed_eng(t), h = 2166136261u ^ e;
+    if (e == ENGI_PROPHET) { const p5_patch_t *p = p5_patch_of(t); return ed_fnv(ed_fnv(h, p->raw, sizeof p->raw), &p->size, 1); }
+    if (e == ENGI_J106) { const j106_patch_t *p = j106_patch_of(t); return ed_fnv(ed_fnv(h, p->raw, sizeof p->raw), p->name, sizeof p->name); }
+    if (e == ENGI_HYDRA) return ed_fnv(h, hy_patch_of(t)->raw, HY_BYTES);
+    if (e == ENGI_CZ) return ed_fnv(h, cz_patch[tr % NTRK].raw, CZ_BYTES);
+    if (e == ENGI_FM6) return ed_fnv(ed_fnv(ed_fnv(h, fm6_patch[tr % NTRK], FP_SIZE), fm6_fn[tr % NTRK], FM6_NFN), &fm6_on[tr % NTRK], 1);
+    return 0;
+}
+static void ed_native_seen(void)                         /* the editor knows the parts' native patches as they are */
+{
+    for (uint32_t k = 0; k < NTRK; k++)
+        ed_w.nh[k] = ed_native_hash(k);
+    ed_w.ugen = hy_ugen;
 }
 static void ed_shadow(void)                              /* the editor is in sync */
 {
@@ -120,6 +161,12 @@ static void ed_shadow(void)                              /* the editor is in syn
     ed_w.eng = (uint8_t)ed_eng(TSEL);
     ed_w.preset = TSEL->preset;
     ed_w.sel = song.sel;
+    for (i = 0; i < NTRK; i++) {
+        ed_w.peng[i] = (uint8_t)ed_eng(&trk[i]);
+        ed_w.ppre[i] = (uint8_t)(trk[i].preset & 127u);
+        ed_w.ppre_hi[i] = (uint8_t)(trk[i].preset >> 7);
+    }
+    ed_native_seen();
     sync_reload = 0;
 }
 static int ed_room(void) { return so_w - so_r + 8u <= SXQ / 2u; }
@@ -146,15 +193,20 @@ static void ed_sync(void)                                /* main loop */
         return;
     }
     if (sync_reload || ed_eng(TSEL) != ed_w.eng || TSEL->preset != ed_w.preset || song.sel != ed_w.sel) {
+        uint32_t nh[NTRK], ugen = ed_w.ugen;
         if (!ed_room())
             return;
+        memcpy(nh, ed_w.nh, sizeof nh);
         ed_shadow();
+        memcpy(ed_w.nh, nh, sizeof nh);                  /* (a RELOAD the editor caused may not be read again: a native */
+        ed_w.ugen = ugen;                                /*  change of the same moment still pushes after it) */
         ed_begin(ED_RELOAD);
         ed_b(ed_eng(TSEL));
         ed_b(TSEL->preset);
         ed_b(song.sel);
         ed_b(TSEL->preset >> 7);                     /* presets past 127 (PROPHET): high bits last */
-        ed_send();
+        if (ed_send() < 0)
+            sync_reload = 1;                             /* (not sent: due again at the next pass) */
         return;
     }
     for (i = 0; i < ED_NV && n < ED_PUSH_MAX; i++) {    /* round robin: nothing starves */
@@ -164,13 +216,14 @@ static void ed_sync(void)                                /* main loop */
             continue;                                    /* coalesced: the latest value goes out later */
         if (!ed_room())
             return;
-        ed_w.v[k] = v;
-        ed_w.t[k] = (uint16_t)now;
         ed_begin(ED_CHANGED);
         ed_b(k < P_COUNT ? 0u : 1u);
         ed_b(k < P_COUNT ? k : k - P_COUNT);
         ed_v(v);
-        ed_send();
+        if (ed_send() < 0)
+            return;                                      /* (the shadow keeps the old value: due again) */
+        ed_w.v[k] = v;
+        ed_w.t[k] = (uint16_t)now;
         n++;
         ed_w.pos = k + 1u;
     }
@@ -181,15 +234,52 @@ static void ed_sync(void)                                /* main loop */
             continue;                                    /* (the selected track: CHANGED above) */
         if (!ed_room())
             return;
-        ed_w.tv[k] = v;
-        ed_w.tt[k] = (uint16_t)now;
         ed_begin(ED_TRACK_CHANGED);
         ed_b(tr);
         ed_b(id);
         ed_v(v);
-        ed_send();
+        if (ed_send() < 0)
+            return;
+        ed_w.tv[k] = v;
+        ed_w.tt[k] = (uint16_t)now;
         n++;
         ed_w.tpos = k + 1u;
+    }
+    for (i = 0; ed_w.push && i < NTRK && n < ED_PUSH_MAX; i++) {   /* PUSH: the parts' sounds */
+        const track_t *t = &trk[i];
+        uint32_t e = ed_eng(t);
+        if (i != song.sel && (e != ed_w.peng[i] || (t->preset & 127u) != ed_w.ppre[i] || (uint32_t)(t->preset >> 7) != ed_w.ppre_hi[i])) {
+            if (!ed_room())
+                return;
+            ed_begin(ED_PUSH);                           /* kind 1: another sound on part i */
+            ed_b(1); ed_b(i); ed_b(e); ed_b(t->preset); ed_b(t->preset >> 7);
+            if (ed_send() < 0)
+                return;
+            ed_w.peng[i] = (uint8_t)e;
+            ed_w.ppre[i] = (uint8_t)(t->preset & 127u);
+            ed_w.ppre_hi[i] = (uint8_t)(t->preset >> 7);
+            ed_w.nh[i] = ed_native_hash(i);
+            n++;
+            continue;
+        }
+        uint32_t h = ed_native_hash(i);
+        if (h == ed_w.nh[i] || (uint16_t)(now - ed_w.nt[i]) < 30u)
+            continue;                                    /* coalesced: a knob turning pushes every 30 ms at most */
+        if (!ed_room())
+            return;
+        ed_begin(ED_PUSH);                               /* kind 0: part i's native patch changed */
+        ed_b(0); ed_b(i); ed_b(e);
+        if (ed_send() < 0)
+            return;
+        ed_w.nh[i] = h;
+        ed_w.nt[i] = (uint16_t)now;
+        n++;
+    }
+    if (ed_w.push && hy_ugen != ed_w.ugen && n < ED_PUSH_MAX && ed_room()) {
+        ed_begin(ED_PUSH);                               /* kind 2: HYDRA's user waves changed (the editor reads the list) */
+        ed_b(2);
+        if (ed_send() >= 0)
+            ed_w.ugen = hy_ugen;
     }
 }
 
@@ -226,6 +316,23 @@ static int ed_flash_stop(void) { return transport_busy(); }
 #include "editor_prophet.c"
 #include "editor_j106.c"
 #include "editor_hydra.c"
+#include "editor_parts.c"
+
+/* after the editor's own request for a part's native patch (read or written): it knows the patch, so no PUSH for it */
+static void ed_seen_after(uint32_t cmd, const uint8_t *a, uint32_t na)
+{
+    if (!ed_w.on)
+        return;
+    if (cmd == ED_HYWAVE) {
+        ed_w.ugen = hy_ugen;
+        return;
+    }
+    if (na < 2u || a[1] >= NTRK)
+        return;
+    if ((cmd >= 95u && cmd <= 97u) || cmd == ED_FM6_FN || ((cmd == ED_FM6_GET || cmd == ED_FM6_PUT) && a[0] == ED_FM6_TRACK) ||
+        ((cmd == ED_CZ_GET || cmd == ED_CZ_PUT) && (a[0] == 0u || a[0] == ED_CZ_LIVE)))
+        ed_w.nh[a[1]] = ed_native_hash(a[1]);
+}
 
 static int ed_args_ok(uint32_t cmd, const uint8_t *a, uint32_t n)
 {
@@ -266,15 +373,13 @@ static __attribute__((minsize)) void ed_handle(const uint8_t *f, uint32_t n)   /
     if (!ed_args_ok(cmd, a, na))
         return;
     ed_begin(cmd);
-    if(ed_prophet_handle(cmd,a,na)){ed_send();return;}
-    if(ed_j106_handle(cmd,a,na)){ed_send();return;}
-    if(ed_hydra_handle(cmd,a,na)){ed_send();return;}
+    if(ed_prophet_handle(cmd,a,na) || ed_j106_handle(cmd,a,na) || ed_hydra_handle(cmd,a,na) || ed_fm6_handle(cmd,a,na) ||
+       ed_cz_handle(cmd,a,na)){ed_send();ed_seen_after(cmd,a,na);return;}
+    if (ed_parts_handle(cmd, a, na)) { ed_send(); return; }
 
     if (ed_ui_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_library_handle(cmd,a,na)) { ed_send(); return; }
     if (ed_backup_handle(cmd, a, na)) { ed_send(); return; }
-    if (ed_fm6_handle(cmd, a, na)) { ed_send(); return; }
-    if (ed_cz_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_native_handle(cmd, a, na)) { ed_send(); return; }
     switch (cmd) {
 #if MELODEE_USB_AUDIO || defined(SAADET_FM1_BASE)
@@ -479,6 +584,7 @@ static __attribute__((minsize)) void ed_handle(const uint8_t *f, uint32_t n)   /
         ed_b(0x4a);ed_b(1);ed_b(ENGI_J106);ed_b(USER_NATIVE_J106);ed_b(ED_J106);ed_b(J106_FIELDS); /* JUNO-106: command 96 */
         ed_b(0x48);ed_b(1);ed_b(ENGI_HYDRA);ed_b(USER_NATIVE_HYDRA);ed_b(ED_HYDRA);ed_b(HY_BYTES&127u);ed_b(HY_BYTES>>7); /* HYDRA: command 97 */
         ed_b(0x57);ed_b(1);ed_b(ED_HYWAVE);ed_b(HY_USER0);ed_b(HY_UWAVES);ed_b(HY_UMAX); /* HYDRA's user waves: command 98 */
+        ed_b(0x45);ed_b(1);ed_b(ED_FEATURES);ed_b(ED_PERF);ed_b(ED_PUSH);ed_b(ED_VOICES);ed_b(ED_FM6_FN);ed_b(PERF_SLOTS); /* editor features */
         break;
     case ED_GET:
     case ED_SET:
@@ -489,7 +595,7 @@ static __attribute__((minsize)) void ed_handle(const uint8_t *f, uint32_t n)   /
                 set_engine((uint32_t)clamp(ed_rv(a + 2), 0, NENGINES - 1));
             } else if (d->max > d->min) {
                 *vp = (int16_t)enum_orig(d, clamp(ed_rv(a + 2), d->min, d->max));
-                if (a[0] == 1 && a[1] == G_A4)
+                if (a[0] == 1 && (a[1] == G_A4 || a[1] == G_BUDGET))
                     settings_save();
                 if (a[0] == 0 && scale_shared(a[1]))
                     scale_share(TSEL);
@@ -683,10 +789,11 @@ static __attribute__((minsize)) void ed_handle(const uint8_t *f, uint32_t n)   /
             return;
         ed_w.on = a[0] & 1u;
         ed_w.v4 = (uint8_t)(ed_w.on && (a[0] & 2u));     /* v4: also TRACK_CHANGED; the reply says it is known */
+        ed_w.push = (uint8_t)(ed_w.on && (a[0] & 4u));   /* PUSH too */
         ed_w.resets = usb.resets;
         if (ed_w.on)
             ed_shadow();
-        ed_b(ed_w.on | ed_w.v4 << 1);
+        ed_b(ed_w.on | ed_w.v4 << 1 | ed_w.push << 2);
         break;
     case ED_PING:
         ed_b(0);

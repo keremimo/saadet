@@ -48,6 +48,34 @@ class AudioRamTest(unittest.TestCase):
         self.assertIn('section ".dsp_text"',functions['hot'][4])
         self.assertNotIn('section',functions['boot'][4])
 
+    def test_another_units_sram_api(self):
+        """The base's sd_* functions live in SRAM: flash code reaches them through a pointer, resident code directly."""
+        source = IR + """declare i32 @sd_lock() local_unnamed_addr #7
+declare void @sd_unlock(i32) local_unnamed_addr #7
+declare i32 @plat_flash_only()
+define void @editor(i32 %x) {
+  %k = call i32 @sd_lock()
+  call void @sd_unlock(i32 %k)
+  %f = call i32 @plat_flash_only()
+  ret void
+}
+define void @resident_lock() {
+  %k = call i32 @sd_lock()
+  ret void
+}
+"""
+        source = source.replace('call fastcc void @render(i32 32)\n  store', 'call fastcc void @render(i32 32)\n  call void @resident_lock()\n  store', 1)
+        output, selected, far = relocate(source, {'fm1_alnk0_irq'}, ram_externals={'sd_lock', 'sd_unlock'})
+        functions = {m[2]: m for m in FUNCTION.finditer(output)}
+        self.assertIn('resident_lock', selected)
+        self.assertEqual(set(far), {'render', 'sd_lock', 'sd_unlock'})
+        self.assertNotIn('@sd_lock(', functions['editor'][5])
+        self.assertIn('call i32 %audio_far_', functions['editor'][5])
+        self.assertIn('call i32 @plat_flash_only()', functions['editor'][5])     # (not SRAM: direct)
+        self.assertIn('call i32 @sd_lock()', functions['resident_lock'][5])     # (SRAM to SRAM: direct)
+        self.assertIn('@__audio_far_sd_lock = internal global i32 ()* @sd_lock', output)
+        self.assertIn('@__audio_far_sd_unlock = internal global void (i32)* @sd_unlock', output)
+
     def test_lowered_memory_intrinsics(self):
         extra = """define i8* @memcpy(i8* %d, i8* %s, i32 %n) {
   ret i8* %d

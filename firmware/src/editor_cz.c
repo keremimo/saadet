@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Kerem Kilic (Ellic Studio) */
 /* Full native Casio tone over the editor transport, nibble-packed, low first.
- * 75 GET / 76 PUT. target 0: track; target 1: ordinary user preset slot.
- * Native slots use UP_VER_CZ, so their existing A/B store is atomic. */
+ * 75 GET / 76 PUT. target 0: track; target 1: ordinary user preset slot; target 3 (PUT): the tone of a part that
+ * plays a native CZ-1 tone now, swapped in as the panel's edits are: no notes cut, E1-E8 kept, COMP keeps the tone
+ * from before. Native slots use UP_VER_CZ, so their existing A/B store is atomic. */
 enum { ED_CZ_GET = 75, ED_CZ_PUT = 76, ED_CZ_BANK = 77 };
+#define ED_CZ_LIVE 3u
 static int ed_cz_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
 {
     if(cmd==ED_CZ_BANK){
@@ -14,7 +16,9 @@ static int ed_cz_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
     if (cmd != ED_CZ_GET && cmd != ED_CZ_PUT) return 0;
     uint32_t target = n ? a[0] : 127u, index = n > 1u ? a[1] : 127u, rc = 0;
     uint8_t raw[CZ_BYTES];
-    if (target > 2u || index >= (target == 2u ? 128u : target ? UP_SLOTS : NTRK) || (target==2u && cmd==ED_CZ_PUT)) rc = 1;
+    if (target == ED_CZ_LIVE && cmd == ED_CZ_PUT) {
+        if (index >= NTRK || trk[index].eng_req != ENGI_CZ || trk[index].p[P_E7] != CZ_NATIVE) rc = 1;
+    } else if (target > 2u || index >= (target == 2u ? 128u : target ? UP_SLOTS : NTRK) || (target==2u && cmd==ED_CZ_PUT)) rc = 1;
     if (!rc && cmd == ED_CZ_GET) {
         if (n != 2u) rc = 1;
         else if (target == 2u) rc = cz_bank_get(index/16u,index%16u,raw) ? 2u : 0u;
@@ -29,7 +33,13 @@ static int ed_cz_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
             else raw[i] = a[2u+2u*i] | (uint8_t)(a[3u+2u*i]<<4);
         }
         if (!rc && !cz_patch_valid(raw)) rc = 1;
-        if (!rc && target) {
+        if (!rc && target == ED_CZ_LIVE) {
+            cz_compare_take(index);
+            fm1_irq_off();
+            memcpy(cz_patch[index].raw, raw, CZ_BYTES);
+            fm1_irq_on();
+            ui.force = 1;
+        } else if (!rc && target) {
             up_rec_t r; memset(&r,0,sizeof r);
             r.used=UP_USED; r.ver=UP_VER_CZ; r.engine=ENGI_CZ; r.np=P_COUNT;
             memcpy(r.packed,raw,CZ_BYTES);

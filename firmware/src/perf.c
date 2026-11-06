@@ -181,6 +181,27 @@ static int perf_load(uint32_t k)
     ui.force = 1;
     return 0;
 }
+/* slot k's name. 0: renamed, 1: no such performance, 2: refused, the transport runs, else a flash error */
+static int perf_rename(uint32_t k, const char *name)
+{
+    uint32_t obj = k / PERF_PER_OBJ;
+    perf_rec_t *r = &perf_buf.r[k % PERF_PER_OBJ];
+    int rc;
+    if (!perf_used(k))
+        return 1;
+    if (transport_busy())
+        return 2;
+    if (perf_bank_load(obj) || !r->used)
+        return 1;
+    memset(r->name, 0, PERF_NAME);
+    str_cpy(r->name, name, PERF_NAME);
+    rc = perf_obj_save(obj);
+    if (rc)
+        return rc;
+    perf_index_obj(obj);
+    up_gen++;
+    return 0;
+}
 static int perf_delete(uint32_t k)                /* 0: gone */
 {
     uint32_t obj = k / PERF_PER_OBJ;

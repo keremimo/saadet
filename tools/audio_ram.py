@@ -16,6 +16,7 @@ from pathlib import Path
 FUNCTION = re.compile(r'^define ([^\n]+?)@([\w.]+)\(([^\n]*)\)([^\n]*)\{\n(.*?)^}', re.M | re.S)
 REFERENCE = re.compile(r'@([\w.]+)')
 CALL = re.compile(r'\bcall\b[^\n@]*@([\w.]+)\(')
+DECLARE = re.compile(r'^declare ([^\n]+?)@([\w.]+)\(([^\n]*)\)([^\n]*)$', re.M)
 ROOTS = {'fm1_alnk0_irq', 'audio_block', 'mix_block', 'ua_audio', 'click_render',
          'p5_worker_kernel', 'fm6_worker_kernel', 'audio_batch_worker', 'audio_batch_parallel', 'p5_batch_kernel', 'fm6_batch_kernel', 'engine_batch_kernel', 'hy_kernel', 'fm1_timer5_irq'}
 CALLBACKS = {'note_on', 'render', 'amp', 'block', 'done', 'alloc', 'legato',
@@ -91,8 +92,12 @@ def call_arguments(line, begin):
     raise ValueError('Unterminated LLVM memory intrinsic')
 
 
-def relocate(ir, roots, required_root="fm1_alnk0_irq"):
+def relocate(ir, roots, required_root="fm1_alnk0_irq", ram_externals=()):
+    """ram_externals: functions another unit defines in SRAM (the base's sd_* API for the instrument). A flash function's
+    call to one is as far as a call into this unit's own resident code: the JieLi linker's direct branch reaches 4 MB,
+    and flash code past that from SRAM fails to link (relocation truncated), so it calls through a pointer too."""
     functions = {m[2]: m for m in FUNCTION.finditer(ir)}
+    externals = {m[2]: m for m in DECLARE.finditer(ir) if m[2] in set(ram_externals) and m[2] not in functions}
     selected = set()
     pending = list(roots)
     while pending:
@@ -154,6 +159,14 @@ def relocate(ir, roots, required_root="fm1_alnk0_irq"):
                     qualifier = qualifier + ' ' if qualifier else ''
                     line = f'  %audio_copy_{len(body)} = {qualifier}call i8* {local}(' + ', '.join(args) + line[end:]
                     call = None
+            if call and call[1] in externals and not sections[name]:
+                target = call[1]
+                typ = function_type(externals[target])
+                far[target] = typ
+                local = f'%audio_far_{len(body)}'
+                body.append(f'  {local} = load volatile {typ}*, {typ}** @__audio_far_{target}, align 4')
+                line = line[:call.start(1)-1] + local + line[call.end(1):]
+                call = None
             if call and call[1] in functions and sections[name] != sections[call[1]]:
                 # SRAM sections can call each other directly; all fit well
                 # inside branch range. Only a flash/RAM crossing needs this.
