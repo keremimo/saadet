@@ -1194,7 +1194,9 @@ on the Elite. Missed renders count from just before the notes start; the longest
 
 Each missed render is one block at a chord's start, on two converted WCOG patches and in LAYER; on the first build of these
 steps the same 35 converted runs missed 4698 (AUTOMATA ET at twice the rate, and LAYER beyond the budget, every block). The
-LAYER pairs with other engines, USB capture and the 33 loads below were not run again.
+LAYER pairs with other engines, USB capture and the 33 loads below were not run again. On this code the three suites pass:
+`tests/run_smk37_tests.sh`, `tests/run_base_tests.sh` and `tests/run_tests.sh` (57 checks), ending ALL SMK-37 TESTS PASSED,
+ALL BASE PORT TESTS PASSED and ALL HOST TESTS PASSED.
 
 With the whole-unit rule, on its final code:
 
