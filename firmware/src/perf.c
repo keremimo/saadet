@@ -25,7 +25,7 @@ typedef struct { uint32_t magic, rec_size; perf_rec2_t r[PERF_PER_OBJ]; } perf_b
 _Static_assert(sizeof(perf_bank_t) <= ST_PAYLOAD_MAX - 32u, "two performances fit their flash object");
 static perf_bank_t perf_buf __attribute__((section(".pool")));
 #if MELODEE_FLASH
-_Static_assert(OBJ_COUNT - OBJ_PERF0 == PERF_OBJS, "a flash object per pair of performances");
+_Static_assert(OBJ_HYWAVE0 - OBJ_PERF0 == PERF_OBJS, "a flash object per pair of performances");
 static int perf_obj_load(uint32_t obj) { return st_load(OBJ_PERF0 + obj, &perf_buf, sizeof perf_buf); }
 static int perf_obj_save(uint32_t obj) { return st_save(OBJ_PERF0 + obj, &perf_buf, sizeof perf_buf); }
 #else                                             /* (the host's interface tests: no flash) */

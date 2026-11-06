@@ -127,10 +127,12 @@ static void storage(void)
     static const uint16_t RANGE[][2] = {           /* independent map from the approved storage plan, in sectors */
 #ifdef SAADET_SMK37
         {0x9D, 2}, {0xA1, 2}, {0xA3, 10}, {0xAD, 2}, {0xB0, 10}, {0xC8, 16}, {0xD8, 8},   /* (0xAF: the owner tag) */
-        {0xE0, 3}, {0xE5, 5}, {0xEB, 2}
+        {0xE0, 3}, {0xE5, 5}, {0xEB, 2},
+        {0xBA, 1}, {0xE3, 2}, {0xED, 1}                                                     /* HYDRA's user waves */
 #else
         {0x93, 10}, {0x9D, 3}, {0xA0, 2}, {0xA8, 12}, {0xC8, 16}, {0xD8, 8},
-        {0xE5, 5}, {0xFA, 1}, {0xFC, 3}
+        {0xE5, 5}, {0xFA, 1}, {0xFC, 3},
+        {0xB4, 4}                                                                          /* HYDRA's user waves */
 #endif
     };
     uint32_t obj, copy, i, n = erases, total = 0;

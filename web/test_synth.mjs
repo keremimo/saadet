@@ -7,7 +7,7 @@ import vm from 'node:vm';
 import {BACKUP_IDS,bkManifest,bkU32,bkR32,bkPack,bkUnpack,bkCrc,readBackup,captureBackup,restoreBackup} from './fm1backup.js';
 const html=readFileSync(new URL('editor.html',import.meta.url),'utf8');
 const proto=html.split('/*PROTO-BEGIN*/')[1].split('/*PROTO-END*/')[0];
-const E=vm.runInNewContext(`${proto};({parse,CMD,engineOrder,FM6,CZ,P5,J106,HY,HYS,bank,cleanPatch,libraryFile,readSysexLibrary})`,{setTimeout,clearTimeout,setInterval,clearInterval,console});
+const E=vm.runInNewContext(`${proto};({parse,CMD,req,engineOrder,FM6,CZ,P5,J106,HY,HYS,HYW,hyBundle,hyInstall,hyCollect,bank,cleanPatch,libraryFile,readSysexLibrary})`,{setTimeout,clearTimeout,setInterval,clearInterval,console});
 const info=E.parse[E.CMD.INFO](Array.from(readFileSync('build/host/synth-info.bin')));
 assert(info.synthOnly && info.ntrk===2 && info.nstep===0);
 assert(info.fm6 && info.cz && info.prophet && info.backupCaps===3);
@@ -73,6 +73,70 @@ assert.throws(()=>E.J106.decode(jf.slice(0,-2).concat([247])));
   assert.throws(()=>E.cleanPatch({engine:19,p:[],hy:h}));
   const lib=E.readSysexLibrary(frame,'x.syx',{});assert.equal(lib.length,1);assert.equal(lib[0].engine,25);
 }
+/* HYDRA's user waves: INFO's marker, command 98's real replies (tests/hydra_test.c), the file message, the bank's plan */
+{
+  const W=E.HYW;
+  assert.deepEqual({...info.hywave},{user0:57,count:14,max:64});
+  const list=E.parse[E.CMD.HYWAVE](Array.from(readFileSync('build/host/hywave-list.bin'))).list;
+  assert.equal(list.length,14);assert.deepEqual([list[0].id,list[0].used,list[0].name],[57,true,'MYBELL']);
+  assert.deepEqual([list[1].used,list[1].name,list[4].name],[false,'USER 2','MINE']);
+  const saw=E.parse[E.CMD.HYWAVE](Array.from(readFileSync('build/host/hywave-get-saw.bin')));
+  assert.equal(saw.name,'SAW');assert.equal(saw.pts.length,256);
+  assert.equal(Math.max(...Array.from(saw.pts,Math.abs)),30000);
+  /* the editor keeps a wave as the generator does: a factory wave comes back through finish within a step */
+  assert(W.finish(saw.pts).every((v,i)=>Math.abs(v-saw.pts[i])<=1));
+  const sq=W.finish(Array.from({length:999},(_,i)=>i<500?1:-1)),spec=W.spectrum(sq);
+  assert.equal(Math.max(...Array.from(sq,Math.abs)),30000);assert(Math.abs(sq.reduce((a,b)=>a+b,0))<256*2);
+  assert(Math.hypot(spec.re[2],spec.im[2])<Math.hypot(spec.re[3],spec.im[3])/50);   /* (a square: odd harmonics) */
+  assert.deepEqual(Array.from(W.unpack(W.pack(saw.pts))),Array.from(saw.pts));assert.equal(W.pack(saw.pts).length,586);
+  assert.deepEqual(Array.from(E.req.hywPut(59,'ZAP',saw.pts)[1].slice(0,9)),[2,59,90,65,80,0,0,0,0]);
+  const f=W.frame(60,'Zap!',saw.pts);assert.equal(f.length,600);assert.deepEqual(Array.from(f.slice(0,6)),[240,0x7D,0x48,0x59,2,60]);
+  const back=W.decode(f);assert.deepEqual([back.id,back.name],[60,'Zap!']);assert.deepEqual(Array.from(back.pts),Array.from(saw.pts));
+  assert.throws(()=>W.decode(f.slice(0,-2).concat?.([247])??Uint8Array.from([...f.slice(0,-2),247])));
+  assert.throws(()=>W.decode(Uint8Array.from([...f.slice(0,5),40,...f.slice(6)])));
+  /* a patch naming user waves: the ids it names, made another bank's */
+  const h=E.HY.init();h[0]=1;h[2]=60;h[3]=3;h[4]=61;h[28]=59;   /* (OSC 1 scans U4, SAW, U5; OSC 3 plays U4 - 1 = id 60) */
+  assert(E.HY.valid(h));assert.deepEqual(Array.from(E.HY.userIds(h)),[60,61]);
+  const moved=E.HY.remap(h,new Map([[60,70],[61,57]]));assert.deepEqual([moved[2],moved[4],moved[28]],[70,57,69]);
+  const reserved=h.slice();reserved[9]=120;assert(E.HY.valid(reserved));reserved[9]=121;assert(!E.HY.valid(reserved));
+  /* the plan: the same points reuse a wave the bank has, others go to free ones, none when the bank is full */
+  const bell={id:60,name:'BELL',pts:Int16Array.from(saw.pts)},other={id:61,name:'OTHER',pts:W.finish(Array.from({length:256},(_,i)=>Math.sin(i/9)))};
+  const bank=list.map(e=>({...e}));bank[3]={...bank[3],used:true,crc:W.crc(bell.pts)};
+  const plan=W.plan([bell,other,bell],bank);assert.deepEqual(Array.from(plan.map,([a,b])=>[a,b]),[[60,60],[61,58]]);assert.deepEqual(Array.from(plan.puts,x=>x.id),[58]);
+  assert.throws(()=>W.plan([other],bank.map(e=>({...e,used:true}))),/full/);
+  /* sounds and their waves as one file: renumbered in the file, paired again when read; identical points one wave */
+  const h2=E.HY.init();h2[15]=60;   /* (OSC 2's WAVE: id 61) */
+  const file=E.hyBundle([{raw:h,waves:[bell,other]},{raw:h2,waves:[{...other,id:61}]}]);
+  const read=E.HY.read(file);assert.equal(read.waves.length,2);assert.equal(read.voices.length,2);
+  assert.deepEqual(Array.from(read.voices[0].waves,w=>w.id),[57,58]);assert.deepEqual(Array.from(E.HY.userIds(read.voices[1].raw)),[58]);
+  assert.equal(read.voices[1].waves[0].name,'OTHER');
+  /* installing: LIST, a PUT for the new wave, the patch with the bank's ids */
+  const sent=[];const unit=async([cmd,a])=>{sent.push([cmd,Array.from(a)]);assert.equal(cmd,98);
+    if(a[0]===0)return [0,0,0,14,57,...bank.flatMap(e=>[e.used?1:0,...W.name7(e.name),...[0,7,14,21,28].map(s=>e.crc>>>s&(s===28?15:127))])];
+    return [a[0],0,a[1]];};
+  const [raw]=await E.hyInstall(unit,info,[read.voices[0].raw],read.voices[0].waves);
+  assert.deepEqual(sent.map(x=>x[1][0]),[0,2]);assert.equal(sent[1][1][1],58);assert.deepEqual([raw[2],raw[4],raw[28]],[60,58,59]);
+  /* a .wav: one cycle, any length; a wavetable's frames (Serum's clm chunk), PCM or float, stereo mixed */
+  const wav=(xs,{bits=16,ch=1,clm=0}={})=>{const n=xs.length,bps=bits/8,data=new Uint8Array(n*ch*bps),v=new DataView(data.buffer);
+    xs.forEach((x,i)=>{for(let c=0;c<ch;c++){const at=(i*ch+c)*bps;if(bits===16)v.setInt16(at,Math.round(x*32767),true);else v.setFloat32(at,x,true);}});
+    const extra=clm?Array.from(`<!>${clm} 00000000`,c=>c.charCodeAt(0)):[],le=(x,k)=>Array.from({length:k},(_,i)=>x>>>8*i&255);
+    const chunk=(id,body)=>[...Array.from(id,c=>c.charCodeAt(0)),...le(body.length,4),...body,...(body.length&1?[0]:[])];
+    const body=[...Array.from('WAVE',c=>c.charCodeAt(0)),...chunk('fmt ',[...le(bits===32?3:1,2),...le(ch,2),...le(48000,4),...le(48000*ch*bps,4),...le(ch*bps,2),...le(bits,2)]),
+      ...(clm?chunk('clm ',extra):[]),...chunk('data',Array.from(data))];
+    return Uint8Array.from([...Array.from('RIFF',c=>c.charCodeAt(0)),...le(body.length,4),...body]);};
+  const one=W.fromWav(wav(Array.from({length:600},(_,i)=>i<300?0.5:-0.5)));assert.equal(one.length,1);assert.equal(Math.max(...Array.from(one[0],Math.abs)),30000);
+  const drawn=W.finish(Array.from({length:600},(_,i)=>i<300?1:-1));assert(one[0].every((v,i)=>Math.abs(v-drawn[i])<=2));   /* (the square it holds, as drawn) */
+  const frames=Array.from({length:4*2048},(_,i)=>Math.sin(2*Math.PI*(i%2048)/2048*(1+(i>>11))));
+  const table=W.fromWav(wav(frames,{bits:32,ch:2,clm:2048}),8);assert.equal(table.length,4);
+  const peaks=Array.from(table,w=>{const s=W.spectrum(w);let k=1;for(let j=1;j<=64;j++)if(Math.hypot(s.re[j],s.im[j])>Math.hypot(s.re[k],s.im[k]))k=j;return k;});
+  assert.deepEqual(peaks,[1,2,3,4]);
+  assert.equal(W.fromWav(wav(frames),2).length,2);   /* (no clm: 2048-sample frames, two of them spread) */
+  assert.throws(()=>W.fromWav(Uint8Array.from([1,2,3,4,5,6,7,8,9,10,11,12])));
+  /* a library sound keeps the waves it names; points that are no wave are refused */
+  const lp=E.cleanPatch({name:'W',engine:25,p:[],hy:h,hyWaves:[bell]});assert.equal(lp.hyWaves[0].pts.length,256);
+  assert.equal(E.libraryFile('bank',[lp],{}).patches[0].hyWaves[0].name,'BELL');
+  assert.throws(()=>E.cleanPatch({engine:25,p:[],hy:h,hyWaves:[{id:60,name:'X',pts:[1,2]}]}));
+}
 const jp=E.cleanPatch({name:'J',engine:21,p:[],j106:jt});assert.deepEqual(E.libraryFile('bank',[jp],{}).patches[0].j106,jt);
 assert.throws(()=>E.cleanPatch({engine:19,p:[],j106:jt}));
 assert(!info.motionMax && !info.patterns && !info.chainRows);
@@ -90,12 +154,12 @@ await E.bank.put(libraryPeer,5,{name:'PATCH A22',engine:21,p:Array(info.pcount).
 assert.throws(()=>E.cleanPatch({engine:10,p:[]}));
 const clean=E.cleanPatch({engine:3,p:[],pattern:[[60,1]],grid:[[1,1]]});assert(!clean.pattern && !clean.grid);
 const exported=E.libraryFile('bank',[clean],{}).patches[0];assert(!('pattern' in exported) && !('grid' in exported));
-const file={format:'saadet-backup',version:2,objects:BACKUP_IDS.map(id=>{
+const file={format:'saadet-backup',version:3,objects:BACKUP_IDS.map(id=>{
  const bytes=readFileSync(`build/host/archive-${id}.bin`);return {id,size:bytes.length,crc:bkCrc(bytes),data:bytes.toString('base64')};
 })};
 readBackup(file);
 const manifest=[1,0,BACKUP_IDS.length,...file.objects.flatMap(o=>[o.id,...bkU32(o.size),...bkU32(o.crc)])];
-assert.equal(bkManifest(manifest).length,30);
+assert.equal(bkManifest(manifest).length,32);assert.equal(file.objects.find(o=>o.id===39).size,3676);
 const committed=[],writes=new Map(),staged=new Map();
 async function peer([cmd,a]){
  if(cmd===65)return manifest;
@@ -108,14 +172,20 @@ async function peer([cmd,a]){
  return [op,id,0];
 }
 const captured=await captureBackup(peer,'test');assert.deepEqual(captured.objects,file.objects);
-await restoreBackup(peer,file);assert.deepEqual(committed.slice(-2),[1,32]);assert.equal(committed.length,30);
+await restoreBackup(peer,file);assert.deepEqual(committed.slice(-2),[1,32]);assert.equal(committed.length,32);
 for(const o of file.objects)assert.deepEqual(writes.get(o.id),Buffer.from(o.data,'base64'));
 const reject=structuredClone(file);reject.objects[0].id=2;assert.throws(()=>readBackup(reject));
 assert.throws(()=>readBackup({...file,format:'felucca-backup'}));
-for(const id of [1,28,32]){
+for(const id of [1,28,32,39]){
  const bad=structuredClone(file),o=bad.objects.find(o=>o.id===id);let b=Buffer.from(o.data,'base64');if(!b.length)b=Buffer.alloc(3716);b[0]^=1;o.size=b.length;o.crc=bkCrc(b);o.data=b.toString('base64');assert.throws(()=>readBackup(bad));
 }
 let commits=0;await assert.rejects(restoreBackup(async([cmd,a])=>cmd===65?manifest:(a[0]===2&&(commits++),[a[0],a[1],a[0]===0&&a[1]===32?2:0]),file));assert.equal(commits,0);
+/* a backup from before the user waves restores without them; a unit without them restores the rest of one with them */
+{const v2={...file,version:2,objects:file.objects.filter(o=>o.id<=38)};assert.equal(readBackup(v2).objects.length,30);
+ committed.length=0;await restoreBackup(peer,v2);assert.equal(committed.length,30);
+ const old30=[1,0,30,...v2.objects.flatMap(o=>[o.id,...bkU32(o.size),...bkU32(o.crc)])];
+ committed.length=0;await restoreBackup(async r=>r[0]===65?old30:peer(r),file);assert.equal(committed.length,30);assert(!committed.includes(39));
+ assert.throws(()=>readBackup({...file,version:2}));}
 /* a backup from before the performances still reads; a performance bank must be one */
 {const old={...file,version:1,objects:file.objects.filter(o=>o.id<=32)};assert.equal(readBackup(old).objects.length,24);
  const short=structuredClone(file);short.objects.pop();assert.throws(()=>readBackup(short));

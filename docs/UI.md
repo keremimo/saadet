@@ -109,6 +109,21 @@ on the other device), NO MIDI SERVICE or CONNECTION TIMEOUT. Only the peer's sub
 Saadet's Bluetooth is the base's own open stack since this build, so bonds made on an earlier build are gone and the radio
 address has changed: forget Saadet on the phone or computer once and connect again.
 
+## HYDRA's user waves
+
+Next to its 56 factory waves, HYDRA has a bank of 14 waves of your own, U1–U14. In EDIT, OSC 1 and OSC 2's WAVE and SLOT 1–8
+and OSC 3's WAVE list the factory waves first, then the user waves, each by its name (USER 1 until you name it). A user wave
+is one cycle of 256 points, kept as the factory waves are: its first 64 harmonics, no offset, the same peak level. A user
+wave that was never written plays a sine.
+
+You make and change user waves in the web editor's HYDRA panel (draw a wave, shape its harmonics, start from a factory wave,
+import a .wav: one cycle, or a wavetable's frames as a scan list). A change is heard at once in every sound that uses the
+wave, on both parts. Saadet keeps the bank once it rests (nothing touched for 3 s, nothing sounding), so a write never
+interrupts playing; the editor's KEEP NOW writes it at once. A sound only names its user waves: changing U3 changes every
+sound that uses U3. Sounds the web editor exports or adds to its library carry the user waves they use, and bring them
+back into the bank when they come back to a unit (a wave already in the bank is reused, others go to free waves). A
+complete backup holds the bank; ERASE EVERYTHING frees it.
+
 ## Importing SysEx
 
 Send a dump to Saadet over USB-MIDI: a DX7 voice or a 32-voice bank, a CZ-1 tone, a Prophet-5 program, a JUNO-106 tone, a HYDRA patch, or a Saadet

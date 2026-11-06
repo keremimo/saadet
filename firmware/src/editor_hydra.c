@@ -25,8 +25,78 @@ static void hy_send(uint32_t tr)
     (void)tr;
 #endif
 }
+/* Command 98, HYDRA's user waves (hydra_bank.h): operation, then a wave by its id (hydra_patch.h). 0 LIST (each user wave:
+ * written, its name, the CRC-32 of its points), 1 GET (any wave: its name as seven bytes, then its points, int16 low byte
+ * first, seven-to-eight packed), 2 PUT (a user wave: the same; heard at once, kept at the next rest), 3 STORE (into
+ * flash now), 4 REVERT (as flash holds it), 5 CLEAR (free again). Replies: operation, result, id */
+#define ED_HYWAVE 98u
+#define ED_HYW_PACKED (HY_PTS * 2u / 7u * 8u + 1u + HY_PTS * 2u % 7u)
+_Static_assert(HY_PTS * 2u % 7u && ED_HYW_PACKED == 586u && HY_PTS * 2u <= sizeof ed_smp_buf, "a wave's points, packed");
+static void ed_hyw_name(const char *s)                /* seven bytes, 0 past the name */
+{
+    uint32_t i, end = 0;
+    for (i = 0; i < HY_UNAME; i++) {
+        if (!end && !s[i])                             /* (nothing read past the name's end) */
+            end = 1;
+        ed_b(end ? 0u : (uint8_t)s[i]);
+    }
+}
+static int ed_hywave_handle(const uint8_t *a, uint32_t n)
+{
+    uint32_t op = n ? a[0] : 127u, id = n > 1u ? a[1] : 0u, rc = 0, k = id - HY_USER0;
+    int user = id >= HY_USER0 && id < HY_USER0 + HY_UWAVES;
+    if (op == 0u || op == 3u) rc = n != 1u;
+    else if (op == 1u) rc = n != 2u || !id || (id > HY_NWAVE && !user);
+    else if (op == 2u) rc = n != 2u + HY_UNAME + ED_HYW_PACKED || !user;
+    else if (op == 4u || op == 5u) rc = n != 2u || !user;
+    else rc = 1;
+    if (!rc && op == 2u) {
+        char name[HY_UNAME + 1u];
+        uint32_t i;
+        for (i = 0; i < HY_UNAME && !rc; i++) {
+            name[i] = (char)a[2u + i];
+            rc = name[i] && (name[i] < 32 || name[i] > 126);
+        }
+        name[HY_UNAME] = 0;
+        if (!rc && ed_unpack7(a + 2u + HY_UNAME, ED_HYW_PACKED, ed_smp_buf, sizeof ed_smp_buf) != HY_PTS * 2u) rc = 1;
+        if (!rc) {
+            for (i = 0; i < HY_PTS; i++) {                 /* (in place: low byte first, as the wire has it) */
+                uint16_t v = (uint16_t)(ed_smp_buf[2u * i] | (uint32_t)ed_smp_buf[2u * i + 1u] << 8);
+                memcpy(ed_smp_buf + 2u * i, &v, sizeof v);
+            }
+            hy_uset(k, (const int16_t *)(const void *)ed_smp_buf, name, 1);
+        }
+    } else if (!rc && op == 3u) {
+        rc = ed_flash_stop() ? 3u : hy_bank_store() ? 4u : 0u;
+    } else if (!rc && op == 4u) {
+        rc = ed_flash_stop() ? 3u : (uint32_t)(hy_urevert(k) != 0);
+    } else if (!rc && op == 5u) {
+        hy_uclear(k);
+    }
+    ed_b(op); ed_b(rc); ed_b(id);
+    if (!rc && op == 0u) {
+        ed_b(HY_UWAVES); ed_b(HY_USER0);
+        for (k = 0; k < HY_UWAVES; k++) {
+            const hy_uwave_t *w = hy_uwave(k);
+            ed_b(w->used);
+            ed_hyw_name(w->name);
+            ed_bk_u32(st_crc32(w->pts, sizeof w->pts));
+        }
+    } else if (!rc && op == 1u) {
+        const int16_t *p = user ? hy_uwave(k)->pts : HY_WAVES[id - 1u];
+        uint32_t i;
+        ed_hyw_name(HY_ALL_NAMES[id]);
+        for (i = 0; i < HY_PTS; i++) {
+            ed_smp_buf[2u * i] = (uint8_t)((uint16_t)p[i] & 255u);
+            ed_smp_buf[2u * i + 1u] = (uint8_t)((uint16_t)p[i] >> 8);
+        }
+        ed_bk_pack(ed_smp_buf, HY_PTS * 2u);
+    }
+    return 1;
+}
 static int ed_hydra_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
 {
+    if (cmd == ED_HYWAVE) return ed_hywave_handle(a, n);
     if (cmd != ED_HYDRA) return 0;
     uint32_t op = n ? a[0] : 127u, tr = n > 1u ? a[1] : 127u, rc = n < 2u || tr >= NTRK || op > 4u;
     if (!rc) {

@@ -56,6 +56,12 @@
   .browser { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
   .browser select[size] { min-width: 150px; }
   .slots { display: grid; grid-template-columns: auto auto auto auto; gap: 3px 8px; align-items: center; justify-content: start; }
+  .hywgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; margin: 0 0 8px; }
+  .hywgrid button { display: grid; gap: 2px; padding: 3px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); text-align: left; }
+  .hywgrid button[aria-pressed="true"] { border-color: var(--fg); outline: 1px solid var(--fg); }
+  .hywgrid button.free { color: var(--dim); }
+  .hywgrid canvas { width: 100%; height: 32px; }
+  .hywcanvas { display: block; width: 100%; max-width: 512px; border: 1px solid var(--line); margin: 0 0 6px; touch-action: none; cursor: crosshair; }
   table { border-collapse: collapse; }
   th { font-weight: 400; color: var(--dim); text-align: left; padding: 0 6px 2px 0; }
   td { padding: 1px 6px 1px 0; }
@@ -236,6 +242,20 @@
         <select id="hyvoices" aria-label="Imported HYDRA patch"></select><button id="hyread">Read track</button><button id="hysend">Send to track</button>
         <button id="hyexport">Export patch .syx</button><button id="hyexportbank">Export imported library .syx</button><button id="hylibrary">Add to library</button></p>
       <label>Name <input id="hyname" maxlength="12"></label><div id="hycontrols" class="groups"></div>
+      <div id="hywpanel" hidden>
+        <h2>HYDRA user waves</h2>
+        <p class="dim">Waves of your own for any slot of any HYDRA sound: draw one, shape its harmonics, start from a factory wave, or import a .wav (one cycle, or a wavetable's frames). Each change is heard at once and kept when the unit rests. Sounds you export or add to the library carry the user waves they use.</p>
+        <div id="hywgrid" class="hywgrid"></div>
+        <p class="bar"><label>Name <input id="hywname" maxlength="7"></label>
+          <select id="hywfrom" aria-label="Wave to start from"></select><button id="hywstart">Start from</button>
+          <button id="hywrevert">Revert</button><button id="hywclear">Clear</button><button id="hywstore">Keep now</button></p>
+        <canvas id="hywdraw" class="hywcanvas" width="512" height="176" aria-label="The wave: draw over it"></canvas>
+        <canvas id="hywharm" class="hywcanvas" width="512" height="112" aria-label="Harmonics 1 to 64: drag for a level, Alt-drag for a phase"></canvas>
+        <p class="bar"><span class="dim">Draw on the wave; drag the harmonics' bars (Alt: their phase).</span></p>
+        <p class="bar"><button id="hywimport">Import .wav or .syx</button><input id="hywfile" type="file" accept=".wav,.syx" hidden>
+          <label><input type="checkbox" id="hywscan"> A wavetable's frames become OSC 1's scan list</label>
+          <button id="hywexport">Export user waves .syx</button></p>
+      </div>
     </div>
     <div id="czpanel" class="group" hidden>
       <h2>CZ-1 native patches</h2>
@@ -406,7 +426,7 @@ const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 
   TRACK_PARAM: 31, TRACK_CHANGED: 32, SONG: 33, PATTERN: 73, BANK_SONG: 74,
   UI_STATE: 34, UI_SET: 35, UI_PALETTES: 36, FAV_GET: 37, FAV_SET: 38,
   MOTION: 64, BACKUP_LIST: 65, BACKUP_GET: 66, BACKUP_PUT: 67,
-  FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71, CZ_GET: 75, CZ_PUT: 76, CZ_BANK: 77, NATIVE: 78, LIBRARY:80, PROPHET:95, J106:96, HYDRA:97 };
+  FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71, CZ_GET: 75, CZ_PUT: 76, CZ_BANK: 77, NATIVE: 78, LIBRARY:80, PROPHET:95, J106:96, HYDRA:97, HYWAVE:98 };
 /* frames the device sends on its own (while WATCH is on); never replies */
 
 /*P5-FACTORY-BEGIN*/
@@ -458,17 +478,91 @@ const J106 = {
   bytes(a) { if(a.length!==62||a.some(x=>x>15))throw Error("Invalid JUNO-106 record");const b=Array.from({length:31},(_,i)=>a[i*2]|a[i*2+1]<<4);if(!J106.valid(b))throw Error("Invalid JUNO-106 record");return b; }
 };
 
+/* HYDRA's user waves (firmware/src/hydra_bank.h, command 98): wave ids 1..56 are the factory waves, the user waves follow
+   from 57 (INFO says where they start and how many the unit has; 64 ids are reserved for them). A wave is 256 int16 points,
+   kept as the factory waves are (tools/gen_hy_waves.py): its first 64 harmonics, no DC, its peak at 30000. Its file message
+   is Saadet's own: F0 7D 48 59 02, the wave's id, seven name bytes (0 past the name), the points (low byte first) packed
+   seven to eight, F7. */
+const HYW = (() => {
+  const N=256,H=64,PEAK=30000,USER0=57,UMAX=64,NAME=7,PACKED=586;
+  const TAB=Array.from({length:256},(_,n)=>{let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;return c>>>0;});
+  const bytesOf=pts=>{const b=new Uint8Array(2*N);for(let i=0;i<N;i++){const u=pts[i]&0xFFFF;b[2*i]=u&255;b[2*i+1]=u>>8;}return b;};
+  /* the CRC-32 the unit lists (st_crc32 over the points as RAM holds them) */
+  const crc=pts=>{let c=0xFFFFFFFF;for(const x of bytesOf(pts))c=TAB[(c^x)&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;};
+  const pack=pts=>{const b=bytesOf(pts),a=[];for(let off=0;off<b.length;off+=7){const c=b.subarray(off,off+7);a.push(c.reduce((m,x,i)=>m|(x>>7)<<i,0),...Array.from(c,x=>x&127));}return a;};
+  const unpack=a=>{
+    if(a.length!==PACKED)throw Error("Invalid wave points");
+    const b=new Uint8Array(2*N);let i=0,j=0;
+    while(j<b.length){const n=Math.min(7,b.length-j),m=a[i++];if(m>>n)throw Error("Invalid wave points");
+      for(let k=0;k<n;k++){if(a[i]>127)throw Error("Invalid wave points");b[j++]=a[i++]|(m>>k&1)<<7;}}
+    return Int16Array.from({length:N},(_,k)=>(b[2*k]|b[2*k+1]<<8)<<16>>16);
+  };
+  const cleanName=s=>String(s??"").replace(/[^ -~]/g," ").trim().slice(0,NAME).trimEnd();
+  const name7=s=>{const c=cleanName(s);return Array.from({length:NAME},(_,i)=>i<c.length?c.charCodeAt(i):0);};
+  const readName=a=>{const e=Array.from(a).indexOf(0);const s=String.fromCharCode(...Array.from(a).slice(0,e<0?NAME:e));if(/[^ -~]/.test(s))throw Error("Invalid wave name");return s;};
+  /* a cycle of any length -> its harmonics 1..64 (x = sum re cos + im sin) */
+  const spectrum=xs=>{const L=xs.length,re=new Float64Array(H+1),im=new Float64Array(H+1);
+    for(let k=1;k<=H&&k<L/2;k++){let a=0,b=0;const w=2*Math.PI*k/L;for(let i=0;i<L;i++){a+=xs[i]*Math.cos(w*i);b+=xs[i]*Math.sin(w*i);}re[k]=2*a/L;im[k]=2*b/L;}
+    return {re,im};};
+  const synth=({re,im})=>{const out=new Float64Array(N);for(let k=1;k<=H;k++){if(!re[k]&&!im[k])continue;const w=2*Math.PI*k/N;for(let i=0;i<N;i++)out[i]+=re[k]*Math.cos(w*i)+im[k]*Math.sin(w*i);}return out;};
+  const normal=xs=>{let m=0;for(const v of xs)m=Math.max(m,Math.abs(v));return m<1e-9?new Int16Array(N):Int16Array.from(xs,v=>Math.round(v*PEAK/m));};
+  /* any drawn or imported cycle -> a wave as the unit keeps them: band-limited, DC-free, normalised */
+  const finish=xs=>normal(synth(spectrum(xs)));
+  const frame=(id,name,pts)=>Uint8Array.from([240,0x7D,0x48,0x59,2,id,...name7(name),...pack(pts),247]);
+  const isFrame=f=>f.length>5&&f[0]===240&&f[1]===0x7D&&f[2]===0x48&&f[3]===0x59&&f[4]===2;
+  const decode=f=>{f=Array.from(f);
+    if(f.length!==1+5+NAME+PACKED+1||!isFrame(f)||f.at(-1)!==247||f[5]<USER0||f[5]>=USER0+UMAX)throw Error("Invalid HYDRA wave message");
+    return {id:f[5],name:readName(f.slice(6,6+NAME)),pts:unpack(f.slice(6+NAME,-1))};};
+  /* a .wav: PCM 8/16/24/32-bit or 32-bit float, mixed to mono; a wavetable's frame size from its "clm " chunk (<!>2048, as
+     Serum writes it), else 2048 when the file is a whole number of them. -> up to max waves, evenly spread over its frames */
+  const fromWav=(bytes,max=8)=>{
+    const v=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),tag=at=>String.fromCharCode(...bytes.slice(at,at+4));
+    if(bytes.length<12||tag(0)!=="RIFF"||tag(8)!=="WAVE")throw Error("Not a WAV file");
+    let fmt=null,data=null,cycle=0;
+    for(let at=12;at+8<=bytes.length;){const id=tag(at),n=v.getUint32(at+4,true),body=at+8;
+      if(id==="fmt "){fmt={kind:v.getUint16(body,true),ch:v.getUint16(body+2,true),bits:v.getUint16(body+14,true)};
+        if(fmt.kind===0xFFFE&&n>=26)fmt.kind=v.getUint16(body+24,true);}   /* (EXTENSIBLE: its sub-format) */
+      else if(id==="data")data=[body,Math.min(n,bytes.length-body)];
+      else if(id==="clm "){const m=/<!>(\d+)/.exec(String.fromCharCode(...bytes.slice(body,body+Math.min(n,64))));if(m)cycle=+m[1];}
+      at=body+n+(n&1);}
+    if(!fmt||!data)throw Error("A WAV file needs fmt and data");
+    const {kind,ch,bits}=fmt,bps=bits/8;
+    if(!(kind===1||kind===3)||!ch||![8,16,24,32].includes(bits)||(kind===3&&bits!==32))throw Error("Unsupported WAV format");
+    const count=Math.floor(data[1]/(bps*ch)),xs=new Float64Array(count),rd=at=>bits===8?(bytes[at]-128)/128:bits===16?v.getInt16(at,true)/32768:
+      bits===24?((bytes[at]|bytes[at+1]<<8|bytes[at+2]<<16)<<8>>8)/8388608:kind===3?v.getFloat32(at,true):v.getInt32(at,true)/2147483648;
+    for(let i=0;i<count;i++){let s=0;for(let c=0;c<ch;c++)s+=rd(data[0]+(i*ch+c)*bps);xs[i]=s/ch;}
+    if(!count)throw Error("An empty WAV file");
+    if(!cycle&&count%2048===0&&count>=4096)cycle=2048;
+    const frames=cycle&&count%cycle===0&&count>=2*cycle?count/cycle:1,size=frames>1?cycle:count,n=Math.min(max,frames);
+    return Array.from({length:n},(_,j)=>{const f=n>1?Math.round(j*(frames-1)/(n-1)):0;return finish(xs.subarray(f*size,(f+1)*size));});
+  };
+  /* waves that travel with sounds -> the unit's bank: the same points already there are reused, the others go to free waves.
+     bundle [{id,name,pts}], list (LIST) [{id,used,name,crc}] -> {map: old id -> id, puts: the waves to PUT} */
+  const plan=(bundle,list)=>{
+    const map=new Map(),puts=[],taken=new Set();
+    for(const w of bundle){if(map.has(w.id))continue;const c=crc(w.pts);
+      const same=list.find(e=>e.used&&e.crc===c)||puts.find(p=>crc(p.pts)===c&&p);
+      if(same){map.set(w.id,same.id);continue;}
+      const free=list.find(e=>!e.used&&!taken.has(e.id));if(!free)throw Error("HYDRA's user wave bank is full");
+      taken.add(free.id);map.set(w.id,free.id);puts.push({id:free.id,name:w.name,pts:w.pts});}
+    return {map,puts};
+  };
+  return {N,H,PEAK,USER0,UMAX,NAME,PACKED,crc,pack,unpack,cleanName,name7,readName,spectrum,synth,normal,finish,frame,isFrame,decode,fromWav,plan};
+})();
+
 /* HYDRA patches (firmware/src/hydra_patch.h): 144 bytes, the name in the last twelve. A field's raw byte is its value - min.
    Its message is Saadet's own: F0 7D 48 59 01, two nibbles a byte (low first), F7. The macros: eight names, then a pool of
    14 slots, each the macro (high three bits) and its destination (low five, 0 free) in one byte, then the depth + 127. */
 const HY = (() => {
-  const WAVES=["SINE","TRI","SAW","SQR","PULSE25","PULSE10","SOFTSW","HALFSIN","OCTAVE","FIFTHS","ODD 5","EVEN","DRAWBR","ORGAN 2","BRIGHT","HOLLOW","VOX A","VOX E","VOX I","VOX O","VOX U","VOX AE","CHOIR","NASAL","BELL","CHIME","GLASS","TINE","MALLET","STEEL","GONG","KALIMBA","SYNC 2","SYNC 3","SYNC 5","PM 1","PM 2","PM 3","BITS","STEPS","COMB","NOTCH","RAMP UP","THIN","BUZZ","FORMNT","TWIN PK","AIR","GRIT","DUST","FUZZ","CRUSH","WIRE","REED","BRASS","STRING"],SLOTS=["EMPTY",...WAVES];
+  const WAVES=["SINE","TRI","SAW","SQR","PULSE25","PULSE10","SOFTSW","HALFSIN","OCTAVE","FIFTHS","ODD 5","EVEN","DRAWBR","ORGAN 2","BRIGHT","HOLLOW","VOX A","VOX E","VOX I","VOX O","VOX U","VOX AE","CHOIR","NASAL","BELL","CHIME","GLASS","TINE","MALLET","STEEL","GONG","KALIMBA","SYNC 2","SYNC 3","SYNC 5","PM 1","PM 2","PM 3","BITS","STEPS","COMB","NOTCH","RAMP UP","THIN","BUZZ","FORMNT","TWIN PK","AIR","GRIT","DUST","FUZZ","CRUSH","WIRE","REED","BRASS","STRING"],ID_LAST=HYW.USER0+HYW.UMAX-1;
+  /* the lists the fields show: the factory waves, then the unit's user waves by their names (setUser) */
+  const ALL=[...WAVES,...Array.from({length:14},(_,i)=>`USER ${i+1}`)],SLOTS=["EMPTY",...ALL];
   const fields=[],f=(id,label,min,max,names)=>{fields.push({id,label,min,max,...(names?{names}:{})});};
-  const osc=(b,n)=>{f(b,`${n} mode`,0,1,["Single","Scan"]);f(b+1,`${n} wave`,0,55,WAVES);for(let i=0;i<8;i++)f(b+2+i,`${n} slot ${i+1}`,0,56,SLOTS);
+  const osc=(b,n)=>{f(b,`${n} mode`,0,1,["Single","Scan"]);f(b+1,`${n} wave`,0,ID_LAST-1,ALL);for(let i=0;i<8;i++)f(b+2+i,`${n} slot ${i+1}`,0,ID_LAST,SLOTS);
     f(b+10,`${n} scan`,0,127);f(b+11,`${n} semitones`,-36,36);f(b+12,`${n} cents`,-50,50);f(b+13,`${n} key tracking %`,0,200);};
   const MUT=["Off","FM-LIN","Stack","Sync","PW","Squeeze","Warp","Harmonic"],SRC=["OSC 1","OSC 2","OSC 3","Ring","Noise"],OSCS=["OSC 1","OSC 2","OSC 3"];
   const mut=(b,n)=>{f(b,`Mutant ${n} mode`,0,7,MUT);f(b+1,`Mutant ${n} FM source`,0,4,SRC);f(b+2,`Mutant ${n} ratio`,0,127);f(b+3,`Mutant ${n} depth`,0,127);f(b+4,`Mutant ${n} feedback / window`,0,127);f(b+5,`Mutant ${n} wet`,0,127);};
-  osc(0,"OSC 1");osc(14,"OSC 2");f(28,"OSC 3 wave",0,55,WAVES);f(29,"OSC 3 semitones",-36,36);f(30,"OSC 3 cents",-50,50);f(31,"OSC 3 key tracking %",0,200);
+  osc(0,"OSC 1");osc(14,"OSC 2");f(28,"OSC 3 wave",0,ID_LAST-1,ALL);f(29,"OSC 3 semitones",-36,36);f(30,"OSC 3 cents",-50,50);f(31,"OSC 3 key tracking %",0,200);
   mut(32,1);mut(38,2);mut(44,3);mut(50,4);
   f(56,"Ring A",0,2,OSCS);f(57,"Ring B",0,2,OSCS);f(58,"Noise colour",0,2,["White","Pink","Brown"]);
   ["OSC 1","OSC 2","OSC 3","Ring","Noise"].forEach((n,i)=>{f(59+i,`${n} level`,0,127);f(64+i,`${n} to filter 2`,0,127);});
@@ -486,7 +580,14 @@ const HY = (() => {
     fields.push({id:300+2*k,label:`Slot ${k+1} macro`,min:1,max:8,get:x=>(x[b]>>5)+1,set:(x,v)=>{x[b]=(v-1)<<5|(x[b]&31);}});
     fields.push({id:301+2*k,label:`Slot ${k+1} destination`,min:0,max:31,names:TARGETS,get:x=>x[b]&31,set:(x,v)=>{x[b]=v?(x[b]&0xE0)|v:0;if(!v)x[b+1]=127;}});
     f(b+1,`Slot ${k+1} depth`,-127,127);}
-  const HY={ENGINE:25,RECORD:144,NAME:132,WAVES,FIELDS:fields,MACRO_NAMES,TARGETS,
+  const WAVE_BYTES=[1,15,28],SLOT_BYTES=[2,16];   /* (a WAVE byte holds the id - 1, a slot the id) */
+  const HY={ENGINE:25,RECORD:144,NAME:132,WAVES,ALL,SLOTS,ID_LAST,FIELDS:fields,MACRO_NAMES,TARGETS,
+    setUser(names) { ALL.length=WAVES.length;ALL.push(...names);SLOTS.length=1;SLOTS.push(...ALL); },
+    /* the user waves a patch names, by id (both oscillators' lists whatever their mode: a mode change makes them heard) */
+    userIds(b) { const s=new Set();for(const i of WAVE_BYTES)if(b[i]+1>=HYW.USER0)s.add(b[i]+1);
+      for(const o of SLOT_BYTES)for(let k=0;k<8;k++)if(b[o+k]>=HYW.USER0)s.add(b[o+k]);return [...s].sort((x,y)=>x-y); },
+    remap(b,map) { const r=b.slice();for(const i of WAVE_BYTES)if(map.has(r[i]+1))r[i]=map.get(r[i]+1)-1;
+      for(const o of SLOT_BYTES)for(let k=0;k<8;k++)if(map.has(r[o+k]))r[o+k]=map.get(r[o+k]);return r; },
     GROUPS:[['OSC 1',0,14],['OSC 2',14,28],['OSC 3',28,32],['Mutants 1, 2 (OSC 1)',32,44],['Mutants 3, 4 (OSC 2)',44,56],['Mixer',56,70],['Filter 1',70,79],['Filter 2',79,85],['ENV 1 and level',85,95],['Macros',95,400]],
     get(b,id) { const d=fields.find(x=>x.id===id);return d.get?d.get(b):b[id]+d.min; },
     set(b,id,v) { const d=fields.find(x=>x.id===id);if(d.set)d.set(b,v);else b[id]=v-d.min; },
@@ -496,11 +597,15 @@ const HY = (() => {
     init() { const b=[0,2,3,33,34,35,0,0,0,0,0,36,50,100,0,2,1,2,4,7,0,0,0,0,0,36,57,100,0,36,50,100,0,2,32,0,0,127,0,2,32,0,0,127,0,2,32,0,0,127,0,2,32,0,0,127,0,1,0,100,0,0,0,0,0,0,0,0,0,0,1,127,0,0,0,63,0,0,0,0,0,127,0,63,0,100,63,63,63,0,0,0,64,0,50,0,0,0,0,0,0,0,0,1,191,36,191,82,191,115,191,149,191,180,191,221,191,254,191,0,0,0,0,0,0,0,0,0,0,0,0,0];b.length=132;HY.setName(b,"INIT HYDRA");return b; },
     sysex(b) { if(!HY.valid(b))throw Error("Invalid HYDRA patch");return new Uint8Array([240,0x7D,0x48,0x59,1,...HY.nibbles(b),247]); },
     decode(f) { if(f.length!==294||f[0]!==240||f[1]!==0x7D||f[2]!==0x48||f[3]!==0x59||f[4]!==1||f[293]!==247)throw Error("Invalid HYDRA SysEx frame");return HY.bytes(f.slice(5,293)); },
+    /* patches, and the user waves that travel with them (HYW's messages) */
     read(bytes) {
-      const voices=[];
+      const voices=[],waves=[];
       for(let i=0;i<bytes.length;){if(bytes[i]!==240)throw Error("Unexpected byte outside HYDRA SysEx");const end=bytes.indexOf(247,i+1);if(end<0)throw Error("Truncated HYDRA SysEx");
-        const raw=HY.decode(Array.from(bytes.slice(i,end+1)));i=end+1;voices.push({name:HY.name(raw),raw});}
-      if(!voices.length)throw Error("Empty HYDRA library");return {voices};
+        const f=Array.from(bytes.slice(i,end+1));i=end+1;
+        if(HYW.isFrame(f))waves.push(HYW.decode(f));else{const raw=HY.decode(f);voices.push({name:HY.name(raw),raw});}}
+      if(!voices.length&&!waves.length)throw Error("Empty HYDRA library");
+      for(const v of voices){const ids=new Set(HY.userIds(v.raw));v.waves=waves.filter(w=>ids.has(w.id));}
+      return {voices,waves};
     },
     nibbles(b) { if(!HY.valid(b))throw Error("Invalid HYDRA patch");return b.flatMap(x=>[x&15,x>>4]); },
     bytes(a) { if(a.length!==288||a.some(x=>x>15))throw Error("Invalid HYDRA record");const b=Array.from({length:144},(_,i)=>a[i*2]|a[i*2+1]<<4);if(!HY.valid(b))throw Error("Invalid HYDRA record");return b; }
@@ -853,6 +958,15 @@ const parse = {
     if(!o.rc&&a.length>3){o.raw=J106.decode([240,...a.slice(3,25),247]);const end=a.indexOf(0,25);J106.setName(o.raw,String.fromCharCode(...a.slice(25,end<0?a.length:end)));}
     return o;
   },
+  /* command 98: LIST {list: [{id,used,name,crc}]}, GET {name,pts} */
+  [CMD.HYWAVE](a) {
+    if(a.length<3)throw Error("Short user wave reply");const o={op:a[0],rc:a[1],id:a[2]};if(o.rc)return o;
+    const r32=at=>(a[at]|a[at+1]<<7|a[at+2]<<14|a[at+3]<<21|a[at+4]<<28)>>>0;
+    if(o.op===0){const n=a[3],u0=a[4];if(a.length!==5+13*n)throw Error("Bad user wave list");
+      o.list=Array.from({length:n},(_,k)=>{const at=5+13*k;return {id:u0+k,used:!!a[at],name:HYW.readName(a.slice(at+1,at+8)),crc:r32(at+8)};});}
+    if(o.op===1){o.name=HYW.readName(a.slice(3,10));o.pts=HYW.unpack(a.slice(10));}
+    return o;
+  },
   [CMD.HYDRA](a) { if(a.length<3)throw Error("Short HYDRA reply");const o={op:a[0],rc:a[1],track:a[2]};if(!o.rc&&a.length>3)o.raw=HY.bytes(a.slice(3));return o; },
   [CMD.PROPHET](a) { if(a.length<3)throw Error("Short Prophet reply");const o={op:a[0],rc:a[1],track:a[2]};if(!o.rc&&a.length>3)o.raw=P5.decode([240,...a.slice(3),247]);return o; },
   [CMD.NATIVE](a) {
@@ -897,6 +1011,8 @@ const parse = {
       const hp=trailer.findIndex((x,i)=>i>=(shared>=0?shared+4:29)&&x===0x48&&trailer[i+1]===1&&trailer[i+2]===HY.ENGINE);
       o.hydra=hp>=0&&trailer[hp+4]===CMD.HYDRA?{engine:trailer[hp+2],namespace:trailer[hp+3]}:null;   /* HYDRA, command 97 */
       if(o.hydra)o.namespace[HY.ENGINE]=o.hydra.namespace;
+      const wp=hp<0?-1:trailer.findIndex((x,i)=>i>=hp+7&&x===0x57&&trailer[i+1]===1&&trailer[i+2]===CMD.HYWAVE);
+      o.hywave=wp>=0?{user0:trailer[wp+3],count:trailer[wp+4],max:trailer[wp+5]}:null;   /* HYDRA's user waves, command 98 */
       return o;
     }
     if (o.uiCaps && trailer[4] === 0x4d && [1,2].includes(trailer[5]) && trailer[6] === 64) {
@@ -1083,6 +1199,12 @@ const req = {
   j106Put: (track,raw) => [CMD.J106,[1,track,...J106.sysex(raw).slice(1,-1)]],
   j106Edit: (track,id,value) => [CMD.J106,[2,track,id,value]],
   j106Name: (track,name) => [CMD.J106,[3,track,...Array.from(String(name).replace(/[^ -~]/g," ").trim().slice(0,12)||"TONE",x=>x.charCodeAt(0))]],
+  hywList: () => [CMD.HYWAVE,[0]],
+  hywGet: id => [CMD.HYWAVE,[1,id]],
+  hywPut: (id,name,pts) => [CMD.HYWAVE,[2,id,...HYW.name7(name),...HYW.pack(pts)]],
+  hywStore: () => [CMD.HYWAVE,[3]],
+  hywRevert: id => [CMD.HYWAVE,[4,id]],
+  hywClear: id => [CMD.HYWAVE,[5,id]],
   hyGet: track => [CMD.HYDRA,[0,track]],
   hyPut: (track,raw) => [CMD.HYDRA,[1,track,...HY.nibbles(raw)]],
   hyEdit: (track,id,raw) => [CMD.HYDRA,[2,track,id,raw&127,raw>>7]],
@@ -1170,6 +1292,7 @@ function replyMatches(cmd, args, a) {
     case CMD.MOTION: return a[0] === args[0];
     case CMD.BACKUP_GET: return a[0] === args[0] && a.slice(2, 7).every((v, i) => v === args[i + 1]);
     case CMD.BACKUP_PUT: return a[0] === args[0] && a[1] === args[1];
+    case CMD.HYWAVE: return a[0] === args[0] && (args[0] === 0 || args[0] === 3 || a[2] === args[1]);
     case CMD.UI_SET: return a[1] === args[0] && a[2] === args[1];
     case CMD.FAV_GET: case CMD.FAV_SET:
       return ![0, 3, 4].includes(a[0]) || (a[1] === args[0] && a[2] === args[1] && a[3] === args[2] && a[4] === args[3]);
@@ -1192,6 +1315,36 @@ function replyMatches(cmd, args, a) {
     case CMD.TRACK_STEP: case CMD.TRACK_PARAM: return a[0] === args[0] && a[1] === args[1];
     default: return true;
   }
+}
+
+/* HYDRA's user waves on a unit (command 98). Sounds carry the user waves they name ({id,name,pts}, as the unit numbered
+   them): hyCollect reads them from the unit, hyInstall puts them into another unit's bank (the same points reused, others
+   into free waves) and gives the patches with their ids made the bank's */
+async function hyList(rq) { const r=parse[CMD.HYWAVE](await rq(req.hywList()));if(r.rc)throw Error("Cannot list HYDRA's user waves");return r.list; }
+async function hyCollect(rq,info,raws) {
+  if(!info.hywave)return [];
+  const last=info.hywave.user0+info.hywave.count,out=[];
+  for(const id of [...new Set(raws.flatMap(r=>HY.userIds(r)))].filter(id=>id<last).sort((x,y)=>x-y)){
+    const r=parse[CMD.HYWAVE](await rq(req.hywGet(id)));if(r.rc)throw Error("Cannot read a user wave");out.push({id,name:r.name,pts:r.pts});}
+  return out;
+}
+async function hyInstall(rq,info,raws,waves) {
+  if(!waves?.length)return raws;
+  if(!info.hywave)throw Error("Install firmware with HYDRA user waves first");
+  const {map,puts}=HYW.plan(waves,await hyList(rq));
+  for(const w of puts){const r=parse[CMD.HYWAVE](await rq(req.hywPut(w.id,w.name,w.pts)));if(r.rc)throw Error("User wave rejected");}
+  return raws.map(r=>HY.remap(r,map));
+}
+/* sounds and the user waves they name as one .syx file: the waves first, numbered in the file (distinct points, distinct
+   ids), then the patches with their ids made the file's. items [{raw, waves}] */
+function hyBundle(items) {
+  const byCrc=new Map(),waves=[];
+  const raws=items.map(({raw,waves:ws=[]})=>{const map=new Map();
+    for(const w of ws){const c=HYW.crc(w.pts);let id=byCrc.get(c);
+      if(id==null){id=HYW.USER0+waves.length;if(id>HY.ID_LAST)throw Error("Too many user waves for one file");byCrc.set(c,id);waves.push({id,name:w.name,pts:w.pts});}
+      map.set(w.id,id);}
+    return HY.remap(raw,map);});
+  return new Uint8Array([...waves.flatMap(w=>Array.from(HYW.frame(w.id,w.name,w.pts))),...raws.flatMap(r=>Array.from(HY.sysex(r)))]);
 }
 
 /* strict request/response: one frame in flight, the rest queued. Push frames (CHANGED, RELOAD,
@@ -1468,7 +1621,10 @@ function cleanPatch(pt) {
   if(pt.drum!=null || pt.engine===10)throw Error("Drum sounds are not supported by Saadet");
   if(pt.p5!=null){if(pt.engine!==19||!P5.valid(pt.p5))throw Error("Invalid native Prophet patch");o.p5=pt.p5.slice();}
   if(pt.j106!=null){if(pt.engine!==J106.ENGINE||!J106.valid(pt.j106))throw Error("Invalid native JUNO-106 tone");o.j106=pt.j106.slice();}
-  if(pt.hy!=null){if(pt.engine!==HY.ENGINE||!HY.valid(pt.hy))throw Error("Invalid native HYDRA patch");o.hy=pt.hy.slice();}
+  if(pt.hy!=null){if(pt.engine!==HY.ENGINE||!HY.valid(pt.hy))throw Error("Invalid native HYDRA patch");o.hy=pt.hy.slice();
+    if(Array.isArray(pt.hyWaves)&&pt.hyWaves.length)o.hyWaves=pt.hyWaves.map(w=>{const pts=Array.from(w.pts||[]);
+      if(!Number.isInteger(w.id)||w.id<HYW.USER0||w.id>HY.ID_LAST||pts.length!==HYW.N||pts.some(x=>!Number.isInteger(x)||x<-32768||x>32767))throw Error("Invalid HYDRA user wave");
+      return {id:w.id,name:HYW.cleanName(w.name),pts};});}
   if (pt.cz != null) { if(!CZ.valid(pt.cz))throw new Error("Invalid native CZ patch");o.cz=pt.cz.slice(); }
   if (Array.isArray(pt.fm6) && pt.fm6.length === FM6.PACKED) o.fm6 = pt.fm6.map((x) => (x | 0) & 127);   /* (a converted */
   if (Array.isArray(pt.fm4)) o.fm4 = pt.fm4.map((v) => (Number.isFinite(v) ? Math.round(v) : null));    /* DIGITAL sound) */
@@ -1488,6 +1644,7 @@ function libraryFile(kind, patches, ctx) {
       if(c.p5)o.p5=c.p5;
       if(c.j106)o.j106=c.j106;
       if(c.hy)o.hy=c.hy;
+      if(c.hyWaves)o.hyWaves=c.hyWaves;
       if (c.cz) o.cz=c.cz;
       if (c.fm6) { o.fm6 = c.fm6; o.fm4 = c.fm4; }   /* a DIGITAL sound converted: its FM6 patch, the DIGITAL values */
       if (Number.isInteger(x.slot)) o.slot = x.slot;
@@ -1500,7 +1657,7 @@ function czLibraryPatch(v,ctx={}) {
   return cleanPatch({name:v.name,engine:15,engineName:"CZ-1",p,cz:v.raw,tags:["CZ-1","SysEx"]});
 }
 function hyLibraryPatch(v,ctx={}) {const p=Array(ctx.keys?.length||ctx.pcount||92).fill(null);if(v.p&&ctx.keys)HYS.params(v.p,ctx.keys,p).forEach((x,i)=>{p[i]=x;});
-  return cleanPatch({name:v.name,engine:HY.ENGINE,engineName:"HYDRA",p,hy:v.raw,tags:v.p?["HYDRA","Hydrasynth"]:["HYDRA","SysEx"]});}
+  return cleanPatch({name:v.name,engine:HY.ENGINE,engineName:"HYDRA",p,hy:v.raw,hyWaves:v.waves,tags:v.p?["HYDRA","Hydrasynth"]:["HYDRA","SysEx"]});}
 function j106LibraryPatch(v,ctx={}) {return cleanPatch({name:v.name,engine:J106.ENGINE,engineName:"JUNO-106",p:Array(ctx.keys?.length||ctx.pcount||92).fill(null),j106:v.raw,tags:["JUNO-106","SysEx"]});}
 function p5LibraryPatch(v,ctx={}) {return cleanPatch({name:v.name,engine:19,engineName:"PROPHET",p:Array(ctx.keys?.length||ctx.pcount||92).fill(null),p5:v.raw,tags:["PROPHET","SysEx"]});}
 /* Library imports work offline too: dispatch by the file's manufacturer, never the selected engine. */
@@ -1640,10 +1797,11 @@ const sharedBank = {
     return p;
   },
   async put(rq,info,slot,pt) {
-    const kind=pt.fm6?1:pt.cz?2:pt.p5?3:pt.j106?4:pt.hy?5:0,raw=kind?(pt.fm6||pt.cz||pt.p5||pt.j106||pt.hy):null;
+    const kind=pt.fm6?1:pt.cz?2:pt.p5?3:pt.j106?4:pt.hy?5:0;let raw=kind?(pt.fm6||pt.cz||pt.p5||pt.j106||pt.hy):null;
     if(pt.drum || pt.engine===10)throw Error("Drum sounds are not supported by Saadet");
     if(kind && pt.engine!==({1:12,2:15,3:19,4:21,5:25}[kind]))throw Error("Native voice does not match its engine");
     if(kind===1 && (raw.length!==128||raw.some(x=>!Number.isInteger(x)||x<0||x>127)) || kind===2&&!CZ.valid(raw) || kind===3&&!P5.valid(raw) || kind===4&&!J106.valid(raw) || kind===5&&!HY.valid(raw))throw Error("Invalid native voice");
+    if(kind===5&&pt.hyWaves?.length)[raw]=await hyInstall(rq,info,[raw],pt.hyWaves);   /* (its user waves into the bank first) */
     const name=String(pt.name||"PATCH").replace(/[^ -~]/g," ").trim().slice(0,kind?20:12)||"PATCH";
     const values=Array.from({length:info.pcount},(_,i)=>pt.p?.[i]??0),defaults=!pt.p;
     const nativeName=kind===1?FM6.name(FM6.unpack(raw)):kind===2?CZ.name(raw):kind===3?P5.name(raw):kind===4?J106.name(raw):kind===5?HY.name(raw):"";
@@ -1701,7 +1859,8 @@ async function capturePatch(rq, info, name) {
   let fm6=null;
   if(info.engines[dump.engine]==="FM6") { const r=parse[CMD.FM6_GET](await rq(req.fm6Get(FM6.TARGET.TRACK,info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0)));if(r.rc)throw new Error("Cannot read FM6 voice");fm6=Array.from(r.packed); }
   const p=dump.p.map((v,i)=>info.pe0>=100&&i>=96&&i<Math.min(info.pe0,108)?[0,0,60,64][(i-96)%4]:info.pe0>=114&&i>=111&&i<=113?0:v);
-  return { patch: cleanPatch({ p5, j106, hy, cz, fm6, name, engine: dump.engine, engineName: info.engines[dump.engine], p }), dump };
+  const hyWaves=hy?await hyCollect(rq,info,[hy]):undefined;   /* (the user waves it names travel with it) */
+  return { patch: cleanPatch({ p5, j106, hy, hyWaves, cz, fm6, name, engine: dump.engine, engineName: info.engines[dump.engine], p }), dump };
 }
 
 /* Dedicated CZ user banks: eight atomic A/B objects, ids 9..16. */
@@ -1750,7 +1909,7 @@ async function auditionPatch(rq, info, pt, opt = {}) {
   if(pt.cz && !info.cz)throw new Error("Install firmware with native CZ support first");
   if(pt.p5){const r=parse[CMD.PROPHET](await rq(req.prophetPut(opt.track??(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0),pt.p5)));if(r.rc)throw Error("Prophet patch rejected");}
   else if(pt.j106){const track=opt.track??(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0),r=parse[CMD.J106](await rq(req.j106Put(track,pt.j106)));if(r.rc)throw Error("JUNO-106 tone rejected");await rq(req.j106Name(track,J106.name(pt.j106)));}
-  else if(pt.hy){const track=opt.track??(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0),r=parse[CMD.HYDRA](await rq(req.hyPut(track,pt.hy)));if(r.rc)throw Error("HYDRA patch rejected");}
+  else if(pt.hy){const track=opt.track??(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0),[raw]=await hyInstall(rq,info,[pt.hy],pt.hyWaves),r=parse[CMD.HYDRA](await rq(req.hyPut(track,raw)));if(r.rc)throw Error("HYDRA patch rejected");}
   else if(pt.cz) { const r=parse[CMD.CZ_PUT](await rq(req.czPut(0,opt.track??(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0),pt.cz)));if(r.rc)throw new Error("CZ patch rejected"); }
   else await rq(req.set(1, opt.gEng ?? 20, pt.engine));
   const dump = parse[CMD.DUMP](await rq(req.dump()), info);
@@ -2822,6 +2981,7 @@ function buildGroups() {
   $("p5panel").hidden=!(dev?.info.prophet&&dev?.dump.engine===19);
   $("j106panel").hidden=!(dev?.info.juno&&dev?.dump.engine===J106.ENGINE);
   $("hypanel").hidden=!(dev?.info.hydra&&dev?.dump.engine===HY.ENGINE);
+  if($("hypanel").hidden)$("hywpanel").hidden=true;else hywRefresh().catch(e=>say(e.message));
   $("czpanel").hidden = !dev.info.cz || dev.dump.engine!==15;
   $("czbankpanel").hidden = !dev.info.czBanks;
   if(dev.info.czBanks && !$("czbank").options.length)$("czbank").replaceChildren(...Array.from({length:8},(_,i)=>el("option",{value:i},`Bank ${String.fromCharCode(65+i)}`)));
@@ -3279,15 +3439,117 @@ function hyRender(){
 }
 $("hyname").addEventListener("change",()=>HY.setName(hyTone,$("hyname").value));
 $("hyimport").addEventListener("click",()=>$("hyfile").click());
-$("hyfile").addEventListener("change",async()=>{const f=$("hyfile").files[0];if(!f)return;try{const b=new Uint8Array(await f.arrayBuffer()),imported=HYS.is(b)?HYS.read(b):HY.read(b);hyVoices=imported.voices;$("hyvoices").replaceChildren(...hyVoices.map((v,i)=>el("option",{value:i},`${i+1}. ${v.name}`)));hyTone=hyVoices[0].raw.slice();hyRender();say(HYS.is(b)?`Converted ${hyVoices.length} Hydrasynth patches`:`Imported ${hyVoices.length} HYDRA patches`);}catch(e){say(e.message);}finally{$("hyfile").value="";}});
-$("hyvoices").addEventListener("change",()=>{hyTone=hyVoices[+$("hyvoices").value].raw.slice();hyRender();});
-$("hyread").addEventListener("click",()=>op(async()=>{const r=parse[CMD.HYDRA](await rq(req.hyGet(dev.sel||0)));if(r.rc)throw Error("Cannot read HYDRA patch");hyTone=r.raw;hyRender();say("HYDRA patch read from track");}));
-$("hysend").addEventListener("click",()=>op(async()=>{const d=dev,r=parse[CMD.HYDRA](await rq(req.hyPut(d.sel||0,hyTone)));if(r.rc)throw Error("HYDRA patch rejected");
+/* hyToneWaves: the user waves the panel's patch names when it came from a file (the file's ids); empty once they are in the
+   unit's bank, its ids then the bank's */
+let hyToneWaves=[];
+$("hyfile").addEventListener("change",async()=>{const f=$("hyfile").files[0];if(!f)return;try{const b=new Uint8Array(await f.arrayBuffer()),hs=HYS.is(b),imported=hs?HYS.read(b):HY.read(b);
+  if(!imported.voices.length)throw Error("No HYDRA patch in this file: import user waves below");
+  hyVoices=imported.voices;
+  if(imported.waves?.length&&dev?.info.hywave){const raws=await hyInstall(rq,dev.info,hyVoices.map(v=>v.raw),imported.waves);hyVoices.forEach((v,i)=>{v.raw=raws[i];v.waves=[];});await hywRefresh(true);}
+  $("hyvoices").replaceChildren(...hyVoices.map((v,i)=>el("option",{value:i},`${i+1}. ${v.name}`)));hyTone=hyVoices[0].raw.slice();hyToneWaves=hyVoices[0].waves||[];hyRender();
+  say(hs?`Converted ${hyVoices.length} Hydrasynth patches`:`Imported ${hyVoices.length} HYDRA patches`+(imported.waves?.length?(dev?.info.hywave?` and ${imported.waves.length} user waves`:"; connect a unit with user waves to bring theirs in"):""));}catch(e){say(e.message);}finally{$("hyfile").value="";}});
+$("hyvoices").addEventListener("change",()=>{const v=hyVoices[+$("hyvoices").value];hyTone=v.raw.slice();hyToneWaves=v.waves||[];hyRender();});
+$("hyread").addEventListener("click",()=>op(async()=>{const r=parse[CMD.HYDRA](await rq(req.hyGet(dev.sel||0)));if(r.rc)throw Error("Cannot read HYDRA patch");hyTone=r.raw;hyToneWaves=[];hyRender();say("HYDRA patch read from track");}));
+$("hysend").addEventListener("click",()=>op(async()=>{const d=dev;
+  if(hyToneWaves.length){[hyTone]=await hyInstall(rq,d.info,[hyTone],hyToneWaves);const v=hyVoices[+$("hyvoices").value];if(v&&v.waves===hyToneWaves){v.raw=hyTone.slice();v.waves=[];}hyToneWaves=[];hyRender();await hywRefresh(true);}
+  const r=parse[CMD.HYDRA](await rq(req.hyPut(d.sel||0,hyTone)));if(r.rc)throw Error("HYDRA patch rejected");
   const v=hyVoices[+$("hyvoices").value];if(v?.p&&d.keys)for(const [k,x] of Object.entries(v.p)){const i=d.keys.indexOf(k);if(i>=0)await rq(req.set(0,i,x));}   /* (a Hydrasynth's: its envelope, voice, glide) */
   await afterSoundChange("ready",d);}));
-$("hyexport").addEventListener("click",()=>downloadBytes(`${fileSlug(HY.name(hyTone))}.syx`,HY.sysex(hyTone)));
-$("hyexportbank").addEventListener("click",()=>{if(!hyVoices.length){say("Import a library first");return;}const voices=hyVoices.map(v=>v.raw);voices[+$("hyvoices").value]=hyTone;downloadBytes(`hydra-library-${today()}.syx`,new Uint8Array(voices.flatMap(v=>Array.from(HY.sysex(v)))));});
-$("hylibrary").addEventListener("click",()=>libAdd([hyLibraryPatch({name:HY.name(hyTone),raw:hyTone},libCtx())]).then(()=>say("HYDRA patch added to library")).catch(e=>say(e.message)));
+/* the user waves a patch names: from its file, else read from the unit (none without one) */
+const hyWavesOf=async(raw,waves)=>waves?.length?waves:dev?.info.hywave&&HY.userIds(raw).length?await hyCollect(rq,dev.info,[raw]):[];
+const hyBundleSay=items=>{if(items.some(x=>HY.userIds(x.raw).length&&!x.waves.length))say("Saved without its user waves: connect the unit to bring them along");};
+$("hyexport").addEventListener("click",async()=>{try{const items=[{raw:hyTone,waves:await hyWavesOf(hyTone,hyToneWaves)}];downloadBytes(`${fileSlug(HY.name(hyTone))}.syx`,hyBundle(items));hyBundleSay(items);}catch(e){say(e.message);}});
+$("hyexportbank").addEventListener("click",async()=>{try{if(!hyVoices.length){say("Import a library first");return;}const sel=+$("hyvoices").value,items=[];
+  for(let i=0;i<hyVoices.length;i++){const raw=i===sel?hyTone:hyVoices[i].raw;items.push({raw,waves:await hyWavesOf(raw,i===sel?hyToneWaves:hyVoices[i].waves)});}
+  downloadBytes(`hydra-library-${today()}.syx`,hyBundle(items));hyBundleSay(items);}catch(e){say(e.message);}});
+$("hylibrary").addEventListener("click",async()=>{try{const waves=await hyWavesOf(hyTone,hyToneWaves);await libAdd([hyLibraryPatch({name:HY.name(hyTone),raw:hyTone,waves},libCtx())]);say("HYDRA patch added to library");}catch(e){say(e.message);}});
+
+/* HYDRA's user waves (HYW, command 98): the unit's bank as tiles, one of them edited, drawn over or by its harmonics. A
+   finished change goes to the unit at once (heard at once; it keeps the bank once it rests) */
+let hywList=[],hywPts=[],hywSel=0,hywEdit=new Int16Array(HYW.N),hywDraft=null,hywFor=null;
+const HYW_DB=60;
+const hywInk=()=>{const cs=getComputedStyle(document.documentElement),v=n=>cs.getPropertyValue(n).trim();return {fg:v("--fg")||"#000",dim:v("--dim")||"#666",line:v("--line")||"#ccc"};};
+function hywPlot(c,pts,base){
+  const g=c.getContext("2d"),w=c.width,h=c.height,ink=hywInk(),y=v=>h/2-v/32768*(h/2-3);
+  g.clearRect(0,0,w,h);g.fillStyle=ink.line;g.fillRect(0,Math.round(h/2),w,1);
+  const line=(p,col,lw)=>{g.strokeStyle=col;g.lineWidth=lw;g.beginPath();for(let i=0;i<=p.length;i++){const x=i*w/p.length;i?g.lineTo(x,y(p[i%p.length])):g.moveTo(x,y(p[0]));}g.stroke();};
+  if(base)line(base,ink.dim,1);line(pts,ink.fg,w>200?2:1);
+}
+const hywTop=spec=>Math.max(1e-9,...Array.from({length:HYW.H},(_,k)=>Math.hypot(spec.re[k+1],spec.im[k+1])));
+function hywBars(c,spec){
+  const g=c.getContext("2d"),w=c.width,h=c.height,ink=hywInk(),bw=w/HYW.H,top=hywTop(spec);g.clearRect(0,0,w,h);
+  for(let k=1;k<=HYW.H;k++){const m=Math.hypot(spec.re[k],spec.im[k])/top,db=m>0?Math.max(-HYW_DB,20*Math.log10(m)):-HYW_DB,bh=(1+db/HYW_DB)*h;
+    g.fillStyle=k%8?ink.fg:ink.dim;g.fillRect((k-1)*bw+1,h-bh,Math.max(1,bw-2),bh);}
+}
+function hywShow(){const p=hywDraft||hywEdit;hywPlot($("hywdraw"),p,hywDraft?hywEdit:null);hywBars($("hywharm"),HYW.spectrum(p));}
+function hywGrid(){
+  $("hywgrid").replaceChildren(...hywList.map((e,k)=>{const c=el("canvas",{width:96,height:32});hywPlot(c,hywPts[k]||new Int16Array(HYW.N));
+    const b=el("button",{type:"button","aria-pressed":String(k===hywSel),class:e.used?"":"free",title:e.used?"":"Free"},c,el("span",{text:`U${k+1} ${e.name}`}));
+    b.addEventListener("click",()=>hywPick(k));return b;}));
+}
+function hywPick(k){hywSel=Math.max(0,k);hywEdit=Int16Array.from(hywPts[hywSel]||new Int16Array(HYW.N));hywDraft=null;$("hywname").value=hywList[hywSel]?.name||"";hywGrid();hywShow();}
+/* the bank as the unit has it: LIST, then GET what changed */
+async function hywRefresh(force) {
+  const d=dev,on=!!(d?.info.hydra&&d?.info.hywave);$("hywpanel").hidden=!on;if(!on||(!force&&hywFor===d))return;hywFor=d;
+  const list=await hyList(rq);
+  for(const e of list){const k=e.id-d.info.hywave.user0;if(!hywPts[k]||hywList[k]?.crc!==e.crc){const r=parse[CMD.HYWAVE](await rq(req.hywGet(e.id)));if(r.rc)throw Error("Cannot read a user wave");hywPts[k]=r.pts;}}
+  hywList=list;HY.setUser(list.map(e=>e.name));hyRender();
+  $("hywfrom").replaceChildren(...HY.WAVES.map((n,i)=>el("option",{value:i+1,text:n})),...list.map((e,k)=>el("option",{value:e.id,text:`U${k+1} ${e.name}`})));
+  hywPick(Math.min(hywSel,list.length-1));
+}
+const hywId=()=>dev.info.hywave.user0+hywSel;
+async function hywSend(pts,name=$("hywname").value) {
+  const k=hywSel,r=parse[CMD.HYWAVE](await rq(req.hywPut(hywId(),name,pts)));if(r.rc)throw Error("User wave rejected");
+  const was=hywList[k].name,now=HYW.cleanName(name)||was;
+  hywPts[k]=Int16Array.from(pts);hywList[k]={...hywList[k],used:true,name:now,crc:HYW.crc(pts)};hywEdit=Int16Array.from(pts);hywDraft=null;
+  if(now!==was){HY.setUser(hywList.map(e=>e.name));hyRender();$("hywfrom").options[HY.WAVES.length+k].text=`U${k+1} ${now}`;}
+  $("hywname").value=now;hywGrid();hywShow();
+}
+const hywCommit=pts=>op(()=>hywSend(pts));
+/* (the canvases take the theme's ink when drawn: a light / dark switch draws them again) */
+window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change",()=>{if(!$("hywpanel").hidden){hywGrid();hywShow();}});
+{ /* drawing over the wave: the stroke as drawn, the wave band-limited when it ends */
+  const c=$("hywdraw");let last=-1,lastV=0;
+  const at=e=>{const r=c.getBoundingClientRect(),h=c.height;return [Math.min(HYW.N-1,Math.max(0,Math.floor((e.clientX-r.left)/r.width*HYW.N))),
+    Math.max(-32767,Math.min(32767,Math.round((0.5-(e.clientY-r.top)/r.height)*32768*h/(h/2-3))))];};
+  c.addEventListener("pointerdown",e=>{if(!dev?.info.hywave)return;c.setPointerCapture(e.pointerId);hywDraft=Float64Array.from(hywEdit);[last,lastV]=at(e);hywDraft[last]=lastV;hywShow();});
+  c.addEventListener("pointermove",e=>{if(!hywDraft||last<0)return;const [i,v]=at(e),n=Math.abs(i-last);
+    for(let j=0;j<=n;j++){const t=n?j/n:1;hywDraft[Math.round(last+(i-last)*t)]=lastV+(v-lastV)*t;}last=i;lastV=v;hywShow();});
+  const up=()=>{if(!hywDraft||last<0)return;const pts=HYW.finish(hywDraft);last=-1;hywDraft=null;hywCommit(pts);};
+  c.addEventListener("pointerup",up);c.addEventListener("pointercancel",up);
+}
+{ /* the harmonics: a bar's height its level (60 dB under the loudest), Alt its phase */
+  const c=$("hywharm");let spec=null;
+  const set=e=>{const r=c.getBoundingClientRect(),k=1+Math.min(HYW.H-1,Math.max(0,Math.floor((e.clientX-r.left)/r.width*HYW.H))),f=Math.min(1,Math.max(0,(e.clientY-r.top)/r.height));
+    const re=spec.re[k],im=spec.im[k],mag=Math.hypot(re,im),top=hywTop(spec);
+    if(e.altKey){const ph=(f*2-1)*Math.PI,m=mag||top/10;spec.re[k]=m*Math.sin(ph);spec.im[k]=m*Math.cos(ph);}
+    else{const m=f>=0.98?0:top*10**(-f*HYW_DB/20),ph=mag?Math.atan2(re,im):0;spec.re[k]=m*Math.sin(ph);spec.im[k]=m*Math.cos(ph);}
+    hywDraft=HYW.normal(HYW.synth(spec));hywShow();};
+  c.addEventListener("pointerdown",e=>{if(!dev?.info.hywave)return;c.setPointerCapture(e.pointerId);spec=HYW.spectrum(hywEdit);set(e);});
+  c.addEventListener("pointermove",e=>{if(spec)set(e);});
+  const up=()=>{if(!spec)return;spec=null;const pts=hywDraft;hywDraft=null;if(pts)hywCommit(Int16Array.from(pts));};
+  c.addEventListener("pointerup",up);c.addEventListener("pointercancel",up);
+}
+$("hywname").addEventListener("change",()=>op(()=>hywSend(hywEdit)));
+$("hywstart").addEventListener("click",()=>op(async()=>{const r=parse[CMD.HYWAVE](await rq(req.hywGet(+$("hywfrom").value)));if(r.rc)throw Error("Cannot read that wave");
+  if(!hywList[hywSel].used||/^USER \d+$/.test($("hywname").value))$("hywname").value=r.name;await hywSend(r.pts);}));
+$("hywrevert").addEventListener("click",()=>op(async()=>{const r=parse[CMD.HYWAVE](await rq(req.hywRevert(hywId()),FLASH_OPT));if(r.rc)throw Error(r.rc===3?"Stop playback first":"Cannot revert");await hywRefresh(true);say(`U${hywSel+1} as the unit keeps it`);}));
+$("hywclear").addEventListener("click",()=>op(async()=>{if(!confirm(`Clear U${hywSel+1}? Sounds that use it will play a sine.`))return;const r=parse[CMD.HYWAVE](await rq(req.hywClear(hywId())));if(r.rc)throw Error("Cannot clear");await hywRefresh(true);}));
+$("hywstore").addEventListener("click",()=>op(async()=>{const r=parse[CMD.HYWAVE](await rq(req.hywStore(),FLASH_OPT));if(r.rc)throw Error(r.rc===3?"Stop playback first":"Flash write failed");say("User waves kept");}));
+$("hywexport").addEventListener("click",()=>{const used=hywList.filter(e=>e.used);if(!used.length){say("No user waves yet");return;}
+  downloadBytes(`hydra-waves-${today()}.syx`,new Uint8Array(used.flatMap(e=>Array.from(HYW.frame(e.id,e.name,hywPts[e.id-dev.info.hywave.user0])))));});
+$("hywimport").addEventListener("click",()=>$("hywfile").click());
+$("hywfile").addEventListener("change",()=>op(async()=>{
+  const f=$("hywfile").files[0];$("hywfile").value="";if(!f)return;const b=new Uint8Array(await f.arrayBuffer()),d=dev;
+  if(b[0]===240){const {waves}=HY.read(b);if(!waves.length)throw Error("No user waves in this file");await hyInstall(rq,d.info,[],waves);await hywRefresh(true);say(`Imported ${waves.length} user waves`);return;}
+  const scan=$("hywscan").checked,waves=HYW.fromWav(b,scan?8:1),stem=HYW.cleanName(f.name.replace(/\.[^.]*$/,"").toUpperCase())||"WAV";
+  if(waves.length===1){if(!hywList[hywSel].used||/^USER \d+$/.test($("hywname").value))$("hywname").value=stem;await hywSend(waves[0]);say("Wave imported");return;}
+  const free=hywList.filter(e=>!e.used).map(e=>e.id);if(free.length<waves.length)throw Error(`The wavetable's ${waves.length} frames need ${waves.length} free user waves; ${free.length} are free`);
+  for(let j=0;j<waves.length;j++){const r=parse[CMD.HYWAVE](await rq(req.hywPut(free[j],`${stem.slice(0,5)} ${j+1}`,waves[j])));if(r.rc)throw Error("User wave rejected");}
+  if(d.dump.engine===HY.ENGINE){const cur=parse[CMD.HYDRA](await rq(req.hyGet(d.sel||0)));if(cur.rc)throw Error("Cannot read HYDRA patch");
+    const raw=cur.raw.slice();raw[0]=1;for(let k=0;k<8;k++)raw[2+k]=k<waves.length?free[k]:0;
+    const r=parse[CMD.HYDRA](await rq(req.hyPut(d.sel||0,raw)));if(r.rc)throw Error("HYDRA patch rejected");hyTone=raw;hyToneWaves=[];}
+  await hywRefresh(true);say(`${waves.length} frames imported`+(d.dump.engine===HY.ENGINE?" as OSC 1's scan list":""));}));
 hyRender();
 let czVoices=[{name:"INIT",raw:CZ.init()}],czTone=czVoices[0].raw.slice();
 function czRender() {
@@ -3339,7 +3601,8 @@ $("savefile").addEventListener("click", () => op(async () => {
     engine, preset, p: dev.dump.p.slice(), g: dev.dump.g.slice() };
   if(data.engine===19){const r=parse[CMD.PROPHET](await rq(req.prophetGet(dev.sel||0)));if(r.rc)throw Error("Cannot read Prophet program");data.p5=r.raw;}
   if(data.engine===J106.ENGINE&&dev.info.juno){const r=parse[CMD.J106](await rq(req.j106Get(dev.sel||0)));if(r.rc)throw Error("Cannot read JUNO-106 tone");data.j106=r.raw;}
-  if(data.engine===HY.ENGINE&&dev.info.hydra){const r=parse[CMD.HYDRA](await rq(req.hyGet(dev.sel||0)));if(r.rc)throw Error("Cannot read HYDRA patch");data.hy=r.raw;}
+  if(data.engine===HY.ENGINE&&dev.info.hydra){const r=parse[CMD.HYDRA](await rq(req.hyGet(dev.sel||0)));if(r.rc)throw Error("Cannot read HYDRA patch");data.hy=r.raw;
+    const waves=await hyCollect(rq,dev.info,[r.raw]);if(waves.length)data.hyWaves=waves.map(w=>({id:w.id,name:w.name,pts:Array.from(w.pts)}));}
   if(data.engine===15 && data.p[dev.info.pe0+7]===2) { const r=parse[CMD.CZ_GET](await rq(req.czGet(0,dev.sel||0)));if(r.rc)throw new Error("Cannot read native CZ patch");data.cz=r.raw; }
   if(data.engineName === "FM6") { const r=parse[CMD.FM6_GET](await rq(req.fm6Get(FM6.TARGET.TRACK,dev.sel||0)));if(r.rc)throw new Error("Cannot read FM6 voice");data.fm6=Array.from(r.packed); }
   download(`saadet-${fileSlug(data.engineName || "patch")}-${fileSlug(data.presetName || preset)}.json`, data);
@@ -3358,6 +3621,7 @@ $("file").addEventListener("change", async () => {
     if(data.j106!=null&&(!J106.valid(data.j106)||data.engine!==J106.ENGINE||!session.info.juno))throw Error("Invalid JUNO-106 tone or unsupported firmware");
     if(data.engine===J106.ENGINE&&!data.j106)throw Error("JUNO-106 sound file is missing native tone data");
     if(data.hy!=null&&(!HY.valid(data.hy)||data.engine!==HY.ENGINE||!session.info.hydra))throw Error("Invalid HYDRA patch or unsupported firmware");
+    if(data.hyWaves!=null)data.hyWaves=cleanPatch({engine:HY.ENGINE,p:[],hy:data.hy,hyWaves:data.hyWaves}).hyWaves||[];
     if(data.engine===HY.ENGINE&&!data.hy)throw Error("HYDRA sound file is missing native patch data");
     if(data.cz != null && (!CZ.valid(data.cz)||!session.info.cz))throw new Error("Invalid CZ patch or unsupported firmware");
     if(data.fm6 != null && (!Array.isArray(data.fm6) || data.fm6.length !== FM6.PACKED || data.fm6.some(v=>!Number.isInteger(v)||v<0||v>127) || data.engine !== 12 || !session.info.fm6))throw new Error("Invalid FM6 voice or unsupported firmware");
@@ -3369,7 +3633,7 @@ $("file").addEventListener("change", async () => {
     selfLoad();
     if(data.p5){const r=parse[CMD.PROPHET](await rq(req.prophetPut(dev.sel||0,data.p5)));if(r.rc)throw Error("Prophet program rejected");}
     else if(data.j106){const r=parse[CMD.J106](await rq(req.j106Put(dev.sel||0,data.j106)));if(r.rc)throw Error("JUNO-106 tone rejected");await rq(req.j106Name(dev.sel||0,J106.name(data.j106)));}
-    else if(data.hy){const r=parse[CMD.HYDRA](await rq(req.hyPut(dev.sel||0,data.hy)));if(r.rc)throw Error("HYDRA patch rejected");}
+    else if(data.hy){const [raw]=await hyInstall(rq,dev.info,[data.hy],data.hyWaves),r=parse[CMD.HYDRA](await rq(req.hyPut(dev.sel||0,raw)));if(r.rc)throw Error("HYDRA patch rejected");}
     else if(data.cz) { const r=parse[CMD.CZ_PUT](await rq(req.czPut(0,dev.sel||0,data.cz)));if(r.rc)throw new Error("CZ patch rejected"); }
     else await rq(req.preset(data.engine, data.preset));
     dev.dump = await getDump();
@@ -3805,6 +4069,7 @@ function bankGet(slot) {
     const u=engine?await nativeBank.get(rqf,d.info,engine,slot):await bank.get(rqf,d.info,slot);
     if (!u.used) { sayK("emptySlot", slotName(slot)); return; }
     const pt = { name: u.name, engine: u.engine, engineName: dev.info.engines[u.engine], p: u.p, p5:u.p5, j106:u.j106, hy:u.hy, cz:u.cz, fm6:u.fm6, drum:u.drum, pattern: u.pattern, grid: u.grid, tags: ["device"] };
+    if(u.hy)pt.hyWaves=await hyCollect(rqf,d.info,[u.hy]);
     await libAdd([reservedFm4(dev.info.engines, u.engine) ? fromDigital(pt, dev.info.engines, dev.info.pe0) : pt]);
     sayK("copiedLib", u.name);
   });
@@ -3837,7 +4102,7 @@ $("bkexport").addEventListener("click", () => libOp(async (d, rqf) => {
   }
   if(engine===19)downloadBytes(`prophet-presets-${today()}.syx`,new Uint8Array(out.flatMap(x=>Array.from(P5.sysex(x.p5)))));
   else if(engine===J106.ENGINE)downloadBytes(`juno106-presets-${today()}.syx`,new Uint8Array(out.flatMap(x=>Array.from(J106.sysex(x.j106)))));
-  else if(engine===HY.ENGINE)downloadBytes(`hydra-presets-${today()}.syx`,new Uint8Array(out.flatMap(x=>Array.from(HY.sysex(x.hy)))));
+  else if(engine===HY.ENGINE)downloadBytes(`hydra-presets-${today()}.syx`,hyBundle(out.map(x=>({raw:x.hy,waves:x.hyWaves||[]}))));
   else if(engine===12){for(let i=0;i<out.length;i+=32)downloadBytes(`fm6-presets-${i/32+1}.syx`,FM6.bankSysex(out.slice(i,i+32).map(x=>FM6.unpack(x.fm6))));}
   else if(engine===15)downloadBytes(`cz1-presets-${today()}.syx`,new Uint8Array(out.flatMap(x=>Array.from(CZ.sysex(x.cz)))));
   else download(`saadet-bank-${today()}.json`,libraryFile("bank",out,libCtx()));
@@ -3850,7 +4115,7 @@ $("bknativefile").addEventListener("change",async()=>{
   try{
     const bytes=new Uint8Array(await file.arrayBuffer()),hs=HYS.is(bytes);if(hs&&!dev.info.hydra)throw Error("Install firmware with HYDRA support first");if(dev.info.shared)engine=hs?HY.ENGINE:bytes[1]===0x43?12:bytes[1]===0x44?15:bytes[1]===1?19:bytes[1]===0x41&&dev.info.juno?J106.ENGINE:bytes[1]===0x7D&&bytes[2]===0x48&&dev.info.hydra?HY.ENGINE:0;if(!engine)throw Error("Unknown SysEx manufacturer");const parsed=engine===19?P5.read(bytes):engine===J106.ENGINE?J106.read(bytes):engine===HY.ENGINE?(hs?HYS:HY).read(bytes):engine===15?CZ.read(bytes,file.name):FM6.parseSysex(bytes);
     if(!parsed.voices.length || parsed.badSum)throw Error("Invalid SysEx file");
-    const tones=parsed.voices.map(v=>({engine,name:v.name,...(engine===19?{p5:v.raw}:engine===J106.ENGINE?{j106:v.raw}:engine===HY.ENGINE?{hy:v.raw}:engine===15?{cz:v.raw}:{fm6:Array.from(FM6.pack(v.v))}),
+    const tones=parsed.voices.map(v=>({engine,name:v.name,...(engine===19?{p5:v.raw}:engine===J106.ENGINE?{j106:v.raw}:engine===HY.ENGINE?{hy:v.raw,hyWaves:v.waves}:engine===15?{cz:v.raw}:{fm6:Array.from(FM6.pack(v.v))}),
       ...(v.p&&dev.keys?{p:fullParams({engine,p:HYS.params(v.p,dev.keys)})}:{})}));   /* (a Hydrasynth's: its envelope, voice, glide) */
     const {targets,overwrite}=nativeImportTargets(bankView().slots,tones.length,bankSel??0);
     if(overwrite && !confirm(overwrite.from===overwrite.to?t("confirmOverwrite").replace("{n}",slotName(overwrite.from)).replace("{name}",targets[0].name||"")

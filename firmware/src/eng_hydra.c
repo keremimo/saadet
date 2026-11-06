@@ -21,6 +21,7 @@
  */
 #include "melodee_hy.h"
 #include "hydra_patch.h"
+#include "hydra_bank.h"
 _Static_assert(HY_NWAVE == HY_WAVE_COUNT, "HYDRA's waves: hydra_patch.h");
 
 /* ---------------------------------------------------------------------------------------------- the patch --- */
@@ -129,6 +130,7 @@ typedef struct {
 typedef struct {
     hy_voice_t voice[HY_SLOTS];
     uint32_t key;                                      /* the patch's hash when the part was made ready */
+    uint32_t ugen;                                     /* hy_ugen when its user waves were copied */
     uint8_t tag[HY_ROWS], key_e[16], valid;
     hy_base_t b;
     int16_t wave[][HY_PTS];                            /* the wave copies the patch reads (hy_rows) */
@@ -147,19 +149,33 @@ static inline __attribute__((always_inline)) hy_voice_t *hy_voice(hy_part_t *P, 
     return &P->voice[(uint32_t)(v - t->v) % HY_SLOTS];
 }
 
-/* the waves the patch reads, copied into the part (a slot's wave + 1 in tag, 0 none) */
+/* the waves the patch reads, copied into the part (a slot's wave id in tag, 0 none): a factory wave from flash, a user
+ * wave from the bank in RAM */
 static void hy_want(hy_part_t *P, uint32_t row, uint32_t id)
 {
-    if (id > HY_NWAVE)
+    if (id >= HY_USER0 + HY_UWAVES)                    /* (past the bank, or no wave: silence) */
         id = 0;
     if (P->tag[row] == id)
         return;
-    if (id)
+    if (id >= HY_USER0)
+        memcpy(P->wave[row], hy_uwave(id - HY_USER0)->pts, sizeof P->wave[row]);
+    else if (id)
         memcpy(P->wave[row], HY_WAVES[id - 1u], sizeof P->wave[row]);
     else                                               /* (a single oscillator with no wave: silence) */
         memset(P->wave[row], 0, sizeof P->wave[row]);
     P->tag[row] = (uint8_t)id;
 }
+/* the bank changed (hy_ugen moved on): the part's user waves are copied again, its others stay */
+static void hy_ufresh(hy_part_t *P)
+{
+    if (P->ugen == hy_ugen)
+        return;
+    for (uint32_t i = 0; i < HY_ROWS; i++)
+        if (P->tag[i] >= HY_USER0)
+            P->tag[i] = 255u;                          /* (no id: hy_want copies it) */
+    P->ugen = hy_ugen;
+}
+_Static_assert(HY_ID_LAST < 255u, "255 tags a copy to make again");
 static void hy_waves(hy_part_t *P, const uint8_t *r)
 {
     uint32_t o, s, row = 0;
@@ -382,10 +398,16 @@ static void hy_block(track_t *t)
     uint32_t h = 2166136261u, i;
     for (i = 0; i < HY_BYTES; i++)                     /* (FNV-1a: a copy of the patch would not fit the part) */
         h = (h ^ r[i]) * 16777619u;
-    if (P->valid && P->key == h && !memcmp(P->key_e, t->p + P_E0, sizeof P->key_e))
+    if (P->valid && P->key == h && !memcmp(P->key_e, t->p + P_E0, sizeof P->key_e)) {
+        if (P->ugen != hy_ugen) {                      /* (the bank alone changed: the same rows, user waves anew) */
+            hy_ufresh(P);
+            hy_waves(P, r);
+        }
         return;
+    }
     if (!P->valid || P->key != h)
         hy_tails_fit(P, t, r);
+    hy_ufresh(P);
     hy_base(P, t, r);
     hy_waves(P, r);                                    /* (after: it sets the base's row numbers) */
     P->key = h;

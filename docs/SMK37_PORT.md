@@ -176,14 +176,16 @@ Each step ends with a measurable "done". Hardware steps need Kerem's Elite and a
    | Native FM (`OBJ_NATIVEFM0`, +1) | 4 | 0xD8000-0xDBFFF | unchanged | `FL_DATA` |
    | User presets (`OBJ_UPRESET0`, +1) | 4 | 0xDC000-0xDFFFF | unchanged | `FL_DATA` |
    | User presets, more (`OBJ_UPRESET_EXT0`, +1) | 4 | 0xE5000-0xE8FFF | unchanged | `FL_DATA` |
+   | HYDRA user waves (`OBJ_HYWAVE0`, +1) | 4 | 0xB4000-0xB7FFF | 0xE3000, 0xE4000, 0xBA000, 0xED000 | `FL_DATA`, `FL_XDATA1`, `FL_GLOB` |
 
    Why each moved: 0x93000-0x9CFFF is the SMK's app area; 0xFA000 and 0xFC000-0xFDFFF are its protected USR window;
    0xFE000 is outside every window the board's flash driver writes; the platform pairs need a window the base's store
    accepts (`FL_STORE_OK`). The update loader reads bytes 0xF00.. of a sector as a possible record, so only objects
    that leave their last 256 bytes erased sit in the XDATA windows, which is why the FM6 bank moved to `FL_DATA`. 0xAF000
    is the board's owner tag (`FL_OWNER`): a save there would read as another firmware's store at the next boot, and every
-   window would be cleared. Free after this: 0x9F000-0xA0FFF, 0xBA000, 0xE3000-0xE4FFF, 0xED000, and, outside every
-   window the board's driver writes today, 0xEE000-0xF3FFF and 0xFE000: 13 sectors, 52 KB, for new engines' banks.
+   window would be cleared. Free after this: 0x9F000-0xA0FFF (kept for a larger app area) and, outside every window the
+   board's driver writes today, 0xEE000-0xF3FFF and 0xFE000: 9 sectors, 36 KB, for new engines' banks. HYDRA's user waves
+   (2026-11-06) took 0xBA000, 0xE3000-0xE4FFF and 0xED000.
 4. **Controls.** Velocity from keys and pads (the USRTRIM curves), faders, wheels, pedal, TRS out, pad LEDs.
    Done: each one measured on the unit (USB test scripts for the velocity's timing).
 5. **UX phase 1: banks** (knobs, faders, picker, gauge, tags). Ships alone.

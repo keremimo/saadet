@@ -642,12 +642,26 @@ static void the_panel(void)
         p = *hy_patch_of(t);
         p.raw[i] = (uint8_t)(HY_PANEL[i].max - HY_PANEL[i].min);
         ok &= hy_patch_valid(&p);
-        if (i != HY_O3_WAVE && i != HY_O1 + HO_WAVE && i != HY_O2 + HO_WAVE && HY_PANEL[i].max - HY_PANEL[i].min < 255) {
+        int wave = i == HY_O3_WAVE || i == HY_O1 + HO_WAVE || i == HY_O2 + HO_WAVE ||
+                   (i >= HY_O1 + HO_L0 && i < HY_O1 + HO_L0 + 8u) || (i >= HY_O2 + HO_L0 && i < HY_O2 + HO_L0 + 8u);
+        if (!wave && HY_PANEL[i].max - HY_PANEL[i].min < 255) {   /* (a wave's: the ids reserved past the bank, below) */
             p.raw[i]++;
             if (hy_patch_valid(&p)) { printf("  byte %u: past its range is valid\n", i); ok = 0; }
         }
     }
     check("the stored ranges are the panel's", ok);
+    {   /* a wave field stores every id the format reserves (hydra_patch.h: the user waves up to U64), the panel reaches the bank */
+        hy_patch_t p = *hy_patch_of(t);
+        int r = HY_PANEL[HY_O1 + HO_L0].max == (int)(HY_USER0 + HY_UWAVES - 1u) &&
+                HY_PANEL[HY_O1 + HO_WAVE].max == (int)(HY_USER0 + HY_UWAVES - 2u);
+        p.raw[HY_O1 + HO_L0 + 3] = (uint8_t)HY_ID_LAST; p.raw[HY_O2 + HO_WAVE] = (uint8_t)(HY_ID_LAST - 1u); p.raw[HY_O3_WAVE] = (uint8_t)(HY_ID_LAST - 1u);
+        r &= hy_patch_valid(&p);
+        p.raw[HY_O1 + HO_L0 + 3] = (uint8_t)(HY_ID_LAST + 1u);
+        r &= !hy_patch_valid(&p);
+        p.raw[HY_O1 + HO_L0 + 3] = 0; p.raw[HY_O3_WAVE] = (uint8_t)HY_ID_LAST;
+        r &= !hy_patch_valid(&p);
+        check("wave fields store the reserved user ids, the panel reaches the bank's", r);
+    }
     hy_quiet(t);
 }
 
@@ -833,6 +847,169 @@ static void the_editor(void)
     hy_quiet(t);
 }
 
+/* a wave's points as command 98 carries them: int16 low byte first, seven-to-eight packed (editor_backup.c ed_bk_pack) */
+static uint32_t hy_pack(const int16_t *w, uint8_t *out)
+{
+    uint8_t b[2u * HY_PTS];
+    uint32_t i, n = 0, at;
+    for (i = 0; i < HY_PTS; i++) { b[2u * i] = (uint8_t)((uint16_t)w[i] & 255u); b[2u * i + 1u] = (uint8_t)((uint16_t)w[i] >> 8); }
+    for (at = 0; at < sizeof b; at += 7u) {
+        uint32_t k = sizeof b - at > 7u ? 7u : sizeof b - at, m = 0;
+        for (i = 0; i < k; i++) m |= (uint32_t)(b[at + i] >> 7) << i;
+        out[n++] = (uint8_t)m;
+        for (i = 0; i < k; i++) out[n++] = b[at + i] & 127u;
+    }
+    return n;
+}
+static int hy_row_is(const hy_part_t *P, uint32_t row, const int16_t *w) { return !memcmp(P->wave[row], w, HY_PTS * sizeof *w); }
+/* a reply's payload (after F0 7D 46 4C 98, before F7), for web/test_synth.mjs */
+static void hy_fixture(const char *path)
+{
+    FILE *f = fopen(path, "wb");
+    if (f) { fwrite(wire + 5, 1, wire_n - 6u, f); fclose(f); }
+}
+
+/* the user waves (hydra_bank.h): a free bank is sines named USER n; a slot plays the bank's points exactly, as a factory wave
+ * holding the same points sounds; a change reaches the part at the next block and only its user waves are copied again; an
+ * id past the bank is silent; command 98 lists, gets, puts, stores, reverts and clears; the bank survives a power cycle, a
+ * torn write keeps flash's copy, and the at-rest autosave waits while a note sounds */
+static void the_bank(void)
+{
+    static int16_t w[HY_PTS], v[HY_PTS];
+    static uint8_t put[2u + HY_UNAME + 600u];
+    track_t *t;
+    hy_part_t *P;
+    uint64_t h1, h2;
+    uint32_t i, r0, n;
+    int32_t out[CTL], pk;
+    int ok;
+    power_on();
+    memset(nor, 255, sizeof nor);
+    hy_bank_boot();
+    ok = 1;
+    for (i = 0; i < HY_UWAVES; i++)
+        ok &= !hy_uwave(i)->used && !memcmp(hy_uwave(i)->pts, HY_WAVES[HYW_SINE], sizeof w);
+    check("a free bank: fourteen sines", ok && !strcmp(hy_uwave(0)->name, "USER 1") && !strcmp(hy_uwave(13)->name, "USER 14"));
+
+    hy_uset(0, HY_WAVES[HYW_BELL], "MYBELL", 1);       /* the same points as a factory wave: the same sound */
+    t = hy_fresh(0);
+    hy_raw(t)[HY_O1 + HO_WAVE] = HYW_BELL;
+    pk = hy_play(t, 60, 8192, 0); h1 = hy_hash(8192);
+    t = hy_fresh(0);
+    hy_raw(t)[HY_O1 + HO_WAVE] = (uint8_t)(HY_USER0 - 1u);   /* (WAVE holds the id - 1: U1) */
+    hy_play(t, 60, 8192, 0); h2 = hy_hash(8192);
+    check("a user wave sounds exactly as the factory wave whose points it holds", h1 == h2 && pk > 1000 * AUDIO_ONE);
+    t = hy_fresh(0);
+    hy_raw(t)[HY_O1 + HO_WAVE] = (uint8_t)(HY_USER0 + HY_UWAVES - 1u);   /* (one past the bank) */
+    pk = hy_play(t, 60, 8192, 0);
+    check("a wave past the bank is silent", pk == 0);
+
+    for (i = 0; i < HY_PTS; i++) w[i] = (int16_t)((int32_t)((i * 977u) % 50000u) - 25000);
+    hy_uset(4, w, "MINE", 1);
+    t = hy_fresh(0);
+    hy_raw(t)[HY_O1 + HO_MODE] = 1;                    /* SCAN: U5, SAW, U5 */
+    hy_raw(t)[HY_O1 + HO_L0] = (uint8_t)(HY_USER0 + 4u);
+    hy_raw(t)[HY_O1 + HO_L0 + 1] = HYW_SAW + 1;
+    hy_raw(t)[HY_O1 + HO_L0 + 2] = (uint8_t)(HY_USER0 + 4u);
+    trk_note_on(t, 57, 100);
+    track_render(t, out, CTL);
+    track_render(t, out, CTL);
+    P = hy_part(0);
+    r0 = P->b.row0[0];
+    check("a slot's user wave is copied whole from the bank", P->b.scanning[0] && hy_row_is(P, r0, w) && hy_row_is(P, r0 + 2u, w) &&
+                                                            hy_row_is(P, r0 + 1u, HY_WAVES[HYW_SAW]));
+    P->wave[r0 + 1u][0] ^= 0x5555;                     /* (a mark a copy of SAW would undo) */
+    memcpy(v, w, sizeof v); v[0] = 1234;
+    hy_uset(4, v, 0, 1);
+    track_render(t, out, CTL);
+    P = hy_part(0);
+    check("a change to the bank reaches the part at the next block, only its user waves copied again",
+          hy_row_is(P, r0, v) && hy_row_is(P, r0 + 2u, v) && P->wave[r0 + 1u][0] == (int16_t)(HY_WAVES[HYW_SAW][0] ^ 0x5555));
+    P->wave[r0 + 1u][0] ^= 0x5555;
+    {
+        char val[16], unit[6];
+        ui_field_t f = {FK_HY, HY_O1 + HO_L0, "SLOT 1", 0};
+        field_text(&f, field_desc(&f), val, unit);
+        check("the panel names a user wave by the bank's name", !strcmp(val, "MINE"));
+    }
+    trk_note_off(t, 57);
+    hy_quiet(t);
+
+    /* command 98 */
+    {
+        uint8_t list[] = {0};
+        request(ED_HYWAVE, list, sizeof list);
+        n = 5u + 5u + HY_UWAVES * (1u + HY_UNAME + 5u) + 1u;
+        hy_fixture("build/host/hywave-list.bin");
+        check("98 LIST: every user wave, written, named, its points' CRC",
+              wire_n == n && !wire[6] && wire[8] == HY_UWAVES && wire[9] == HY_USER0 && wire[10] == 1u && !memcmp(wire + 11, "MYBELL", 6) &&
+              ed_bk_r32(wire + 18) == st_crc32(HY_WAVES[HYW_BELL], sizeof w) && wire[10u + 13u] == 0u);
+    }
+    {
+        uint8_t get[] = {1, HYW_SAW + 1};
+        static uint8_t b[2u * HY_PTS];
+        request(ED_HYWAVE, get, sizeof get);
+        hy_fixture("build/host/hywave-get-saw.bin");
+        ok = wire_n == 5u + 3u + HY_UNAME + 586u + 1u && !wire[6] && !memcmp(wire + 8, "SAW\0\0\0\0", 7) &&
+             ed_unpack7(wire + 8u + HY_UNAME, 586u, b, sizeof b) == sizeof b;
+        for (i = 0; ok && i < HY_PTS; i++)
+            ok = (int16_t)(b[2u * i] | b[2u * i + 1u] << 8) == HY_WAVES[HYW_SAW][i];
+        check("98 GET: a factory wave's name and every point", ok);
+        get[1] = 0; request(ED_HYWAVE, get, sizeof get); ok = wire[6] == 1u;
+        get[1] = (uint8_t)(HY_USER0 + HY_UWAVES); request(ED_HYWAVE, get, sizeof get); ok &= wire[6] == 1u;
+        check(".. no wave 0, none past the bank", ok);
+    }
+    {
+        for (i = 0; i < HY_PTS; i++) w[i] = (int16_t)(i & 1u ? -32768 : 32767);
+        put[0] = 2; put[1] = (uint8_t)(HY_USER0 + 2u);
+        memset(put + 2, 0, HY_UNAME); memcpy(put + 2, "ZAP", 3);
+        n = 2u + HY_UNAME + hy_pack(w, put + 2u + HY_UNAME);
+        request(ED_HYWAVE, put, n);
+        check("98 PUT: a user wave heard at once, marked to keep", !wire[6] && hy_uwave(2)->used && !strcmp(hy_uwave(2)->name, "ZAP") &&
+                                                                !memcmp(hy_uwave(2)->pts, w, sizeof w) && (hy_udirty & 4u));
+        put[1] = HYW_SAW + 1; request(ED_HYWAVE, put, n); ok = wire[6] == 1u;
+        put[1] = (uint8_t)(HY_USER0 + 2u); put[2] = 7; request(ED_HYWAVE, put, n); ok &= wire[6] == 1u; put[2] = 'Z';
+        request(ED_HYWAVE, put, n - 1u); ok &= wire[6] == 1u;
+        check(".. not a factory wave, nor an unprintable name or a short wave", ok && !memcmp(hy_uwave(2)->pts, w, sizeof w));
+    }
+    {
+        uint8_t store[] = {3}, revert[] = {4, (uint8_t)(HY_USER0 + 2u)}, clear[] = {5, (uint8_t)(HY_USER0 + 2u)};
+        request(ED_HYWAVE, store, sizeof store);
+        ok = !wire[6] && !hy_udirty;
+        memset(hy_ubank, 0, sizeof hy_ubank);          /* (a power cycle) */
+        hy_bank_boot();
+        check("98 STORE: the bank survives a power cycle", ok && hy_uwave(2)->used && !strcmp(hy_uwave(2)->name, "ZAP") &&
+                                                            !memcmp(hy_uwave(2)->pts, w, sizeof w) && !strcmp(hy_uwave(4)->name, "MINE"));
+        hy_uset(2, HY_WAVES[HYW_TRI], "TRI", 1);
+        fail_after = 3;                                /* (the write torn part-way) */
+        ok = hy_bank_store() != 0 && (hy_udirty & 4u);
+        fail_after = -1;
+        hy_bank_boot();
+        check("a torn write keeps the bank flash held", ok && !strcmp(hy_uwave(2)->name, "ZAP") && !memcmp(hy_uwave(2)->pts, w, sizeof w));
+        hy_uset(2, HY_WAVES[HYW_TRI], "TRI", 1);
+        request(ED_HYWAVE, revert, sizeof revert);
+        check("98 REVERT: back to flash's", !wire[6] && !strcmp(hy_uwave(2)->name, "ZAP") && !memcmp(hy_uwave(2)->pts, w, sizeof w) &&
+                                            !(hy_udirty & 4u));
+        request(ED_HYWAVE, clear, sizeof clear);
+        check("98 CLEAR: free again", !wire[6] && !hy_uwave(2)->used && !strcmp(hy_uwave(2)->name, "USER 3") &&
+                                      !memcmp(hy_uwave(2)->pts, HY_WAVES[HYW_SINE], sizeof w) && hy_ufree() == 1);
+    }
+    {   /* the at-rest autosave: not while a note sounds */
+        uint32_t e;
+        hy_uset(6, HY_WAVES[HYW_GLASS], "GLASS", 1);
+        t = hy_fresh(0);
+        trk_note_on(t, 60, 100);
+        track_render(t, out, CTL);
+        e = erases;
+        for (i = 0; i < 20u; i++) { fm1_ms += 400u; autosave_poll(0); }
+        ok = erases == e && (hy_udirty & 64u);
+        trk_note_off(t, 60);
+        hy_quiet(t);
+        for (i = 0; i < 20u; i++) { fm1_ms += 400u; autosave_poll(0); }
+        check("the bank is kept at rest, never while a note sounds", ok && !hy_udirty && erases > e);
+    }
+}
+
 int main(void)
 {
     power_on();
@@ -841,6 +1018,7 @@ int main(void)
     the_panel();
     the_stores();
     the_editor();
+    the_bank();
     printf("%s\n", bad ? "HYDRA test FAILED" : "HYDRA test passed");
     return bad != 0;
 }

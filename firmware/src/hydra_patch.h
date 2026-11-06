@@ -77,19 +77,27 @@ enum { F1_LAD12, F1_LAD24, F1_FAT12, F1_FAT24, F1_MSLP, F1_MSHP, F1_LPG, F1_3LP,
 #define HY_CENT0 50
 #define HY_ENV0 63
 #define HY_WAVE_COUNT 56u                              /* tools/gen_hy_waves.py (eng_hydra.c checks it) */
+/* A wave's id, as a slot holds it: 0 EMPTY, 1..HY_WAVE_COUNT the factory waves, then the user waves from HY_USER0
+ * (hydra_bank.h). HY_UMAX ids are theirs, so the bank can grow without another patch format; one past the bank plays
+ * silence. A single oscillator's WAVE and OSC 3's hold the id - 1 */
+#define HY_USER0 (HY_WAVE_COUNT + 1u)
+#define HY_UMAX 64u
+#define HY_UWAVES 14u                                  /* the bank as built: two flash objects of seven */
+#define HY_ID_LAST (HY_USER0 + HY_UMAX - 1u)
+_Static_assert(HY_UWAVES <= HY_UMAX && HY_ID_LAST <= 255u, "a wave's id is a byte");
 #define HY_FRAME 294u                                  /* a native message, F0 to F7: its header, two nibbles a byte */
 typedef struct { uint8_t raw[HY_BYTES]; } hy_patch_t;
 
 /* the bytes a stored or received patch may hold: {first, last, the largest value} */
 static int hy_patch_valid(const hy_patch_t *p)
 {
-#define HY_OSC_RULES(b) {b + HO_MODE, b + HO_MODE, 1}, {b + HO_WAVE, b + HO_WAVE, HY_WAVE_COUNT - 1u}, \
-        {b + HO_L0, b + HO_L0 + 7, HY_WAVE_COUNT}, {b + HO_SCAN, b + HO_SCAN, 127}, {b + HO_SEMI, b + HO_SEMI, 2 * HY_SEMI0}, \
+#define HY_OSC_RULES(b) {b + HO_MODE, b + HO_MODE, 1}, {b + HO_WAVE, b + HO_WAVE, HY_ID_LAST - 1u}, \
+        {b + HO_L0, b + HO_L0 + 7, HY_ID_LAST}, {b + HO_SCAN, b + HO_SCAN, 127}, {b + HO_SEMI, b + HO_SEMI, 2 * HY_SEMI0}, \
         {b + HO_CENT, b + HO_CENT, 2 * HY_CENT0}, {b + HO_KEY, b + HO_KEY, 200}
 #define HY_MUT_RULES(b) {b + HM_MODE, b + HM_MODE, MU_N - 1}, {b + HM_SRC, b + HM_SRC, HYS_N - 1}, {b + HM_RATIO, b + HM_WET, 127}
     static const uint8_t RULE[][3] = {
         HY_OSC_RULES(HY_O1), HY_OSC_RULES(HY_O2),
-        {HY_O3_WAVE, HY_O3_WAVE, HY_WAVE_COUNT - 1u}, {HY_O3_SEMI, HY_O3_SEMI, 2 * HY_SEMI0},
+        {HY_O3_WAVE, HY_O3_WAVE, HY_ID_LAST - 1u}, {HY_O3_SEMI, HY_O3_SEMI, 2 * HY_SEMI0},
         {HY_O3_CENT, HY_O3_CENT, 2 * HY_CENT0}, {HY_O3_KEY, HY_O3_KEY, 200},
         HY_MUT_RULES(HY_M1), HY_MUT_RULES(HY_M2), HY_MUT_RULES(HY_M3), HY_MUT_RULES(HY_M4),
         {HY_RING_A, HY_NOISE, 2}, {HY_LVL, HY_BAL + 4, 127}, {HY_ROUTE, HY_ROUTE, 1},

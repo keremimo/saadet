@@ -11,8 +11,9 @@
 #endif
 /* Object 32 is Saadet state; 28 remains the final unified preset bank. */
 #define ED_BK_PERF0 33u                            /* 33..: the performances' flash objects */
-static const uint8_t ED_BK_IDS[] = {1,6,7,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,32,33,34,35,36,37,38};
-_Static_assert(ED_BK_PERF0 + PERF_OBJS - 1u == 38u, "a backup id per performance object");
+#define ED_BK_HYW0 39u                             /* 39, 40: HYDRA's user waves (hydra_bank.c) */
+static const uint8_t ED_BK_IDS[] = {1,6,7,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,32,33,34,35,36,37,38,39,40};
+_Static_assert(ED_BK_PERF0 + PERF_OBJS - 1u == 38u && ED_BK_HYW0 == 39u, "a backup id per performance object, then the waves'");
 #define ED_BK_N ((uint32_t)sizeof ED_BK_IDS)
 #define ED_BK_RAW transfer_scratch.raw
 #define ED_BK_MAX ((uint32_t)sizeof transfer_scratch.raw)
@@ -64,7 +65,7 @@ static const uint8_t *ed_bk_object(uint32_t id,uint32_t *len)
     uint32_t bank=ed_bk_preset_bank(id);
 #if MELODEE_FLASH
     if(bank<UP_BANKS || id>=ED_BK_PERF0){
-        uint32_t obj=id>=ED_BK_PERF0?OBJ_PERF0+id-ED_BK_PERF0:up_obj(bank);st_hdr_t h;int copy=st_current(obj,&h);
+        uint32_t obj=id>=ED_BK_HYW0?OBJ_HYWAVE0+id-ED_BK_HYW0:id>=ED_BK_PERF0?OBJ_PERF0+id-ED_BK_PERF0:up_obj(bank);st_hdr_t h;int copy=st_current(obj,&h);
         if(copy>=0){*len=h.len;ed_bk_source_obj=obj;ed_bk_source_copy=(uint32_t)copy;ed_bk_source_crc=h.crc;
             return ED_BK_FLASH_PTR(st_sector(obj,(uint32_t)copy)+st_payload_off_header(obj,&h));}
     }
@@ -76,6 +77,7 @@ static const uint8_t *ed_bk_object(uint32_t id,uint32_t *len)
 static uint32_t ed_bk_capture(void)
 {
     if(ed_flash_stop())return 3;
+    if(hy_bank_store())return 4;                   /* (the user waves as RAM has them: the archive reads flash) */
     state_capture(&ed_bk_synth);
 #if MELODEE_FLASH
     ed_bk_set.p=persist_saved;
@@ -112,6 +114,12 @@ static uint32_t ed_bk_commit_inner(void)
         if(!state_upgrade((synth_state_t *)raw,ed_bk_len) || !state_valid((const synth_state_t *)raw))return 2;
         if(st_save(OBJ_SYNTH,raw,sizeof(synth_state_t)))return 4;
         syn_saved=0;syn_retry=0;state_boot();return 0;
+    }
+    if(ed_bk_id>=ED_BK_HYW0){
+        uint32_t j=ed_bk_id-ED_BK_HYW0;
+        if(ed_bk_len && !hy_uobj_valid((const hy_uobj_t *)(const void *)raw,j))return 2;
+        if(st_save(OBJ_HYWAVE0+j,raw,ed_bk_len))return 4;
+        hy_bank_boot();return 0;                       /* (an empty one: free waves) */
     }
     if(ed_bk_id>=ED_BK_PERF0){
         uint32_t len=ed_bk_len;
@@ -158,7 +166,8 @@ static uint32_t ed_bk_write(const uint8_t *a, uint32_t n)
         if (n != 12u || a[6] > 15u || a[11] > 15u) return 1;
         uint32_t len = ed_bk_r32(a + 2);
         if(len>ED_BK_MAX || (a[1]==32u && len!=sizeof(synth_state_t) && len!=sizeof(synth_state2_t) && len!=sizeof(synth_state1_t) && len!=SYN_SIZE_V1) ||
-            (a[1]>=ED_BK_PERF0 && len && len!=sizeof(perf_bank_t) && len!=sizeof(perf_bank2_t)) ||
+            (a[1]>=ED_BK_PERF0 && a[1]<ED_BK_HYW0 && len && len!=sizeof(perf_bank_t) && len!=sizeof(perf_bank2_t)) ||
+            (a[1]>=ED_BK_HYW0 && len && len!=sizeof(hy_uobj_t)) ||
             (a[1]==1u && (len<sizeof(persist_t) || len>sizeof set_rec)) ||
             (ed_bk_preset_bank(a[1])<UP_BANKS && len && len!=sizeof(up_disk_bank_t)))return 1;
         ed_bk_valid = 0; ed_bk_put = 1; ed_bk_id = a[1]; ed_bk_len = len; ed_bk_gen = ++transfer_gen;

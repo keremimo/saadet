@@ -1225,3 +1225,25 @@ Resident audio 107,956 B and the engine arena 102,816 B on the Elite; a part's s
 
 Not checked: the FM-1 (built, not run), HYDRA under Bluetooth traffic, the panel's pages and knobs on the unit itself (host
 renders only), and the sound by ear.
+
+## 6 November 2026: HYDRA's user waves (host only)
+
+Branch `hydra-user-waves` off `main` at c333332: 14 user waves (`hydra_bank.h`, `hydra_bank.c`), wave ids 57-120 reserved for
+them, command 98, the backup archive's objects 39 and 40, and the web editor's USER WAVES panel. Not flashed, not run on a unit.
+
+All three suites passed on the branch: `ALL HOST TESTS PASSED`, `ALL SMK-37 TESTS PASSED`, `ALL BASE PORT TESTS PASSED` (the
+base suite after `./build.sh --host`: its `saadet_host` from 5 November predated HYDRA and counted four engines). New host
+checks in `tests/hydra_test.c`: a user wave holding BELL's points renders bit-exact as BELL; a bank change re-copies only the
+parts' user rows at the next block; an id past the bank is silent; command 98 LIST, GET, PUT, STORE, REVERT and CLEAR; the bank
+survives a power cycle and a torn write keeps flash's copy; the at-rest autosave waits while a note sounds. The sanitizer build
+found an over-read in command 98's name field on a short factory name, fixed before this run. `tests/storage_test.c` and
+`tests/ui_erase_test.c` place the new sectors on both boards (64 live sectors); `web/test_synth.mjs` parses the firmware's real
+LIST and GET replies and covers packing, the file message, `.wav` import, the import plan and backup versions 1-3.
+
+Sizes: FM-1 app 492,408 B of 581,564, engine arena 95,360 B; SMK-37 packages 505,168-505,360 B of 622,524, engine arena
+93,824 B. The bank takes 7,352 B of the pool (the arena was 102,816 B on the Elite before). Not measured against a clean build
+of c333332: by symbol sizes the new code is about 3 KB, and the audio path gains `hy_ufresh` (204 B) and a larger `hy_want`.
+
+Not checked: any unit, timing with user waves (the audio work per block is unchanged: a bank change copies 512 B per user row,
+as a patch load does), the web panel against a unit (its drawing was checked in a harness with a simulated unit; the repaint on
+a light / dark switch was not seen), and the sound by ear.

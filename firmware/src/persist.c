@@ -17,6 +17,7 @@ static void perf_boot(void);                      /* perf.c, at the end */
 static union { uint32_t align; uint8_t raw[8192]; } transfer_scratch __attribute__((section(".pool")));
 static uint32_t transfer_gen;
 static uint8_t *transfer_borrow(void) { transfer_gen++; return transfer_scratch.raw; }
+#include "hydra_bank.c"                           /* HYDRA's user waves (hydra_bank.h) */
 
 
 /* the main firmware's template (its project.c tmpl_t) after the settings: kept as read. Its size and its magic
@@ -285,15 +286,16 @@ static int state_autosave(void)
     synth_state_t *s = &syn_scratch;
     if (!flash_ok) return 1;
     if (song.playing) return 0;
+    int waves = hy_bank_store();                        /* (HYDRA's user waves changed since: 0 when flash has them) */
     state_capture(s);
     if (s->sum == syn_saved && !syn_retry)
-        return 1;
+        return waves == 0;
     if (st_save(OBJ_SYNTH, s, sizeof *s) == 0) {
         syn_saved = s->sum;
         syn_retry = 0;
     } else
         syn_retry = 1;
-    return !syn_retry;
+    return !syn_retry && waves == 0;
 #else
     return 1;
 #endif

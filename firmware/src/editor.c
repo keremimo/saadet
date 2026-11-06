@@ -478,6 +478,7 @@ static __attribute__((minsize)) void ed_handle(const uint8_t *f, uint32_t n)   /
         ed_b(0x55);ed_b(1);ed_b(UP_SLOTS&127u);ed_b(UP_SLOTS>>7); /* shared library */
         ed_b(0x4a);ed_b(1);ed_b(ENGI_J106);ed_b(USER_NATIVE_J106);ed_b(ED_J106);ed_b(J106_FIELDS); /* JUNO-106: command 96 */
         ed_b(0x48);ed_b(1);ed_b(ENGI_HYDRA);ed_b(USER_NATIVE_HYDRA);ed_b(ED_HYDRA);ed_b(HY_BYTES&127u);ed_b(HY_BYTES>>7); /* HYDRA: command 97 */
+        ed_b(0x57);ed_b(1);ed_b(ED_HYWAVE);ed_b(HY_USER0);ed_b(HY_UWAVES);ed_b(HY_UMAX); /* HYDRA's user waves: command 98 */
         break;
     case ED_GET:
     case ED_SET:

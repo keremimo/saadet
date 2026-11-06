@@ -237,7 +237,7 @@ void saadet_init(void)
     midi_input_reset();memset(mchord,0,sizeof mchord);sd_ble_was_up=sd_thru_was=0;
     memset(trk,0,sizeof trk);memset(&song,0,sizeof song);eng_state_reset();
     memset(&ui,0,sizeof ui);memset(&uix,0,sizeof uix);uix.held=PL_N;uix.hot=4;uix.eng=255;
-    panel=PANEL_DEFAULT;settings_init();persist_boot();panel_init();settings_init();sd_panel_set(panel.btn,panel.enc,panel.dir);
+    panel=PANEL_DEFAULT;settings_init();persist_boot();hy_bank_boot();panel_init();settings_init();sd_panel_set(panel.btn,panel.enc,panel.dir);
 #ifdef SAADET_SMK37
     panel=PANEL_DEFAULT; /* the UI's ids are the FM-1's defaults here; the base's panel map owns the 18 real buttons */
 #endif

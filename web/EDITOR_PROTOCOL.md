@@ -26,7 +26,7 @@ and part B's MIDI channel. With the mode at ONE, only part zero can be selected.
 | 22–25 | WATCH, CHANGED, RELOAD and PING |
 | 27–29, 31–32 | Parts: select one, read and set the other part's mix and parameters |
 | 34–38 | UI state/preferences/palettes and favorites |
-| 65–67 | Saadet archive inventory, chunk read and staged restore; objects 33–38 hold the performances |
+| 65–67 | Saadet archive inventory, chunk read and staged restore; objects 33–38 hold the performances, 39 and 40 HYDRA's user waves |
 | 68–71 | Native FM6 transfers |
 | 72 | Audio diagnostics |
 | 78 | Legacy native-slot compatibility |
@@ -36,6 +36,7 @@ and part B's MIDI channel. With the mode at ONE, only part zero can be selected.
 | 95 | Native Prophet transfers |
 | 96 | Native JUNO-106 transfers |
 | 97 | Native HYDRA transfers |
+| 98 | HYDRA user waves |
 
 Command 72 answers on both builds with the same layout (`tools/usb_audio_stats.py`
 reads it; flag 1 resets the maxima, 2 adds voices, 4 the second core, 8 memory,
@@ -115,12 +116,41 @@ Its message is Saadet's own, `F0 7D 48 59 01`, the nibble pairs, `F7`: outside t
 waits in SAVE for its slots, as other native dumps do. Favourites use namespace 25 for the presets (INIT, 16 factory sounds)
 and 26 for user slots.
 
+## HYDRA user waves
+
+A wave's id, as a HYDRA patch's slots hold it: 0 EMPTY, 1–56 the factory waves, then the user waves from the id INFO gives;
+64 ids are reserved for them (57–120), so the bank can grow without a new patch format. OSC 1 and OSC 2's WAVE and OSC 3's
+WAVE hold the id - 1. An id past the unit's bank plays silence. After HYDRA's marker, `57 01 62 39 0E 40` announces command
+98, the first user id (57), the bank's count (14) and the reserved count (64).
+
+A user wave is 256 int16 points (low byte first on the wire), kept as `tools/gen_hy_waves.py` keeps the factory waves:
+harmonics 1–64, no DC, its peak at 30000. Clients band-limit and normalise before they send one. Its name is 1–7 printable
+characters, as seven bytes with 0 after the name. Command 98 takes the operation, then a wave's id; replies are the
+operation, the result and the id:
+
+- 0 LIST: the count and the first id, then for each user wave: 1 when written (0: free, a sine named `USER n`), its name
+  (seven bytes) and the CRC-32 of its points as five seven-bit digits, low first.
+- 1 GET id: any factory or user wave: its name (seven bytes), then its 512 bytes packed seven to eight (a byte of high
+  bits, then seven low ones; 586 bytes).
+- 2 PUT id, name, points: a user wave, packed as GET has it. It is heard at the next audio block in every part using it,
+  and kept when the unit rests.
+- 3 STORE: the changed waves into flash now (3: stop playback first, 4: the write failed).
+- 4 REVERT id: the wave as flash holds it.
+- 5 CLEAR id: free again.
+
+Files carry user waves as Saadet's own message, `F0 7D 48 59 02`, the id, the seven name bytes, the packed points, `F7`
+(600 bytes). A file with HYDRA sounds lists the waves first, numbered in the file, then the patches naming them by those
+ids; a client that imports it puts each wave into the unit's bank (one with the same points is reused, others take free
+waves) and rewrites the patches' ids. The unit itself does not read these messages.
+
 ## Backups
 
-Archives are `saadet-backup` version 1. The ordered object identities are
-`1, 6, 7, 9–28, 32`: settings, 22 shared sound banks, and current synth state.
-Object 28 is a sound bank; 32 is exclusively Saadet state. No project, sample,
-pattern or song identities are accepted.
+Archives are `saadet-backup` version 3. The ordered object identities are
+`1, 6, 7, 9–28, 32, 33–38, 39, 40`: settings, 22 shared sound banks, current synth state, the six performance objects and
+HYDRA's two user wave objects (`firmware/src/hydra_bank.c`: seven waves each, 3676 bytes, `HYW1`). Object 28 is a sound
+bank; 32 is exclusively Saadet state. Version 2 archives end at 38 and version 1 at 32; they restore without touching what
+they lack, and a unit without the user waves restores everything else of a version 3 archive. The inventory writes the
+user waves RAM has changed into flash first. No project, sample, pattern or song identities are accepted.
 
 The inventory supplies object length and CRC32. Restore begins an object with
 its expected length/CRC, transfers offset-checked chunks, then commits or cancels.

@@ -18,13 +18,16 @@ static const char *const N_HY_DPOS[] = {"PRE", "POST"};
 static const char *const N_HY_TGT[] = {HY_TARGETS};
 #undef X
 _Static_assert(NELEM(N_HY_MUT) == MU_N && NELEM(N_HY_SRC) == HYS_N && NELEM(N_HY_F1) == F1_N, "HYDRA names");
-#define HY_PW(df) {"WAVE", F_ENUM, 0, (int16_t)(HY_NWAVE - 1u), df, HY_SLOT_NAMES + 1, 0}   /* (the slots' names past EMPTY) */
+/* every wave by its id: EMPTY, the factory waves, then the user waves by the names the bank gives them (hydra_bank.h) */
+static const char *const HY_ALL_NAMES[] = {"EMPTY", HY_WAVE_NAME_LIST, HY_UNAMES};
+_Static_assert(NELEM(HY_ALL_NAMES) == HY_USER0 + HY_UWAVES, "a name for every wave");
+#define HY_PW(df) {"WAVE", F_ENUM, 0, (int16_t)(HY_NWAVE + HY_UWAVES - 1u), df, HY_ALL_NAMES + 1, 0}   /* (past EMPTY) */
 #define HY_OSC(b) \
     [b + HO_MODE] = PE("MODE", N_HY_OMODE, 0), [b + HO_WAVE] = HY_PW(HYW_SAW), \
-    [b + HO_L0] = PE("SLOT 1", HY_SLOT_NAMES, 0), [b + HO_L0 + 1] = PE("SLOT 2", HY_SLOT_NAMES, 0), \
-    [b + HO_L0 + 2] = PE("SLOT 3", HY_SLOT_NAMES, 0), [b + HO_L0 + 3] = PE("SLOT 4", HY_SLOT_NAMES, 0), \
-    [b + HO_L0 + 4] = PE("SLOT 5", HY_SLOT_NAMES, 0), [b + HO_L0 + 5] = PE("SLOT 6", HY_SLOT_NAMES, 0), \
-    [b + HO_L0 + 6] = PE("SLOT 7", HY_SLOT_NAMES, 0), [b + HO_L0 + 7] = PE("SLOT 8", HY_SLOT_NAMES, 0), \
+    [b + HO_L0] = PE("SLOT 1", HY_ALL_NAMES, 0), [b + HO_L0 + 1] = PE("SLOT 2", HY_ALL_NAMES, 0), \
+    [b + HO_L0 + 2] = PE("SLOT 3", HY_ALL_NAMES, 0), [b + HO_L0 + 3] = PE("SLOT 4", HY_ALL_NAMES, 0), \
+    [b + HO_L0 + 4] = PE("SLOT 5", HY_ALL_NAMES, 0), [b + HO_L0 + 5] = PE("SLOT 6", HY_ALL_NAMES, 0), \
+    [b + HO_L0 + 6] = PE("SLOT 7", HY_ALL_NAMES, 0), [b + HO_L0 + 7] = PE("SLOT 8", HY_ALL_NAMES, 0), \
     [b + HO_SCAN] = PD("SCAN", F_PCT, 0, 127, 0), [b + HO_SEMI] = PD("SEMI", F_SEMI, -HY_SEMI0, HY_SEMI0, 0), \
     [b + HO_CENT] = {"CENT", F_INT, -HY_CENT0, HY_CENT0, 0, 0, "ct"}, [b + HO_KEY] = {"KEY", F_INT, 0, 200, 100, 0, "%"}
 #define HY_MUTANT(b) \

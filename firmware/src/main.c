@@ -172,6 +172,7 @@ static void fm1_main(void)
     lcd_sync();
     dsp_tables_init();                        /* the RAM lookup tables (FM6), before anything renders */
     persist_boot();
+    hy_bank_boot();                           /* HYDRA's user waves, before the audio reads them */
 #if MELODEE_OTA
     if (flash_ok && boot_work.state != 2u)
         ota_boot_cleanup();                             /* staging area left by an update */

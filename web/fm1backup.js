@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Kerem Kilic (Ellic Studio)
 // Portions Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
-// Saadet archives use explicit object identities; object 32 is synth state, 33.. the performances.
-// Version 1 archives, from before the performances, restore without touching them.
-export const BACKUP_IDS=[1,6,7,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,32,33,34,35,36,37,38];
-const LEGACY_IDS=BACKUP_IDS.filter(id=>id<=32);
+// Saadet archives use explicit object identities; object 32 is synth state, 33..38 the performances, 39 and 40 HYDRA's
+// user waves. Version 1 archives, from before the performances, and version 2, from before the user waves, restore without
+// touching what they lack; a unit without the user waves restores the rest of a version 3 archive.
+const V2_IDS=[1,6,7,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,32,33,34,35,36,37,38];
+export const BACKUP_IDS=[...V2_IDS,39,40];
+const LEGACY_IDS=V2_IDS.filter(id=>id<=32);
+const idsOf=n=>n===LEGACY_IDS.length?LEGACY_IDS:n===V2_IDS.length?V2_IDS:BACKUP_IDS;
+const versionOf=ids=>ids===LEGACY_IDS?1:ids===V2_IDS?2:3;
 const maxSize=()=>3840;
 export const BACKUP_CMD = { LIST: 65, GET: 66, PUT: 67 };
 const BACKUP_CHUNK = 256;
@@ -47,21 +51,22 @@ function bkCheck(rc) {
 }
 export function bkManifest(a) {
   if(a[0]!==1)throw Error("Unsupported archive protocol");bkCheck(a[1]);
-  const ids=a[2]===LEGACY_IDS.length?LEGACY_IDS:BACKUP_IDS;
+  const ids=idsOf(a[2]);
   if(a[2]!==ids.length || a.length!==3+ids.length*11)throw Error("Not a Saadet archive manifest");
   return ids.map((id,i)=>{const at=3+i*11;if(a[at]!==id)throw Error("Unexpected archive object");const size=bkR32(a,at+1),crc=bkR32(a,at+6);if(size>maxSize(id)||(!size&&crc))throw Error("Invalid archive size");return {id,size,crc};});
 }
 function fnv(bytes){let h=2166136261;for(const b of bytes)h=Math.imul(h^b,16777619)>>>0;return h;}
 export function readBackup(file) {
   if(typeof file==="string")file=JSON.parse(file);
-  const ids=file&&file.version===1?LEGACY_IDS:BACKUP_IDS;
-  if(!file||file.format!=="saadet-backup"||(file.version!==1&&file.version!==2)||!Array.isArray(file.objects)||file.objects.length!==ids.length)throw Error("Not a complete Saadet backup");
+  const ids=[LEGACY_IDS,V2_IDS,BACKUP_IDS][(file?.version|0)-1];
+  if(!file||file.format!=="saadet-backup"||!ids||!Array.isArray(file.objects)||file.objects.length!==ids.length)throw Error("Not a complete Saadet backup");
   const objects=file.objects.map((o,i)=>{
     if(!o||o.id!==ids[i]||!Number.isInteger(o.size)||o.size<0||o.size>maxSize(o.id)||!Number.isInteger(o.crc)||o.crc<0||o.crc>0xffffffff||typeof o.data!=="string"||o.data.length!==4*Math.ceil(o.size/3)||!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(o.data))throw Error("Invalid backup object");
     const bytes=Uint8Array.from(atob(o.data),c=>c.charCodeAt(0));if(bytes.length!==o.size||bkCrc(bytes)!==o.crc)throw Error("Backup checksum mismatch");
     const v=new DataView(bytes.buffer);
     if(o.id===32){if(o.size<512||(v.getUint32(0,true)!==0x31534453&&v.getUint32(0,true)!==0x32534453&&v.getUint32(0,true)!==0x33534453)||v.getUint32(4,true)!==o.size||v.getUint32(o.size-4,true)!==fnv(bytes.subarray(0,-4)))throw Error("Invalid synth state");}
     else if(o.id===1){if(o.size<604||v.getUint32(0,true)!==0x50455235)throw Error("Invalid settings record");}
+    else if(o.id>=39){if(o.size&&(o.size!==3676||v.getUint32(0,true)!==0x31575948||bytes[4]!==(o.id-39)*7||bytes[5]!==7))throw Error("Invalid HYDRA user waves");}
     else if(o.id>=33){if(o.size&&(o.size<8||v.getUint32(0,true)!==0x31465053||8+2*v.getUint32(4,true)!==o.size))throw Error("Invalid performance bank");}
     else if(o.size&&(o.size!==3716||v.getUint32(0,true)!==0x32425055||v.getUint16(4,true)!==206||v.getUint16(6,true)!==18))throw Error("Invalid shared sound bank");
     return {...o,bytes};
@@ -77,11 +82,12 @@ export async function captureBackup(request,firmware,onProgress=()=>{}) {
     for(let off=0;off<o.size;off+=BACKUP_CHUNK){const size=Math.min(BACKUP_CHUNK,o.size-off),a=await request([BACKUP_CMD.GET,[o.id,...bkU32(off),size&127,size>>>7]],{timeout:1000,retries:1});bkCheck(a[1]);if(a[0]!==o.id||bkR32(a,2)!==off||(a[7]|a[8]<<7)!==size)throw Error("Unexpected backup reply");bytes.set(bkUnpack(a.slice(9),size),off);done+=size;onProgress(done,total);}
     if(bkCrc(bytes)!==o.crc)throw Error("The device changed during backup; start again");objects.push({...o,data:bkBase64(bytes)});
   }
-  const file={format:"saadet-backup",version:manifest.length===BACKUP_IDS.length?2:1,firmware,created:new Date().toISOString(),objects};readBackup(file);return file;
+  const file={format:"saadet-backup",version:versionOf(idsOf(manifest.length)),firmware,created:new Date().toISOString(),objects};readBackup(file);return file;
 }
 export async function restoreBackup(request,file,onProgress=()=>{}) {
   const archive=readBackup(file),ask=(r,o={})=>request(r,{timeout:4000,retries:0,...o}),put=async args=>{const a=await ask([BACKUP_CMD.PUT,args]);if(a[0]!==args[0]||a[1]!==args[1])throw Error("Unexpected restore reply");bkCheck(a[2]);return a;};
-  bkManifest(await ask([BACKUP_CMD.LIST,[]]));
+  const has=new Set(bkManifest(await ask([BACKUP_CMD.LIST,[]])).map(o=>o.id));
+  archive.objects=archive.objects.filter(o=>has.has(o.id));   /* (what the unit has no object for stays in the file) */
   // Preflight every object before the first committed write; begin/cancel only stages RAM.
   for(const o of archive.objects){await put([0,o.id,...bkU32(o.size),...bkU32(o.crc)]);await put([3,o.id]);}
   const total=archive.objects.reduce((n,o)=>n+o.size,0);let done=0;

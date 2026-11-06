@@ -90,13 +90,21 @@ static void editor(void){
     for(uint32_t i=0;i<sizeof removed/sizeof *removed;i++){request(removed[i],args,sizeof args);assert(!wire_n);}
     uint8_t library[]={3,127,2,0,'L','A','S','T'};request(ED_LIBRARY,library,sizeof library);assert(wire_n && wire[8]==0 && up_used(383));assert(!up_used(127));
     up_ui_named(3,383,"LAST384");char label[20];up_name(383,label);assert(str_eq(label,"LAST384"));
-    TSEL->p[P_SPRD]=51;assert(state_autosave());assert(!ed_bk_capture());assert(ED_BK_N==30 && ed_bk_supported(32) && ed_bk_supported(28));assert(!ed_bk_supported(0) && !ed_bk_supported(2));
+    hy_bank_boot();hy_uset(0,HY_WAVES[HYW_SAW],"SAWZ",1);   /* (a user wave not yet in flash: the backup keeps it first) */
+    TSEL->p[P_SPRD]=51;assert(state_autosave());hy_uset(1,HY_WAVES[HYW_BELL],"BELLZ",1);assert(!ed_bk_capture());assert(!hy_udirty);assert(ED_BK_N==32 && ed_bk_supported(32) && ed_bk_supported(28) && ed_bk_supported(39) && ed_bk_supported(40));assert(!ed_bk_supported(0) && !ed_bk_supported(2));
     uint32_t len;const uint8_t *bytes=ed_bk_object(32,&len);assert(len==sizeof(synth_state_t) && state_valid((const synth_state_t *)bytes));
     save_file("build/host/synth-state.bin",bytes,len);save_file("build/host/synth-settings.bin",&set_rec,ed_bk_set_len);
     for(uint32_t i=0;i<ED_BK_N;i++){uint32_t n,id=ED_BK_IDS[i];const uint8_t *p=ed_bk_object(id,&n);char path[80];snprintf(path,sizeof path,"build/host/archive-%u.bin",id);save_file(path,p,n);}
     synth_state_t state;state_capture(&state);memcpy(ED_BK_RAW,&state,sizeof state);ed_bk_id=32;ed_bk_len=ed_bk_pos=sizeof state;ed_bk_crc=st_crc32(ED_BK_RAW,ed_bk_len);
     TSEL->p[P_SPRD]=7;assert(!ed_bk_commit_inner() && TSEL->p[P_SPRD]==51);ED_BK_RAW[0]^=1;assert(ed_bk_commit_inner()==2);
     uint8_t put[12]={0,2};request(ED_BACKUP_PUT,put,sizeof put);assert(wire[7]==1);
+    {   /* HYDRA's user waves restore whole, a bank that is not one fails, an empty object frees them */
+        const uint8_t *w=ed_bk_object(39,&len);assert(len==sizeof(hy_uobj_t));memcpy(ED_BK_RAW,w,len);
+        hy_uclear(1);ed_bk_id=39;ed_bk_len=ed_bk_pos=len;ed_bk_crc=st_crc32(ED_BK_RAW,len);
+        assert(!ed_bk_commit_inner() && hy_uwave(1)->used && str_eq(hy_uwave(1)->name,"BELLZ") && !hy_udirty);
+        ED_BK_RAW[0]^=1;ed_bk_crc=st_crc32(ED_BK_RAW,len);assert(ed_bk_commit_inner()==2 && hy_uwave(1)->used);ED_BK_RAW[0]^=1;
+        ed_bk_id=40;ed_bk_len=ed_bk_pos=0;ed_bk_crc=st_crc32(ED_BK_RAW,0);assert(!ed_bk_commit_inner() && hy_uwave(0)->used);
+    }
     puts("EDITOR: removed commands, shared slot 384, distinct synth/preset archives and corrupt-restore rejection passed");
 }
 static void battery_calibration(void)
