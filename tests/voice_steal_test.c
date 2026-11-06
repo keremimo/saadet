@@ -200,7 +200,7 @@ static void two_parts(const char *name, uint32_t engine, uint32_t preset)
 {
     start(engine, preset, PT_MULTI);
     uint32_t units = voice_units(&trk[0]);
-    settings_budget = (int16_t)(4u * units);
+    settings_budget = (int16_t)(4u * units / VQ);
     for (uint32_t i = 0; i < 4u; i++) trk_note_on(&trk[1], 48u + i * 2u, 100);
     ticks(16);
     uint32_t kills = voice_kills;
@@ -211,7 +211,7 @@ static void two_parts(const char *name, uint32_t engine, uint32_t preset)
     if (v) ok(name, "the voice's fade is long", watch_fade(name, v, 32767 / 16) == VOICE_FADE_BLOCKS);
     /* a note claims no more than its share: the waiting and the sounding count */
     start(engine, preset, PT_MULTI);
-    settings_budget = (int16_t)(4u * units);
+    settings_budget = (int16_t)(4u * units / VQ);
     for (uint32_t i = 0; i < 4u; i++) trk_note_on(&trk[1], 48u + i * 2u, 100);
     ticks(16);
     for (uint32_t i = 0; i < 4u; i++) trk_note_on(&trk[0], 72u + i * 2u, 100);
@@ -239,7 +239,7 @@ static void mono(const char *name, uint32_t engine, uint32_t preset)
 {
     start(engine, preset, PT_MULTI);
     uint32_t units = voice_units(&trk[0]);
-    settings_budget = (int16_t)(4u * units);
+    settings_budget = (int16_t)(4u * units / VQ);
     trk[0].p[P_VOICE] = V_MONO;
     trk[0].p[P_PRIO] = 0;
     for (uint32_t i = 0; i < 4u; i++) trk_note_on(&trk[1], 48u + i * 2u, 100);
@@ -441,7 +441,7 @@ static void coupling(const char *name, uint32_t preset)
     double peak = 1, residue = 0;
     for (int run = 0; run < 3; run++) {
         start(ENGI_PROPHET, preset, PT_MULTI);
-        settings_budget = (int16_t)(2u * voice_units(&trk[1]));
+        settings_budget = (int16_t)(2u * voice_units(&trk[1]) / VQ);
         trk_note_on(&trk[1], 36, 100);
         if (run < 2) trk_note_on(&trk[1], 64, 120);
         for (uint32_t b = 0; b < 600u; b++) {

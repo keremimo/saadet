@@ -93,7 +93,7 @@ static void voice_tests(void)
     for(uint32_t k=0;k<VOICE_FADE_BLOCKS+2u;k++)tick();
     voice_wait_block(t);
     check("eight notes cap at five sounding Prophet voices",active(t)==5u);
-    check("five Prophet voices use fifteen of sixteen shared units",voices_busy()==15u);
+    check("five Prophet voices use fifteen of sixteen shared units",voices_busy()==15u*VQ);
     setup();t=&trk[0];p5_patch_t *p=p5_patch_of(t);
     p->raw[P5_RELEASE_AMP]=90;t->p[P_REL]=0;
     trk_note_on(t,60,100);for(uint32_t k=0;k<32;k++)tick();trk_note_off(t,60);

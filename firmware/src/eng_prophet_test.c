@@ -584,7 +584,7 @@ static void p5_preset_loaded(track_t *t,uint32_t pi)
 /* Serial hardware measurements justify three units per voice. The opt-in
  * paired path provisionally charges two: eight voices fill the same sixteen
  * units, so adding another track still steals voices. Validate on hardware. */
-static uint32_t p5_units(const track_t *t) { (void)t; return p5_poly()>5u?2u:3u; }
+static uint32_t p5_units(const track_t *t) { (void)t; return (p5_poly()>5u?2u:3u)*VQ; }
 static const engine_t ENG_P5_TEST = {
     .name="PROPHET", .page_title={"FILTER/TUNE","PW/MIX"},
     .edit={{"CUT",F_INT,-63,63,0,0,0},{"RES",F_INT,-63,63,0,0,0},

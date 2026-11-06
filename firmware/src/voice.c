@@ -135,42 +135,59 @@ static uint32_t voice_p5_parts(void)
     return parts;
 }
 #endif
-static VOICE_EVENT uint32_t voice_units(const track_t *t)
+static VOICE_EVENT uint32_t voice_units_now(const track_t *t)
 {
     const engine_t *e = ENGINES[t->engine];
     /* GLO > WEIGHTS: the player's points per voice replace the built-in rule; AUTO (0) keeps it. */
     int k = e == &ENG_P5_TEST ? 0 : e == &ENG_CZ ? 1 : e == &ENG_FM6 ? 2 : -1;
     if (k >= 0 && settings_vpoints[k] > 0)
-        return (uint32_t)settings_vpoints[k];
+        return (uint32_t)settings_vpoints[k] * VQ;
 #if MELODEE_ADMISSION
     if(e==&ENG_P5_TEST){
-        return voice_p5_parts()>1u?4u:3u;
+        return (voice_p5_parts()>1u?4u:3u)*VQ;
     }
-    if(e==&ENG_CZ)return 3u;
-    if(e==&ENG_FM6)return 2u;
+    if(e==&ENG_CZ)return 3u*VQ;
+    if(e==&ENG_FM6)return 2u*VQ;
 #endif
-    return e->units ? e->units(t) : trk_nvoice(t) > NPOLY ? 1u : 2u;
+    return e->units ? e->units(t) : (trk_nvoice(t) > NPOLY ? 1u : 2u) * VQ;
+}
+/* A chord asks the budget dozens of times in one block, and an engine may work its cost out each time (HYDRA from its patch and
+ * macros): within a block (events_block, voice_units_block) a part's is worked out once, for the engine it has then. Nothing
+ * else changes a part's patch while the block's events run */
+static struct { uint8_t on, have, eng[NPART]; uint32_t units[NPART]; } vu;
+static void voice_units_block(int on) { vu.on = (uint8_t)on; vu.have = 0; }
+static VOICE_EVENT uint32_t voice_units(const track_t *t)
+{
+    uint32_t p = (uint32_t)(t - trk);
+    if (!vu.on || p >= NPART)
+        return voice_units_now(t);
+    if (!((vu.have >> p) & 1u) || vu.eng[p] != t->engine) {
+        vu.units[p] = voice_units_now(t);
+        vu.eng[p] = t->engine;
+        vu.have |= (uint8_t)(1u << p);
+    }
+    return vu.units[p];
 }
 
 /* the budget with CPU1: VBUDGET at 360 MHz, scaled with the clock running by main.c clock_boot (16 at a 320 MHz a
- * soft reset kept from a 1.3.x session); VBUDGET on the host */
+ * soft reset kept from a 1.3.x session); VBUDGET on the host. Units here, steps (VQ a unit) from voice_budget on */
 static uint32_t vbudget_cpu1 = VBUDGET;
 static uint32_t voice_budget(void)
 {
 #if MELODEE_AUDIO_BENCH
-    if(audio_bench_active())return NPART*NVOICE*3u;
+    if(audio_bench_active())return NPART*NVOICE*3u*VQ;
 #endif
 #if MELODEE_RAM_AUDIO
 #if MELODEE_DUAL_CORE
     /* CPU1 retirement removes the extra headroom. New notes then use the
      * original budget; overload shedding still handles already-active work. */
-    uint32_t selected=(uint32_t)settings_budget;
-    return audio_worker_online?selected*vbudget_cpu1/VBUDGET:selected<16u?selected:16u;
+    uint32_t selected=(uint32_t)settings_budget*VQ;
+    return audio_worker_online?selected*vbudget_cpu1/VBUDGET:selected<16u*VQ?selected:16u*VQ;
 #else
-    return (uint32_t)settings_budget<16u?(uint32_t)settings_budget:16u;
+    return ((uint32_t)settings_budget<16u?(uint32_t)settings_budget:16u)*VQ;
 #endif
 #else
-    return (uint32_t)settings_budget;
+    return (uint32_t)settings_budget*VQ;
 #endif
 }
 
@@ -204,11 +221,11 @@ static VOICE_EVENT uint32_t voice_ceiling(void)
 {
     uint32_t c, b = voice_budget();
 #if MELODEE_RAM_AUDIO && MELODEE_DUAL_CORE
-    c = audio_worker_online ? vbudget_cpu1 : 16u;
+    c = (audio_worker_online ? vbudget_cpu1 : 16u) * VQ;
 #elif MELODEE_RAM_AUDIO
-    c = 16u;
+    c = 16u * VQ;
 #else
-    c = VBUDGET;
+    c = VBUDGET * VQ;
 #endif
     return b > c ? b : c;
 }
@@ -420,6 +437,10 @@ static VOICE_EVENT voice_t *voice_alloc(track_t *t, uint32_t note)
         } else if (voices_fading() && (claim >= np || voices_claimed() + voice_units(t) > voice_budget())) {
             voice_wait_drop(t);                          /* nothing left to take: this note or an older one */
             return 0;
+        } else if (voices_busy() + voice_units(t) > voice_ceiling()) {
+            return 0;                                    /* nothing to take and no fade to wait for, and more than the CPU
+                                                          * carries: it waits (a heavy HYDRA voice can be more than a part's
+                                                          * half, and LAYER's second part then has none of its own to give) */
         }
     }
     if (!nfree || (voices_fading() && voices_busy() + voice_units(t) > voice_ceiling()))

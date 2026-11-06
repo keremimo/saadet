@@ -27,8 +27,8 @@ _Static_assert(HY_NWAVE == HY_WAVE_COUNT, "HYDRA's waves: hydra_patch.h");
 #define HY_POLY 8u
 #define HY_SLOTS (HY_POLY + 1u)                        /* the cap and engine_t.spare */
 #define HY_ROWS 17u                                    /* the wave copies at most: OSC 1's eight, OSC 2's, OSC 3 */
-/* The budget is VBUDGET's 18 units; one is HY_UNIT_US, so a full budget renders within HY_BLOCK_US of the block above the
- * 330 us an idle block takes: 2600 of 2902. */
+/* The budget is VBUDGET's 18 units, 72 steps (VQ a unit); a step is HY_BLOCK_US / 72, so a full budget renders within
+ * HY_BLOCK_US of the block above the 330 us an idle block takes: 2600 of 2902. */
 #define HY_BLOCK_US 2270u
 #define HY_OS_NOTE (65 * 16)                           /* from F4 up, a voice's oscillators run at twice the rate */
 #define HY_COUPLE (2.0f * 3.14159265f * 5.0f / (float)FS)   /* a coupling capacitor, ~5 Hz: ring, FM and the filters' drive can
@@ -354,13 +354,16 @@ static void hy_base(hy_part_t *P, const track_t *t, const uint8_t *raw)
  * just changed under it). Held notes are never touched. */
 typedef struct { uint16_t c1, os; } hy_cost_t;
 static hy_cost_t hy_cost_most(const uint8_t *r);
+static uint32_t hy_most(const uint8_t *r);
 static void voice_fade(voice_t *v);
+/* what the patch can carry stays: as many voices as its budget and the cores let it play (a tail rendered with a heavy
+ * patch is a heavy voice: two of AUTOMATA ET took 3092 us, their shares said 2158) */
 static void hy_tails_fit(hy_part_t *P, track_t *t, const uint8_t *r)
 {
-    uint32_t c1 = hy_cost_most(r).c1, n = 0, i;
+    uint32_t most = hy_most(r), n = 0, i;
     for (i = 0; i < NVOICE; i++)
         n += t->v[i].active && t->v[i].stage != 4u;
-    for (i = 0; i < NVOICE && n * c1 > HY_BLOCK_US; i++) {
+    for (i = 0; i < NVOICE && n > most; i++) {
         voice_t *v = &t->v[i];
         if (v->active && !v->gate && v->stage != 4u) {
             voice_fade(v);
@@ -419,6 +422,12 @@ static hy_cost_t hy_cost(const uint8_t *r)
         k = (a && a != MU_STACK) + (b && b != MU_STACK);
         x = OSC[k][a == MU_STACK || b == MU_STACK][0];
         y = OSC[k][a == MU_STACK || b == MU_STACK][1];
+        if ((a == MU_STACK || b == MU_STACK) && (a == MU_FM || b == MU_FM)) {
+            /* FM in a STACK reads its source for every copy: two converted patches measured 300 and 288 us a share (HIT
+             * C2 ! LA, WCOG) where STACK and PW take 261, and HIT's twice the rate 440 where 371 */
+            x += 30u;
+            y += 70u;
+        }
         if (q[HO_MODE]) {                              /* (a scan between two slots reads both) */
             x = x * 3u / 2u + 25u;
             y = y * 3u / 2u + 25u;
@@ -429,43 +438,84 @@ static hy_cost_t hy_cost(const uint8_t *r)
         c1 += 17u;
     return (hy_cost_t){(uint16_t)c1, (uint16_t)os};
 }
-/* what a voice may come to cost, whatever its macros do: the budget's figure */
+/* what a voice may come to cost, whatever its macros do: the budget's figure. Asked at every note (the budget, twice the
+ * rate) and worked out from flash, so kept for each part's patch by its hash as hy_block keeps the patch made ready: a high
+ * chord's first block ran 500 us longer working it out some thirty times */
+static struct { const uint8_t *r; uint32_t key; hy_cost_t c; } hy_most_kept[NPART + 1u];
 static hy_cost_t hy_cost_most(const uint8_t *r)
 {
     uint8_t w[HY_BYTES];
+    uint32_t h = 2166136261u, i, k = NPART;
+    for (i = 0; i < HY_BYTES; i++)                     /* (FNV-1a) */
+        h = (h ^ r[i]) * 16777619u;
+    for (i = 0; i < NPART; i++)
+        if (r == hy_patch[i].raw)
+            k = i;
+    if (hy_most_kept[k].r == r && hy_most_kept[k].key == h)
+        return hy_most_kept[k].c;
     hy_worst(r, w);
-    return hy_cost(w);
+    hy_most_kept[k].c = hy_cost(w);
+    hy_most_kept[k].r = r;
+    hy_most_kept[k].key = h;
+    return hy_most_kept[k].c;
 }
-#define HY_UNIT_US (HY_BLOCK_US / 18u)
-/* the voice budget by that cost: two units at the least, three with any mutant, up to the whole budget for one voice. Polyphony
- * is bound here, before a note starts: nothing is ever cut for being late */
+#define HY_STEPS (18u * VQ)                            /* the budget's 18 units in steps: HY_BLOCK_US of them, 31.5 us a step */
+/* a voice's share of the budget by that cost, in steps, up to the whole budget for one voice. Polyphony is bound here, before
+ * a note starts: nothing is ever cut for being late. (Whole units cost a voice up to 125 us it did not use: eight voices of
+ * 260 us took 24 units, six fitted; in steps they take 9 each, eight fit) */
+/* A part's voices on the two cores: the batch (audio_batch.h) gives CPU1 a part's first two voices and then every other one, so n
+ * voices take W(n) = n - (n - 1) / 2 voices' time one after another. The table above is a voice's share at six to eight voices, where
+ * CPU1 runs five of eight: a voice on its own takes about 1.6 times its share (AUTOMATA ET, a converted patch: a share of 1079 us,
+ * 1538 alone, 3059 for two). Few heavy voices are bound by that, not by the budget: the cap, and a voice that cannot pair takes its
+ * whole time from the budget, so a second part cannot lay another beside it */
+#define HY_ALONE(c1) ((c1) * 8u / 5u)
+static uint32_t hy_cap_of(uint32_t c1)
+{
+    uint32_t n;
+    for (n = HY_POLY; n > 1u && (n - (n - 1u) / 2u) * HY_ALONE(c1) > HY_BLOCK_US; n--)
+        ;
+    return n;
+}
 static uint32_t hy_units_of(const uint8_t *r, hy_cost_t c)
 {
-    uint32_t u = (c.c1 + HY_UNIT_US - 1u) / HY_UNIT_US, k, least = 2u;
-    for (k = 0; k < 4u; k++)
-        if (r[HY_M1 + k * HM_N + HM_MODE])
-            least = 3u;
-    if (u < least) u = least;
-    return u < 18u ? u : 18u;
+    uint32_t cap = hy_cap_of(c.c1), us = cap < 3u ? HY_ALONE(c.c1) : c.c1, u = (us * HY_STEPS + HY_BLOCK_US - 1u) / HY_BLOCK_US;
+    (void)r;
+    if (cap < HY_POLY && HY_STEPS / u > cap)           /* the cores bind before the budget: the cap's voices take all of it,
+                                                        * so a stolen voice's fade is not a voice more beside them (HIT C2 !
+                                                        * LA: three, and a fourth fading took 2818 us) */
+        u = HY_STEPS / cap;
+    return u < HY_STEPS ? u : HY_STEPS;
 }
-/* May a new voice of part t run at twice the rate? What is left of the block once the part's whole budget plays at the sample
- * rate is shared by the voices that do, in both parts */
+/* the voices of a patch that play at once at the most: its budget, and its cap on the cores */
+static uint32_t hy_most(const uint8_t *r)
+{
+    hy_cost_t c = hy_cost_most(r);
+    uint32_t n = HY_STEPS / hy_units_of(r, c), cap = hy_cap_of(c.c1);
+    return n < cap ? n : cap;
+}
+/* May a new voice of part t run at twice the rate? What is left of the block once the part plays all it can at the sample
+ * rate (its budget and cap; MONO and LEGATO one voice and the one fading out) goes to the voices that do, in both parts.
+ * Counted as the cores run them: the part's W(n) one after another, each at its time alone, and what twice the rate adds at
+ * its time alone, since it lands on one core. (In the table's shares AUTOMATA ET's one voice at twice the rate fitted with
+ * 224 us to spare and played every block late, 2970 us. HIT C2 ! LA measured W exactly: 814 us a voice alone, 1627 for two,
+ * 2441 for four, and twice the rate adds 704 us to a voice alone where its share said 371) */
 static int hy_os_room(const track_t *t)
 {
     const uint8_t *raw = hy_patch_of(t)->raw;
     hy_cost_t c = hy_cost_most(raw);
-    uint32_t voices = 18u / hy_units_of(raw, c), full = voices * c.c1, used = c.os, p, i;
-    if (full + c.os > HY_BLOCK_US)
-        return 0;
-    for (p = 0; p < NPART; p++) {
+    uint32_t n = hy_most(raw), used, p, i;
+    if ((t->p[P_VOICE] == V_MONO || t->p[P_VOICE] == V_LEGATO) && n > 2u)
+        n = 2u;
+    used = (n - (n - 1u) / 2u) * HY_ALONE(c.c1) + HY_ALONE(c.os);
+    for (p = 0; p < NPART && used <= HY_BLOCK_US; p++) {
         const track_t *o = &trk[p];
         hy_part_t *P = o->engine == ENGI_HYDRA ? hy_part(p) : 0;
-        uint32_t each = P ? hy_cost_most(hy_patch_of(o)->raw).os : 0u;
+        uint32_t each = P ? HY_ALONE(hy_cost_most(hy_patch_of(o)->raw).os) : 0u;
         for (i = 0; P && i < NVOICE; i++)
             if (o->v[i].active && P->voice[i % HY_SLOTS].os)
                 used += each;
     }
-    return full + used <= HY_BLOCK_US;
+    return used <= HY_BLOCK_US;
 }
 
 /* ------------------------------------------------------------------------------------------- the voice --- */
@@ -510,7 +560,7 @@ static void hy_note_on(track_t *t, voice_t *v)
     s->e1stage = P->b.e1dly ? 1u : 2u;                 /* ENV 1 from where it is (a retrigger: no jump) */
     s->e1wait = P->b.e1dly;
 }
-static uint32_t hy_cap(const track_t *t) { (void)t; return HY_POLY; }
+static uint32_t hy_cap(const track_t *t) { return hy_cap_of(hy_cost_most(hy_patch_of(t)->raw).c1); }
 static uint32_t hy_units(const track_t *t)
 {
     const uint8_t *r = hy_patch_of(t)->raw;

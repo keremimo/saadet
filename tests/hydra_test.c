@@ -365,10 +365,11 @@ static void the_sound(void)
     /* the budget against what the Elite measured (docs/VALIDATION.md): the rule never promises less than it took */
     {
         static const struct { const char *name; uint8_t mode[4], lvl2, lvl3, scan; uint16_t c1; uint8_t units; } COST[] = {
-            {"plain", {0}, 0, 0, 0, 155, 2}, {"O1+O2", {0}, 80, 0, 0, 180, 2}, {"O1+O2+O3", {0}, 80, 60, 0, 192, 2},
-            {"PW", {MU_PW}, 0, 0, 0, 231, 3}, {"SQUEEZE", {MU_SQZ}, 0, 0, 0, 234, 3}, {"STACK", {MU_STACK}, 0, 0, 0, 237, 3},
-            {"PW both", {MU_PW, 0, MU_PW}, 80, 0, 0, 322, 3}, {"STACK both", {MU_STACK, 0, MU_STACK}, 80, 0, 0, 333, 3},
-            {"STACK+PW", {MU_STACK, MU_PW}, 0, 0, 0, 416, 4},
+            {"plain", {0}, 0, 0, 0, 155, 5}, {"O1+O2", {0}, 80, 0, 0, 180, 6}, {"O1+O2+O3", {0}, 80, 60, 0, 192, 7},
+            {"PW", {MU_PW}, 0, 0, 0, 231, 8}, {"SQUEEZE", {MU_SQZ}, 0, 0, 0, 234, 8}, {"STACK", {MU_STACK}, 0, 0, 0, 237, 8},
+            {"PW both", {MU_PW, 0, MU_PW}, 80, 0, 0, 322, 11}, {"STACK both", {MU_STACK, 0, MU_STACK}, 80, 0, 0, 333, 11},
+            {"STACK+PW", {MU_STACK, MU_PW}, 0, 0, 0, 416, 14},     /* (units: steps, VQ a unit; eight voices up to 8 steps) */
+            {"STACK+FM", {MU_STACK, MU_FM}, 0, 0, 0, 455, 15},     /* (HIT C2 ! LA less its OSC 2, OSC 3 and FILTER 2) */
         };
         ok = 1;
         for (k = 0; k < NELEM(COST); k++) {
@@ -377,7 +378,7 @@ static void the_sound(void)
             for (uint32_t m = 0; m < 4u; m++) hy_raw(t)[HY_M1 + m * HM_N + HM_MODE] = COST[k].mode[m];
             hy_raw(t)[HY_LVL + 1] = COST[k].lvl2; hy_raw(t)[HY_LVL + 2] = COST[k].lvl3;
             c = hy_cost(hy_raw(t));
-            if (c.c1 * 103u / 100u < COST[k].c1 || hy_units(t) != COST[k].units || 18u / hy_units(t) * c.c1 > HY_BLOCK_US) {
+            if (c.c1 * 103u / 100u < COST[k].c1 || hy_units(t) != COST[k].units || HY_STEPS / hy_units(t) * c.c1 > HY_BLOCK_US) {
                 printf("  %s: rule %u us, %u units; measured %u, wanted %u units\n", COST[k].name, c.c1, hy_units(t), COST[k].c1, COST[k].units);
                 ok = 0;
             }
@@ -389,12 +390,36 @@ static void the_sound(void)
         hy_raw(t)[HY_O1 + HO_MODE] = hy_raw(t)[HY_O2 + HO_MODE] = 1;
         hy_raw(t)[HY_M2 + HM_MODE] = MU_FM; hy_raw(t)[HY_M4 + HM_MODE] = MU_SYNC;
         hy_raw(t)[HY_LVL + 1] = 80;
-        check("the heaviest patch takes most of the budget", hy_units(t) >= 9u && 18u / hy_units(t) * hy_cost_most(hy_raw(t)).c1 <= HY_BLOCK_US);
+        check("few heavy voices are bound by the cores' pairing: 1079 us a share plays one, 567 three, a plain eight",
+              hy_cap_of(1079u) == 1u && hy_cap_of(567u) == 3u && hy_cap_of(155u) == 8u && hy_cap_of(283u) == 8u &&
+              hy_units_of(hy_raw(t), (hy_cost_t){1079u, 0u}) == (HY_ALONE(1079u) * HY_STEPS + HY_BLOCK_US - 1u) / HY_BLOCK_US);
+        check("the heaviest patch plays two voices at the most", HY_STEPS / hy_units(t) <= 2u && HY_STEPS / hy_units(t) * hy_cost_most(hy_raw(t)).c1 <= HY_BLOCK_US);
+        {                                              /* LAYER with it on both parts: one voice is more than a part's half */
+            track_t *b = &trk[1];
+            host_preset(b, ENGI_HYDRA, 0);
+            memcpy(hy_raw(b), hy_raw(t), HY_BYTES);
+            song.g[G_PMODE] = PT_LAYER;
+            t->p[P_VOICE] = b->p[P_VOICE] = V_POLY;
+            trk_note_on(t, 48, 100);
+            trk_note_on(b, 48, 100);
+            check("LAYER with the heaviest patch on both: part B's note waits rather than take the CPU past what it carries",
+                  voices_busy() <= voice_ceiling() && b->wait_n == 1u && t->v[0].active);
+            trk_note_off(t, 48); trk_note_off(b, 48);
+            check(".. and is forgotten at its key-up", b->wait_n == 0u);
+            song.g[G_PMODE] = PT_ONE;
+            hy_quiet(b);
+            hy_quiet(t);
+            t = hy_fresh(0);
+            for (uint32_t m = 0; m < 4u; m++) hy_raw(t)[HY_M1 + m * HM_N + HM_MODE] = MU_STACK;
+            hy_raw(t)[HY_O1 + HO_MODE] = hy_raw(t)[HY_O2 + HO_MODE] = 1;
+            hy_raw(t)[HY_M2 + HM_MODE] = MU_FM; hy_raw(t)[HY_M4 + HM_MODE] = MU_SYNC;
+            hy_raw(t)[HY_LVL + 1] = 80;
+        }
         check("every factory sound's full budget fits the block", ({
             int all = 1;
             for (pi = 1; pi < ENG_HYDRA.npresets; pi++) {
                 t = hy_fresh(pi);
-                all &= 18u / hy_units(t) * hy_cost_most(hy_raw(t)).c1 <= HY_BLOCK_US;
+                all &= HY_STEPS / hy_units(t) * hy_cost_most(hy_raw(t)).c1 <= HY_BLOCK_US;
             }
             all;
         }));
@@ -456,14 +481,15 @@ static void the_sound(void)
         check(".. held notes are never touched", going == 0u);
         hy_quiet(t);
     }
-    /* twice the rate: as many voices as the block has room for, across both parts; one note alone always has it */
+    /* twice the rate: what the block has left once the part plays all it can at the rate, across both parts, each voice's
+     * extra at its time alone. A note alone has it only where that leaves room: a lead (LEGATO) does, a heavy chord does not */
     {
         static const uint8_t HIGH[8] = {72, 76, 79, 83, 86, 89, 93, 96};
         uint32_t n[3];
+        static const uint8_t WHICH[3] = {0u, 5u, 4u};  /* INIT; FM BELL; SUPERSTACK */
         for (uint32_t which = 0; which < 3u; which++) {
             int32_t out[CTL];
-            t = hy_fresh(which == 0u ? 0u : 4u);       /* INIT; SUPERSTACK */
-            if (which == 2u) { hy_raw(t)[HY_M3 + HM_MODE] = MU_OFF; hy_raw(t)[HY_LVL + 1] = 0; }   /* (one stack alone) */
+            t = hy_fresh(WHICH[which]);
             t->p[P_VOICE] = V_POLY;
             for (k = 0; k < 8u; k++) trk_note_on(t, HIGH[k], 100);
             track_render(t, out, CTL);
@@ -473,13 +499,25 @@ static void the_sound(void)
             printf("  high chord: %u voices at twice the rate\n", n[which]);
             hy_quiet(t);
         }
-        check("twice the rate: all of a plain patch, one of SUPERSTACK, some of one stack", n[0] == 8u && n[1] == 1u && n[2] >= 3u && n[2] < 6u);
-        t = hy_fresh(4);
-        trk_note_on(t, 96, 100);
-        { int32_t out[CTL]; track_render(t, out, CTL); }
-        for (k = 0; k < NVOICE; k++)
-            if (t->v[k].active) check("a high note alone runs at twice the rate", hy_voice(hy_part(0), t, &t->v[k])->os);
-        hy_quiet(t);
+        check("twice the rate: all of a plain patch, one of FM BELL, none of SUPERSTACK (its six at the rate take the rest)",
+              n[0] == 8u && n[1] == 1u && n[2] == 0u);
+        for (uint32_t which = 0; which < 2u; which++) {
+            uint32_t os = 0;
+            t = hy_fresh(which ? 4u : 3u);             /* SYNC LEAD (LEGATO); SUPERSTACK */
+            if (which) {                               /* (the heaviest patch, as above: it plays one voice) */
+                for (uint32_t m = 0; m < 4u; m++) hy_raw(t)[HY_M1 + m * HM_N + HM_MODE] = MU_STACK;
+                hy_raw(t)[HY_O1 + HO_MODE] = hy_raw(t)[HY_O2 + HO_MODE] = 1;
+                hy_raw(t)[HY_M2 + HM_MODE] = MU_FM; hy_raw(t)[HY_M4 + HM_MODE] = MU_SYNC;
+                hy_raw(t)[HY_LVL + 1] = 80;
+            }
+            trk_note_on(t, 96, 100);
+            { int32_t out[CTL]; track_render(t, out, CTL); }
+            for (k = 0; k < NVOICE; k++)
+                if (t->v[k].active) os += hy_voice(hy_part(0), t, &t->v[k])->os;
+            check(which ? "the heaviest patch's high note alone stays at the rate" : "a lead's high note runs at twice the rate",
+                  os == (which ? 0u : 1u));
+            hy_quiet(t);
+        }
     }
 }
 

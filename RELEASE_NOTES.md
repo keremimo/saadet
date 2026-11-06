@@ -15,7 +15,8 @@ This is an experimental release; the outstanding hardware checks are listed belo
   Saadet on your phone or computer once and connect again: the radio has a new address and old pairings are gone.
 - HYDRA, a fifth engine: three oscillators on 56 of our own waves, OSC 1 and 2 playing one or scanning a list of eight, four
   mutants (FM, STACK, SYNC, PW, SQUEEZE, WARP, HARMONIC), ring and noise, two filters and 16 factory sounds. Its voices cost what
-  the patch asks: eight of a plain patch, six with a mutant, fewer with heavy stacks, and the budget is bound before a note
+  the patch asks: eight of a plain patch or one with a mutant, six with mutants on both oscillators, fewer with heavier
+  stacks, and the budget is bound before a note
   starts. A saved state and performances from before it keep their sounds and gain HYDRA's INIT. Its eight macros are the
   Hydrasynth's kind: each sound names them and routes them to its own destinations with depths (LFO > MACRO 1–8), and a voice
   is budgeted with every macro at its costliest, so no turn makes the sound late.

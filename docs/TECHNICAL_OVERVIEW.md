@@ -92,7 +92,8 @@ state variable, in series or side by side. One ENV moves the filters, the scans 
 A patch is 144 bytes (`firmware/src/hydra_patch.h`), eight macros after the Hydrasynth's among them: a name each and a pool of 14
 assignments (macro, one of 31 destinations, a depth), applied once a block; the part's E1..E8 are their values, so the knobs, CC
 74/71 and the matrix move them. Oscillators run at twice the rate from F4 up while the block has room for it. Polyphony follows
-the patch's measured cost with every macro where it costs most, and it is bound before a note starts ([the measurements](VALIDATION.md)).
+the patch's measured cost with every macro where it costs most, in quarter units of the shared budget and no more voices than the
+two cores can pair, and it is bound before a note starts ([the measurements](VALIDATION.md)).
 SID is retired with its stored engine ID reserved. FM6 uses the MSFA renderer;
 legacy MARK I/OPL settings load through it and can sound different. CZ-1 is
 independent of the removed PHASE/CrispyZebra engine. BLE/platform migration

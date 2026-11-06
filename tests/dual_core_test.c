@@ -197,17 +197,17 @@ static void prophet_allocation(void)
     audio_worker_online=0;
     for(uint32_t i=0;i<8;i++)trk_note_on(&trk[0],48+i,100);
     voices_settle();
-    assert(active_voices(&trk[0])==5 && voices_busy()==15);
+    assert(active_voices(&trk[0])==5 && voices_busy()==15*VQ);
     setup_case(0,0,0);
     memset(p5_ready,0,sizeof p5_ready);
     host_preset(&trk[0],ENGI_PROPHET,0);
     audio_worker_online=1;
     for(uint32_t i=0;i<8;i++)trk_note_on(&trk[0],48+i,100);
-    assert(active_voices(&trk[0])==8 && voices_busy()==VBUDGET);
+    assert(active_voices(&trk[0])==8 && voices_busy()==VBUDGET*VQ);
     /* part B within its share: the part over its own gives up a voice, within the budget */
     for(uint32_t i=1;i<NTRK;i++)trk_note_on(&trk[i],60+i,100);
     voices_settle();
-    assert(active_voices(&trk[0])==7 && voices_busy()<=VBUDGET);
+    assert(active_voices(&trk[0])==7 && voices_busy()<=VBUDGET*VQ);
     for(uint32_t i=1;i<NTRK;i++)assert(active_voices(&trk[i])==1);
     /* The device's budget: a ninth note starts at once in the spare slot, its voice fades on the worker, and the
      * units never pass the budget the CPU is known to carry */
@@ -219,12 +219,12 @@ static void prophet_allocation(void)
         int32_t out[2*CTL];
         for(uint32_t i=0;i<8;i++)trk_note_on(&trk[0],48+i,100);
         for(uint32_t i=0;i<16;i++)mix_block(out,CTL);
-        assert(active_voices(&trk[0])==8 && voices_busy()==16);
+        assert(active_voices(&trk[0])==8 && voices_busy()==16*VQ);
         trk_note_on(&trk[0],70,100);
-        assert(active_voices(&trk[0])==8 && voices_busy()==18 && !trk[0].wait_n);
-        for(uint32_t i=0;i<VOICE_FADE_BLOCKS;i++){mix_block(out,CTL);assert(voices_busy()==18);}
+        assert(active_voices(&trk[0])==8 && voices_busy()==18*VQ && !trk[0].wait_n);
+        for(uint32_t i=0;i<VOICE_FADE_BLOCKS;i++){mix_block(out,CTL);assert(voices_busy()==18*VQ);}
         mix_block(out,CTL);
-        assert(active_voices(&trk[0])==8 && voices_busy()==16);
+        assert(active_voices(&trk[0])==8 && voices_busy()==16*VQ);
         settings_budget=budget;
     }
     /* Native factory unison stays at its requested five; an explicit count
@@ -236,9 +236,9 @@ static void prophet_allocation(void)
     assert(active_voices(&trk[0])==5);
     panic_req=1;events_block(CTL);
     p->raw[P5_UNISON_COUNT]=8;trk_note_on(&trk[0],64,100);
-    assert(active_voices(&trk[0])==8 && voices_busy()==VBUDGET);
+    assert(active_voices(&trk[0])==8 && voices_busy()==VBUDGET*VQ);
     audio_worker_online=0;
-    assert(p5_cap(&trk[0])==5 && p5_units(&trk[0])==3);
+    assert(p5_cap(&trk[0])==5 && p5_units(&trk[0])==3*VQ);
     audio_worker_online=1;
 }
 /* A CPU1 fault mid-song, as the exception handler reports it: a join still
@@ -264,7 +264,7 @@ static void prophet_retire(void)
         if(pos>CTL*16u)for(uint32_t i=0;i<2u*CTL;i++)if(abs(out[i])>peak)peak=abs(out[i]);
     }
     assert(audio_worker.jobs==jobs && peak>0 && active_voices(&trk[0])==8);
-    assert(p5_cap(&trk[0])==5 && p5_units(&trk[0])==3);
+    assert(p5_cap(&trk[0])==5 && p5_units(&trk[0])==3*VQ);
     panic_req=1;events_block(CTL);
     for(uint32_t i=0;i<8;i++)trk_note_on(&trk[0],60+i,100);
     while(trk[0].wait_n)voices_settle();          /* the eight tails over the smaller budget go first */
@@ -306,7 +306,7 @@ static void prophet_case(int parallel,uint32_t preset,uint32_t mode,uint32_t voi
         trk_note_on(&trk[i],60+i,100);
         if(mixed==2)trk_note_on(&trk[i],67+i,90);
     }
-    assert(voices_busy()<=VBUDGET);
+    assert(voices_busy()<=VBUDGET*VQ);
     if(!mixed)assert(active_voices(&trk[0])==voices);
     for(uint32_t pos=0;pos<FRAMES;pos+=CTL){
         int32_t out[2*CTL];

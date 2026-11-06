@@ -830,7 +830,7 @@ static void voices(void)
     for (i = 0; i < NVOICE; i++)
         n += T->v[i].active;
     check("voices: 18 keys in POLY: 16 voices (Dexed's), each one budget unit", n == 16u && ENG_FM6.poly == 16u &&
-          voices_busy() == 16u);
+          voices_busy() == 16u * VQ);
     for (i = 0; i < 18u; i++)
         trk_note_off(T, 40 + 2 * i);
     for (i = 0; i < FS * 8u / CTL; i++)

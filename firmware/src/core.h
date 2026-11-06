@@ -22,6 +22,8 @@
 #define MELODEE_ADMISSION 0 /* enable only with a calibrated performance contract */
 #endif
 #define VOICE_BUDGET_DEFAULT (MELODEE_ADMISSION ? 16u : VBUDGET)
+#define VQ 4u                    /* budget steps a unit: the voices are costed in quarters of a unit (voice.c); the settings, the
+                                  * budget page and WEIGHTS stay in units */
 #ifndef MELODEE_AUDIO_BENCH
 #define MELODEE_AUDIO_BENCH 0 /* laboratory fixed-voice admission bypass; never a release default */
 #endif
@@ -289,7 +291,7 @@ typedef struct {                 /* an engine (engines.c ENGINES[]; the eng_*.c 
     void (*post)(struct track *t, int32_t *out, uint32_t n, uint32_t nr);
     /* optional: the voice cap of the part now, instead of poly  */
     uint32_t (*cap)(const struct track *t);
-    /* optional: the voice budget units one of its voices takes now  */
+    /* optional: the voice budget one of its voices takes now, in steps (VQ a unit) */
     uint32_t (*units)(const struct track *t);
     /* with presets 0: preset k (< npresets) made on demand, its name into name (21 bytes); engines.c eng_preset */
     void (*preset_make)(uint32_t k, preset_t *p, char *name);

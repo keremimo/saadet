@@ -1155,14 +1155,48 @@ What a voice costs, per voice, from chords of 8 notes (the budget let 6 play wit
 An idle block takes about 330 us. Melodee's rule, three units with any mutant, gave 3078 us and 706 missed renders in 4 s on
 SUPERSTACK and up to 8965 us on the last row. So `hy_cost` (`firmware/src/eng_hydra.c`) estimates a voice from these rows, and:
 
-- A voice takes `cost / 126 us` units of the 18, at least two, three with any mutant, so a full budget renders within 2600 us. The
-  last row plays two voices.
-- Twice the rate needs room: what the block has left once the part's whole budget plays at the sample rate is shared among the
-  voices that use it, in both parts. A plain patch has all eight; STACK on one oscillator, five of six; STACK on both, one.
+- A voice takes `cost × 72 / 2270 us` steps of the budget's 72 (a quarter unit each, `VQ` in `firmware/src/core.h`), so a full
+  budget renders within 2600 us: eight voices of a plain patch or one mutant, six with mutants on both oscillators, five with
+  STACK and PW on one. (Whole units, at least two and three with any mutant, left up to 125 us a voice unused: one mutant
+  played six.)
+- A voice on its own takes about 1.6 times its share: the batch gives CPU1 a part's first two voices and then every other one,
+  so `n` voices take `n - (n - 1) / 2` one after another. `hy_cap_of` bounds a patch's voices by that, and a voice that cannot
+  pair takes its whole time from the budget. The last row plays one voice.
+- Twice the rate needs room: what the block has left once the part plays all it can at the sample rate (MONO and LEGATO: one
+  voice and its fade) is shared among the voices that use it, in both parts, each one's extra at its time alone: it lands on
+  one core. A plain patch has all eight, FM BELL one, SUPERSTACK none; a lead's high notes have it. Counted in shares, one
+  AUTOMATA ET voice at twice the rate fitted with 224 us to spare and took 2970 us, every block late; HIT C2 ! LA's twice the
+  rate adds 704 us to a voice alone where its share says 371.
+- A chord's first block counts each part's voice cost once (`voice_units_block` in `seq.c`): before, 8 notes costed the patch
+  with every macro at its worst dozens of times in one block and ran up to 700 us long. The twice-the-rate check asks for it
+  at each high note, so `hy_cost_most` keeps each part's by the patch's hash: high chords' first blocks came down from up to
+  2964 us (DUAL FILTER, one missed render) to 2756 at the most (FM BELL), none missed in 30 starts on five sounds.
+- The cores' pairing measured exactly on HIT C2 ! LA, a converted patch: 814 us a voice alone, 1627 for two, 2441 for four
+  (CPU1 runs three of four). FM in a STACK costs more than the table's STACK and PW: 300 and 288 us a share on two converted
+  patches where the rule took 261, and HIT's twice the rate 440 where 371, so the rule adds 30 and 70.
+- A sound loaded over tails keeps as many of them as it can play (`hy_tails_fit`): counted in shares, two AUTOMATA ET tails
+  stayed and took 3092 us.
+- Where the cores bind before the budget, the cap's voices take all of it, so a stolen voice's fade waits instead of
+  sounding a voice beyond the cap: HIT C2 ! LA played three and a fourth fading, 2818 us.
+- A note with nothing to take, no fade to wait for and more than the CPU carries waits (`voice_alloc`): LAYER with a voice
+  bigger than a part's half on both parts started the second part's beyond the budget, every block late.
 
 **Why:** overload cuts nothing here, so the budget is the only protection. A note beyond it takes a voice as any other does.
 
-With that rule, on the final code:
+6 November, the steps and the rules above, package SHA-256 `1a1364dba957bb4b4334919367ec4d98e9d9ceebfe0331a07cad5648e41fa4bb`
+on the Elite. Missed renders count from just before the notes start; the longest render is after they settle:
+
+| Test | Longest render | Missed renders |
+| --- | --- | --- |
+| All 17 sounds: low, high, struck (51 runs) | 2508 us (FM BELL, struck) | 0 |
+| 7 converted Hydrasynth patches, the heaviest at each voice count from 1 to 8: low, high, struck (21 runs) | 2665 us (WCOG, 4 voices, struck) | 2 |
+| The same 7 in LAYER, on both parts: low, high (14 runs) | 2596 us | 5 |
+
+Each missed render is one block at a chord's start, on two converted WCOG patches and in LAYER; on the first build of these
+steps the same 35 converted runs missed 4698 (AUTOMATA ET at twice the rate, and LAYER beyond the budget, every block). The
+LAYER pairs with other engines, USB capture and the 33 loads below were not run again.
+
+With the whole-unit rule, on its final code:
 
 | Test | Longest render | Missed renders |
 | --- | --- | --- |

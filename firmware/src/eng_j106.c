@@ -434,7 +434,7 @@ static void j106_preset_loaded(track_t *t, uint32_t pi)
 static uint32_t j106_cap(const track_t *t) { (void)t; return J106_POLY; }
 /* Provisional: one DCO and one filter per voice, cheaper than a Prophet
  * voice. Not yet measured on hardware. */
-static uint32_t j106_units(const track_t *t) { (void)t; return 2u; }
+static uint32_t j106_units(const track_t *t) { (void)t; return 2u * VQ; }
 static const engine_t ENG_J106 = {
     .name = "JUNO-106", .page_title = {"FILTER/TUNE", "DCO/MIX"},
     .edit = {{"CUT", F_INT, -63, 63, 0, 0, 0}, {"RES", F_INT, -63, 63, 0, 0, 0},

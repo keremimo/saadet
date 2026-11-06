@@ -664,6 +664,7 @@ static uint8_t parts_mode_was;
 static void events_block(uint32_t n)
 {
     uint32_t i, pr;
+    voice_units_block(1);                              /* (a part's voice cost once for the block's events: voice.c) */
 #ifdef SAADET_SMK37
     if (song.g[G_CLOCK] == 2)                          /* (a song from elsewhere, the editor) nothing can come in on TRS */
         song.g[G_CLOCK] = 0;
@@ -798,4 +799,5 @@ static void events_block(uint32_t n)
         clock_advance(n);
     if (song.playing)
         song.tick++;
+    voice_units_block(0);
 }
