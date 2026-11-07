@@ -12,7 +12,7 @@ compile() { "$CC" -O2 -DAUDIO_FRAC_BITS=0 -w -Ibuild/gen -Ifirmware/src "tests/$
 run() { name=$1; shift; echo "Checking $name"; "$@" >"$LOG/$name.log" 2>&1 || { cat "$LOG/$name.log"; exit 1; }; }
 # These inherited fixtures express audio magnitudes in Q15. Exercise their
 # original numeric contracts separately from the shipping Q23 path below.
-for name in master_output_test parts_test voice_steal_test synth_test prophet_knob_test prophet_test prophet_fast_test j106_test hydra_test fm6_test fm6_ams_test fm6_prepare_test cz_window_test synth_fpu_test mod_route_test mod_spread_test control_prepare_test dual_core_test midi_uart_test midi_timing_test input_test storage_test power_test audio_boot_test usb_audio_test usb_audio_driver_test theme_test text_ref_test settings_test settings_usb_test preferences_compat_test main_scratch_test core1_stop_test core1_fallback_test libc_word_test ui_test ui_erase_test midi_input_test; do
+for name in master_output_test parts_test voice_steal_test synth_test prophet_knob_test prophet_test prophet_fast_test j106_test hydra_test ppg_test ppg_editor_test fm6_test fm6_ams_test fm6_prepare_test cz_window_test synth_fpu_test mod_route_test mod_spread_test control_prepare_test dual_core_test midi_uart_test midi_timing_test input_test storage_test power_test audio_boot_test usb_audio_test usb_audio_driver_test theme_test text_ref_test settings_test settings_usb_test preferences_compat_test main_scratch_test core1_stop_test core1_fallback_test libc_word_test ui_test ui_erase_test midi_input_test; do
  compile "$name"
  if [ "$name" = fm6_test ]; then run "$name" "$OUT/$name" build/fm6_demo; else run "$name" "$OUT/$name"; fi
 done
@@ -76,6 +76,8 @@ done
 run precision-address-overflow "$OUT/precision_asan"
 "$CC" -O1 -g -w -DAUDIO_FRAC_BITS=0 -fsanitize=address,undefined -fno-sanitize=shift,alignment -fno-sanitize-recover=undefined -fno-omit-frame-pointer -Ibuild/gen -Ifirmware/src tests/j106_test.c -lm -pthread -o "$OUT/j106_asan"
 run j106-address-overflow "$OUT/j106_asan"
+"$CC" -O1 -g -w -DAUDIO_FRAC_BITS=0 -fsanitize=address,undefined -fno-sanitize=shift,alignment -fno-sanitize-recover=undefined -fno-omit-frame-pointer -Ibuild/gen -Ifirmware/src tests/ppg_test.c -lm -pthread -o "$OUT/ppg_asan"
+run ppg-address-overflow "$OUT/ppg_asan"
 "$CC" -O1 -g -w -DAUDIO_FRAC_BITS=0 -fsanitize=address,undefined -fno-sanitize=shift,alignment -fno-sanitize-recover=undefined -fno-omit-frame-pointer -Ibuild/gen -Ifirmware/src tests/hydra_test.c -lm -pthread -o "$OUT/hydra_asan"
 run hydra-address-overflow "$OUT/hydra_asan"
 printf '%s\n' 'ALL HOST TESTS PASSED'

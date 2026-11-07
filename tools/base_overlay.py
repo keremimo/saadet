@@ -151,9 +151,11 @@ static void sd_pcm_write(uint8_t *p,uint32_t width,int32_t v)
     s=replace(s,'        float l = (float)a.l', '        int32_t target=ua_host_mute?0:ua_host_target_q15;\n        ua_host_gain_q15+=(target-ua_host_gain_q15)/128;\n        if(ua_host_gain_q15!=target&&target-ua_host_gain_q15<128&&target-ua_host_gain_q15>-128)ua_host_gain_q15=target;\n        float volume=(float)ua_host_gain_q15*(1.0f/32768.0f);\n        float l = (float)a.l')
     s=replace(s,'(int32_t)(l * g)', '(int32_t)(l * g * volume)')
     s=replace(s,'(int32_t)(rr * g)', '(int32_t)(rr * g * volume)')
+    # The calls into saadet_sysex_byte are indirect: sysex_byte runs from SRAM (.audio_text) and a direct branch
+    # reaches only ~4 MB, which left the SMK-37 Elite 516 B of room (any growth before it in flash broke the link).
     # Raw streams reach the existing bounded native-bank parsers even when too
     # large for the base's app/editor frame collector. Real-time bytes survive.
-    s = replace(s, 'static void sysex_byte(uint8_t b)\n{', 'static void sysex_byte(uint8_t b)\n{\n#ifndef FELUCCA_LOADER\n    saadet_sysex_byte(b);\n#endif')
+    s = replace(s, 'static void sysex_byte(uint8_t b)\n{', 'static void sysex_byte(uint8_t b)\n{\n#ifndef FELUCCA_LOADER\n    { void (*volatile sx)(uint8_t) = saadet_sysex_byte; sx(b); }   /* (resident code: a direct branch reaches only ~4 MB of flash) */\n#endif')
     # Match Melodee's USB receive fix (998ca1a3, by Kerem Kilic): hosts can
     # deliver any SysEx byte as CIN F, including at a USB packet-list boundary.
     # Route those through both collectors before status handling can cancel F0/F7.
@@ -162,7 +164,7 @@ static void sd_pcm_write(uint8_t *p,uint32_t width,int32_t v)
         return;
     }
     if (st >= 0x80u && st < 0xF8u) {''')
-    s=replace(s,'    if (st >= 0x80u && st < 0xF8u) {','    if (st >= 0x80u && st < 0xF8u) {\n#ifndef FELUCCA_LOADER\n        saadet_sysex_byte((uint8_t)st); /* cancel an interrupted native bank */\n#endif')
+    s=replace(s,'    if (st >= 0x80u && st < 0xF8u) {','    if (st >= 0x80u && st < 0xF8u) {\n#ifndef FELUCCA_LOADER\n        { void (*volatile sx)(uint8_t) = saadet_sysex_byte; sx((uint8_t)st); }   /* cancel an interrupted native bank (indirect, as above) */\n#endif')
     return s
 
 

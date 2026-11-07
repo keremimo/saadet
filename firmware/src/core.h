@@ -51,13 +51,18 @@
 #define USER_NATIVE_P5 20u
 #define USER_NATIVE_J106 22u
 #define USER_NATIVE_HYDRA 26u
-#define NENGINES 26               /* 13 SLICE and 14 OBXF reserved; 15 native CZ-1; 20, 22, 23 and 24 reserved */
+#ifndef SAADET_PPG
+#define SAADET_PPG 0             /* PPG (eng_ppg.c): the builds' switch is build_options.h's; this is for a file read without it */
+#endif
+#define ENGI_PPG 29u             /* (26: HYDRA's user namespace; 27 and 28 kept for GR and its namespace, branch gr-engine) */
+#define USER_NATIVE_PPG 30u      /* PPG's user namespace (its slots' favourites; reserved in engines.c's table) */
+#define NENGINES (SAADET_PPG ? 31 : 26)   /* 13 SLICE and 14 OBXF reserved; 15 native CZ-1; 20, 22..24, 26..28 and 30 reserved */
 #define USER_NATIVE_FM 17u
 #define USER_NATIVE_CZ 18u
 #define USER_NONE 65535u
 #define ENGI_ANALOG 0u           /* retired in 1.2: never selectable (eng_ok), its stored sounds play silent */
 #define ENGI_DIGITAL 1u          /* retired: never selectable (eng_ok), its stored sounds play silent */
-#define NENG_SHOWN (NENGINES - 15u - !MELODEE_SLICE - 5u * !MELODEE_LEGACY_EXTRAS)   /* the engines one can pick: PRESETS, the EDIT
+#define NENG_SHOWN (NENGINES - 15u - !MELODEE_SLICE - 5u * !MELODEE_LEGACY_EXTRAS - 4u * SAADET_PPG)   /* the engines one can pick: PRESETS, the EDIT
                                                 * layer, the editor, in the display order of engines.c ENGINE_ORDER */
 #define ENGI_SLICE 13u           /* reserved without MELODEE_SLICE: never selectable (eng_ok) */
 #ifdef SMP_USER_SLOTS
@@ -287,6 +292,9 @@ typedef struct {                 /* an engine (engines.c ENGINES[]; the eng_*.c 
     void (*legato)(struct track *t, voice_t *v);
     /* optional: a key went down in MONO / LEGATO / UNISON, whether or not it takes the voice */
     void (*mono_key)(struct track *t, uint32_t note);
+    /* optional: a key went down in POLY, before it takes a voice (PPG: it deals its own voices, and the key it takes
+     * them from ends here, so its claim is gone before the new key's is counted) */
+    void (*poly_key)(struct track *t, uint32_t note);
     /* optional: the part's block after its voices (FM6: Dexed's DC filter); nr: voices rendered */
     void (*post)(struct track *t, int32_t *out, uint32_t n, uint32_t nr);
     /* optional: the voice cap of the part now, instead of poly  */

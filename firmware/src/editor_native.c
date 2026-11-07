@@ -26,7 +26,7 @@ static int ed_native_handle(uint32_t cmd,const uint8_t *a,uint32_t n)
         }else if(op==5u){if(n!=3u)rc=1;else rc=ed_flash_stop()?3u:(uint32_t)native_put(e,k,0);}
         else if(op==7u){if(n!=3u)rc=1;}
         else {
-            uint32_t len=e==ENGI_PROPHET?20u:e==ENGI_FM6?10u:e==ENGI_J106?J106_NAME_LEN:e==ENGI_HYDRA?HY_NAME_LEN:16u;
+            uint32_t len=e==ENGI_PROPHET?20u:e==ENGI_FM6?10u:e==ENGI_J106?J106_NAME_LEN:e==ENGI_HYDRA?HY_NAME_LEN:PPG_ON(e)?12u:16u;
             if(n<4u || n>3u+len || !native_used(e,k))rc=1;
             for(uint32_t j=3u;!rc && j<n;j++)if(a[j]<32u || a[j]>126u)rc=1;
             if(!rc){char name[21];memcpy(name,a+3,n-3u);name[n-3u]=0;rc=ed_flash_stop()?3u:(uint32_t)up_rename(k,name);}

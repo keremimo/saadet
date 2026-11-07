@@ -75,7 +75,11 @@ static const ui_field_t *smk_bank_field(uint32_t bank, uint32_t i)
         st = e == 0u ? smk_stop(ST_EDIT_P5, NELEM(ST_EDIT_P5), "FILTER", "CUTOFF") :
              e == 2u ? smk_stop(ST_EDIT_CZ, NELEM(ST_EDIT_CZ), "LINE 1", "WAVES") :
              e == 3u ? smk_stop(ST_EDIT_J106, NELEM(ST_EDIT_J106), "VCF", "CUTOFF") :
-             e == 4u ? smk_stop(ST_EDIT_HY, NELEM(ST_EDIT_HY), "FILTER 1", "CUTOFF") : 0;
+             e == 4u ? smk_stop(ST_EDIT_HY, NELEM(ST_EDIT_HY), "FILTER 1", "CUTOFF") :
+#if SAADET_PPG
+             e == 5u ? smk_stop(ST_EDIT_PPG, NELEM(ST_EDIT_PPG), "FILTER", "LOW-PASS") :
+#endif
+             0;
         break;
     case BK_ENV:
         if (e == 1u) {
@@ -85,9 +89,16 @@ static const ui_field_t *smk_bank_field(uint32_t bank, uint32_t i)
         st = e == 0u ? smk_stop(ST_ENV_P5, NELEM(ST_ENV_P5), "AMP ENV", "SHAPE") :
              e == 2u ? smk_stop(ST_ENV_CZ, NELEM(ST_ENV_CZ), "DCA 1", "RATES 1-4") :
              e == 3u ? smk_stop(ST_ENV_J106, NELEM(ST_ENV_J106), "ENV", "SHAPE") :
+#if SAADET_PPG
+             e == 5u ? smk_stop(ST_ENV_PPG, NELEM(ST_ENV_PPG), "ENV 2", "SHAPE") :   /* (the loudness's, as P5's AMP ENV) */
+#endif
              smk_stop(ST_ENV_HY, NELEM(ST_ENV_HY), "ENV 1", "SHAPE");
         break;
-    case BK_LFO: st = e == 0u ? &ST_LFO_P5[0] : e == 1u ? &ST_LFO_FM6[0] : e == 2u ? &ST_LFO_CZ[0] : e == 3u ? &ST_LFO_J106[0] : &ST_LFO_HY[0]; break;
+    case BK_LFO: st = e == 0u ? &ST_LFO_P5[0] : e == 1u ? &ST_LFO_FM6[0] : e == 2u ? &ST_LFO_CZ[0] : e == 3u ? &ST_LFO_J106[0] :
+#if SAADET_PPG
+                      e == 5u ? &ST_LFO_PPG[0] :
+#endif
+                      &ST_LFO_HY[0]; break;
     case BK_ARP: st = &ST_ARP[0]; break;
     case BK_CHORD: st = &ST_SEQ[0]; break;
     case BK_MIX: {
@@ -286,7 +297,7 @@ static uint32_t smk_list(void)
     if (smk_mode_now() == PM_FAVS)
         return LIB_FAV;
     if (uix.place != PL_LIB)
-        for (s = LIB_P5; s <= LIB_HY; s++)
+        for (s = LIB_P5; s < LIB_PERF; s++)
             if (lib_engine(s) == (uint32_t)TSEL->eng_req)
                 return s;
     return ui_stop(PL_LIB);

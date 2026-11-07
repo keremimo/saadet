@@ -305,13 +305,18 @@ static void vm_draw_browse(const ui_vm_t *v)
     if (!v->toast[0])
         cv_text_r(230, 8, TY_TX, v->bcount, T_MID, T_BG);
     vm_list(v, 40);
+    int32_t total = 0, gap = 16;
+    for (uint32_t e = 0; e < NELEM(ENG_TAG); e++) total += text_w(e == v->bsrc ? TY_HD : TY_TX, ENG_TAG[e]);
+    if (NELEM(ENG_TAG) > 1u && total + gap * (int32_t)(NELEM(ENG_TAG) - 1u) > 220)   /* (a sixth engine: closer) */
+        gap = (220 - total) / (int32_t)(NELEM(ENG_TAG) - 1u);
+    if (gap < 4) gap = 4;
     for (uint32_t e = 0; e < NELEM(ENG_TAG); e++) {  /* the sources ALGORITHM picks, the chosen one lit */
         const aafont_t *f = e == v->bsrc ? TY_HD : TY_TX;
         int32_t w = text_w(f, ENG_TAG[e]);
         cv_text(x, 212, f, ENG_TAG[e], e == v->bsrc ? T_TEXT : T_DIM);
         if (e == v->bsrc)
             cv_rect(x, 231, w, 2, T_THEME);
-        x += w + 16;
+        x += w + gap;
     }
 }
 static void vm_draw_save(const ui_vm_t *v)          /* the name, the letter under the cursor marked; what a press does */

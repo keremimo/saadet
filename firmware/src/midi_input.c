@@ -43,6 +43,10 @@ static void midi_bend_to(uint32_t ch, track_t *t)
     t->bend_raw = midi_chan[ch].bend;
     if (t->eng_req == ENGI_PROPHET)
         p5_update_bend(t);
+#if SAADET_PPG
+    else if (t->eng_req == ENGI_PPG)                  /* PPG bends by its own BD and BI (eng_ppg.c ppg_bend) */
+        midi_bend_target[trk_index(t)] = 0;
+#endif
     else
         midi_bend_target[trk_index(t)] =
             midi_bend_scale(midi_chan[ch].bend, midi_chan[ch].semi * 256 + midi_chan[ch].cents * 256 / 100);

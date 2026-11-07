@@ -70,7 +70,12 @@ static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN",
                                      "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH"};
 static const char *const N_ENGNAME[] = {"-", "-", MELODEE_LEGACY_EXTRAS ? "PHASE" : "-", "-", "-", MELODEE_LEGACY_EXTRAS ? "VOICE" : "-", MELODEE_LEGACY_EXTRAS ? "TRIO" : "-", MELODEE_LEGACY_EXTRAS ? "WHEEL" : "-", "-", MELODEE_LEGACY_EXTRAS ? "PHYS" : "-",
                                              "DRUM", MELODEE_LEGACY_EXTRAS ? "NOISE" : "-", "FM6", MELODEE_SLICE ? "SLICE" : "-", "-", "CZ-1", "-", "-", "-", "PROPHET",
-                                             "-", "JUNO-106", "-", "-", "-", "HYDRA"};
+                                             "-", "JUNO-106", "-", "-", "-", "HYDRA"
+#if SAADET_PPG
+                                             , "-", "-", "-", "PPG", "-"   /* (26..28 reserved, 29 PPG, 30 its user namespace) */
+#endif
+                                             };
+_Static_assert(sizeof N_ENGNAME / sizeof N_ENGNAME[0] == NENGINES, "the ENG global names every engine number");
 
 #define PD(l, f, mn, mx, df) {l, f, mn, mx, df, 0, 0}
 #define PE(l, n, df) {l, F_ENUM, 0, (int16_t)(sizeof(n) / sizeof(n[0]) - 1), df, n, 0}
@@ -462,3 +467,6 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
 #include "prophet_edit.h"
 #include "j106_edit.h"
 #include "hydra_edit.h"
+#if SAADET_PPG
+#include "ppg_edit.h"
+#endif

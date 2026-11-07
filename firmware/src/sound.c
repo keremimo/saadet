@@ -72,6 +72,9 @@ static void apply_preset_to(track_t *t, uint32_t pi)
     if(t->eng_req==ENGI_PROPHET)p5_preset_loaded(t,pi);
     if(t->eng_req==ENGI_J106)j106_preset_loaded(t,pi);
     if(t->eng_req==ENGI_HYDRA)hy_preset_loaded(t,pi);
+#if SAADET_PPG
+    if(t->eng_req==ENGI_PPG)ppg_preset_loaded(t,pi);
+#endif
     cz_factory_loaded(t);
     cz_track_accept(t);
     fm6_track_loaded(t);                              /* FM6: the preset's patch */

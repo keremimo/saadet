@@ -32,6 +32,16 @@
 #include "j106_patch.h"
 #define UP_VER_HY 15u                           /* a HYDRA patch (hy_patch_t) in the payload */
 #include "hydra_patch.h"
+#define UP_VER_PPG 16u                          /* a PPG program (ppg_patch_t) in the payload (SAADET_PPG builds) */
+#if SAADET_PPG
+#define PPG_ON(e) ((e) == ENGI_PPG)
+#define PPG_REC ((uint32_t)sizeof(ppg_patch_t))
+#define PPG_NAME ((uint32_t)__builtin_offsetof(ppg_patch_t, name))
+#else
+#define PPG_ON(e) 0
+#define PPG_REC 0u
+#define PPG_NAME 0u
+#endif
 static int native_used(uint32_t e, uint32_t k);          /* native slots: shared_presets.c */
 static const uint8_t *native_raw(uint32_t e, uint32_t k);
 static int shared_preferences_save(void);                /* persist.c */
@@ -62,6 +72,9 @@ typedef struct {
                                                   * lane hits, their accents) */
     uint8_t cz_extra[46];                        /* UP_VER_DRUM*: the DRUM patch's first bytes (up_drum_raw) */
 } up_rec_t;
+#if SAADET_PPG
+_Static_assert(sizeof(ppg_patch_t) <= sizeof(((up_rec_t *)0)->packed), "a PPG program fits a slot");
+#endif
 typedef struct {
     uint32_t magic;
     uint16_t rsize, nslot;
@@ -149,7 +162,8 @@ static int up_native_cz(const up_rec_t *r){return r->engine==ENGI_CZ && (r->ver=
 static int up_native(const up_rec_t *r)
 {
     return (r->engine==ENGI_FM6 && r->ver==UP_VER_FM) || (r->engine==ENGI_PROPHET && r->ver==UP_VER_P5) || (r->engine==ENGI_CZ && r->ver==UP_VER_NATIVE_CZ) ||
-           (r->engine==ENGI_J106 && r->ver==UP_VER_J106) || (r->engine==ENGI_HYDRA && r->ver==UP_VER_HY);
+           (r->engine==ENGI_J106 && r->ver==UP_VER_J106) || (r->engine==ENGI_HYDRA && r->ver==UP_VER_HY) ||
+           (PPG_ON(r->engine) && r->ver==UP_VER_PPG);
 }
 static int up_cz_raw(const up_rec_t *r,uint8_t *raw)
 {
@@ -168,6 +182,9 @@ static int up_valid(const up_rec_t *r)
         if(r->engine==ENGI_FM6){for(uint32_t i=0;i<128u;i++)if(r->packed[i]>127u)return 0;return 1;}
         if(r->engine==ENGI_J106){j106_patch_t p;memcpy(&p,r->packed,sizeof p);return j106_patch_valid(&p);}
         if(r->engine==ENGI_HYDRA){hy_patch_t p;memcpy(&p,r->packed,sizeof p);return hy_patch_valid(&p);}
+#if SAADET_PPG
+        if(r->engine==ENGI_PPG){ppg_patch_t p;memcpy(&p,r->packed,sizeof p);return ppg_patch_valid(&p);}
+#endif
 #ifndef UP_HOST
         p5_patch_t p;memcpy(&p,r->packed,sizeof p);return p5_patch_valid(&p);
 #else
@@ -337,7 +354,7 @@ static int up_parse(const uint8_t *a, uint32_t na, up_rec_t *r, uint32_t *slot)
     r->used = UP_USED;
     r->ver = UP_VER;
     r->engine = a[1];
-    if(r->engine==ENGI_PROPHET || r->engine==ENGI_J106 || r->engine==ENGI_HYDRA)return 1;
+    if(r->engine==ENGI_PROPHET || r->engine==ENGI_J106 || r->engine==ENGI_HYDRA || PPG_ON(r->engine))return 1;
     r->np = P_COUNT;
     for (i = 0; i < n; i++)
         r->name[i] = (char)a[2 + i];
@@ -521,8 +538,8 @@ static void up_set_name(up_rec_t *r, uint32_t k, const char *name)
 /* the selected part's sound -> slot k; name 0 or "": the automatic name (up_auto_name); up_put's result */
 static void up_native_name(up_rec_t *r,const char *name)
 {
-    uint32_t e=r->engine,off=e==ENGI_PROPHET?P5_NAME:e==ENGI_FM6?118u:e==ENGI_J106?J106_NAME:e==ENGI_HYDRA?HY_NAME:128u;
-    uint32_t len=e==ENGI_PROPHET?20u:e==ENGI_FM6?10u:e==ENGI_J106?J106_NAME_LEN:e==ENGI_HYDRA?HY_NAME_LEN:16u;
+    uint32_t e=r->engine,off=e==ENGI_PROPHET?P5_NAME:e==ENGI_FM6?118u:e==ENGI_J106?J106_NAME:e==ENGI_HYDRA?HY_NAME:PPG_ON(e)?PPG_NAME:128u;
+    uint32_t len=e==ENGI_PROPHET?20u:e==ENGI_FM6?10u:e==ENGI_J106?J106_NAME_LEN:e==ENGI_HYDRA?HY_NAME_LEN:PPG_ON(e)?12u:16u;
     memset(r->packed+off,' ',len);
     for(uint32_t i=0;i<len && name && name[i];i++)r->packed[off+i]=(uint8_t)name[i];
 }
@@ -532,12 +549,15 @@ static int up_store_to(uint32_t k,uint32_t tr,const char *name)
     track_t *t=&trk[tr];up_rec_t r;
     memset(&r,0,sizeof r);r.used=UP_USED;r.ver=UP_VER;r.engine=t->eng_req;r.np=P_COUNT;
     up_set_name(&r,k,name);
-    if(r.engine==ENGI_FM6 || r.engine==ENGI_PROPHET || r.engine==ENGI_J106 || r.engine==ENGI_HYDRA || (r.engine==ENGI_CZ && t->p[P_E7]==CZ_NATIVE)){
-        r.ver=r.engine==ENGI_FM6?UP_VER_FM:r.engine==ENGI_PROPHET?UP_VER_P5:r.engine==ENGI_J106?UP_VER_J106:r.engine==ENGI_HYDRA?UP_VER_HY:UP_VER_NATIVE_CZ;
+    if(r.engine==ENGI_FM6 || r.engine==ENGI_PROPHET || r.engine==ENGI_J106 || r.engine==ENGI_HYDRA || PPG_ON(r.engine) || (r.engine==ENGI_CZ && t->p[P_E7]==CZ_NATIVE)){
+        r.ver=r.engine==ENGI_FM6?UP_VER_FM:r.engine==ENGI_PROPHET?UP_VER_P5:r.engine==ENGI_J106?UP_VER_J106:r.engine==ENGI_HYDRA?UP_VER_HY:PPG_ON(r.engine)?UP_VER_PPG:UP_VER_NATIVE_CZ;
         if(r.engine==ENGI_FM6)fm6_pack(fm6_patch[tr],r.packed);
         else if(r.engine==ENGI_PROPHET)memcpy(r.packed,p5_patch_of(t),sizeof(p5_patch_t));
         else if(r.engine==ENGI_J106)memcpy(r.packed,j106_patch_of(t),sizeof(j106_patch_t));
         else if(r.engine==ENGI_HYDRA)memcpy(r.packed,hy_patch_of(t),sizeof(hy_patch_t));
+#if SAADET_PPG
+        else if(r.engine==ENGI_PPG)memcpy(r.packed,ppg_patch_of(t),sizeof(ppg_patch_t));
+#endif
         else memcpy(r.packed,cz_patch[tr].raw,CZ_BYTES);
         r.np=sizeof UP_NATIVE_PARAMS;
         for(uint32_t i=0;i<r.np;i++)r.cz_extra[i]=(uint8_t)(t->p[UP_NATIVE_PARAMS[i]]+64);
@@ -590,6 +610,9 @@ static int up_load_to(uint32_t k,uint32_t tr)
         if(r->engine==ENGI_PROPHET && r->ver==UP_VER_P5){memcpy(&p5_patch[tr],r->packed,sizeof(p5_patch_t));p5_ready[tr]=1;p5_track_accept(t);}
         if(r->engine==ENGI_J106 && r->ver==UP_VER_J106){memcpy(&j106_patch[tr],r->packed,sizeof(j106_patch_t));j106_ready[tr]=1;}
         if(r->engine==ENGI_HYDRA && r->ver==UP_VER_HY){memcpy(&hy_patch[tr],r->packed,sizeof(hy_patch_t));hy_ready[tr]=1;}
+#if SAADET_PPG
+        if(r->engine==ENGI_PPG && r->ver==UP_VER_PPG){memcpy(&ppg_patch[tr%NPART],r->packed,sizeof(ppg_patch_t));ppg_ready[tr%NPART]=1;}
+#endif
         cz_track_accept(t);
         fm1_irq_on();
         if (t->eng_req == ENGI_FM6) {                   /* FM6: its voice, native slot k (else INIT) */

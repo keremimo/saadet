@@ -12,3 +12,6 @@ fm1-recovery-backups/
 web/node_modules
 
 /platform/web/words/
+
+# third-party ROM data kept out of the public repository (PPG Wave wavetables)
+/private/

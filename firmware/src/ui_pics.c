@@ -193,6 +193,14 @@ static void pic_build(ui_vm_t *v, const ui_stop_t *st)
             v->pv[0] = h[HY_E1_ATK]; v->pv[1] = h[HY_E1_DEC]; v->pv[2] = h[HY_E1_SUS]; v->pv[3] = h[HY_E1_REL];
             break;
         }
+#if SAADET_PPG
+        if (st->arg == 4u || st->arg == 5u) {             /* (arg 4, 5: PPG's ENV 1 and ENV 2, 0..63 drawn on 0..127) */
+            const ppg_patch_t *pp = ppg_patch_of(t);
+            const uint8_t *g = ppg_group_c(pp, pp->sel) + (st->arg == 4u ? PG_A1 : PG_A2);
+            for (k = 0; k < 4u; k++) v->pv[k] = (int16_t)(g[k] * 2u);
+            break;
+        }
+#endif
         const uint8_t *p = p5_patch_of(t)->raw;
         uint32_t a = st->arg ? P5_ATTACK_AMP : P5_ATTACK_FILTER;
         v->pv[0] = p[a]; v->pv[1] = p[a + 2u]; v->pv[2] = p[a + 4u];
@@ -204,6 +212,11 @@ static void pic_build(ui_vm_t *v, const ui_stop_t *st)
             v->pv[0] = j106_patch_of(t)->raw[J106_VCF_FREQ]; v->pv[1] = j106_patch_of(t)->raw[J106_VCF_RES];
         } else if (st->arg == 3u) {                       /* (HYDRA's FILTER 1) */
             v->pv[0] = hy_patch_of(t)->raw[HY_F1_CUT]; v->pv[1] = hy_patch_of(t)->raw[HY_F1_RES];
+#if SAADET_PPG
+        } else if (st->arg == 4u) {                       /* (PPG's: 0..63 on 0..127) */
+            const ppg_patch_t *pp = ppg_patch_of(t);
+            v->pv[0] = (int16_t)(ppg_group_c(pp, pp->sel)[PG_CUT] * 2u); v->pv[1] = (int16_t)(ppg_group_c(pp, pp->sel)[PG_EMPH] * 2u);
+#endif
         } else if (st->arg) {
             v->pv[0] = t->p[P_E4]; v->pv[1] = (int16_t)(t->p[P_E5] * 127 / 15);
         } else {

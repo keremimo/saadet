@@ -26,10 +26,15 @@ typedef struct { const char *name; const ui_stop_t *stop; uint8_t n; } ui_place_
 #define FD(id, l) {FK_DEV, (uint8_t)(id), l, 0}
 #define FL(id, l) {FK_LIB, (uint8_t)(id), l, 0}
 #define FW(id, l) {FK_HYLAB, (uint8_t)(id), l, 0}
+#define FQ(id, l) {FK_PPG, (uint8_t)(id), l, 0}
 #define F0 {FK_NONE, 0, 0, 0}
 
 /* the library's lists (ui_lib.c); its fields, SAVE's and an import's */
+#if SAADET_PPG
+enum { LIB_FAV, LIB_USER, LIB_P5, LIB_FM6, LIB_CZ, LIB_J106, LIB_HY, LIB_PPG, LIB_PERF, LIB_N };
+#else
 enum { LIB_FAV, LIB_USER, LIB_P5, LIB_FM6, LIB_CZ, LIB_J106, LIB_HY, LIB_PERF, LIB_N };
+#endif
 enum { LF_SOUND, LF_FAV, LF_SLOT, LF_CURSOR, LF_LETTER, LF_SFAV, LF_FIRST, LF_DELETE, LF_ERASE, LF_SEND, LF_PSLOT, LF_N };
 static const ui_stop_t ST_LIB[LIB_N] = {
     {"", "FAVOURITES", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
@@ -39,6 +44,9 @@ static const ui_stop_t ST_LIB[LIB_N] = {
     {"", "CZ-1", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
     {"", "J106", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
     {"", "HYDRA", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
+#if SAADET_PPG
+    {"", "PPG", PIC_LIB, {FL(LF_SOUND, "SOUND"), FL(LF_FAV, "FAV"), FL(LF_SEND, "SEND"), FL(LF_DELETE, "DELETE")}},
+#endif
     {"", "PERFORM", PIC_LIB, {FL(LF_SOUND, "SETUP"), F0, F0, FL(LF_DELETE, "DELETE")}},
 };
 static const ui_stop_t ST_SAVE[] = {
@@ -142,6 +150,19 @@ static const ui_stop_t ST_LFO_CZ[] = {
                                      FC(LCZ_VDELAY, "DELAY")}},
     LFO_COMMON,
 };
+#if SAADET_PPG
+static const ui_stop_t ST_ENV_PPG[] = {            /* (its three envelopes, as on EDIT; then the common one) */
+    {"ENV 1", "SHAPE", PIC_P5ENV, {FQ(PG_A1, "ATTACK"), FQ(PG_D1, "DECAY"), FQ(PG_S1, "SUSTAIN"), FQ(PG_R1, "RELEASE")}, 4},
+    {"ENV 2", "SHAPE", PIC_P5ENV, {FQ(PG_A2, "ATTACK"), FQ(PG_D2, "DECAY"), FQ(PG_S2, "SUSTAIN"), FQ(PG_R2, "RELEASE")}, 5},
+    {"ENV 3", "PITCH", PIC_FADERS, {FQ(PG_A3, "ATTACK"), FQ(PG_D3, "DECAY"), FQ(PG_E3AMT, "AMOUNT"), FQ(PG_E3TO, "TO")}},
+    MOD_ENV("MOD ENV"),
+};
+static const ui_stop_t ST_LFO_PPG[] = {            /* (its own LFO first; then the common one and the matrix) */
+    {"PPG LFO", "RATE", PIC_FADERS, {FQ(PG_RATE, "RATE"), FQ(PG_SHAPE, "SHAPE"), FQ(PG_DELAY, "DELAY"), FQ(PG_WHEEL, "WHEEL")}},
+    {"PPG LFO", "TO", PIC_FADERS, {FQ(PG_MP, "PITCH"), FQ(PG_MW, "WAVES"), FQ(PG_MF, "FILTER"), FQ(PG_ML, "LOUD")}},
+    LFO_COMMON,
+};
+#endif
 #undef ROUTE
 #undef LFO_COMMON
 
@@ -287,9 +308,36 @@ static const ui_stop_t ST_PLAY[] = {
     {"", "UNISON", PIC_VOICES, {FT(P_DETUNE, "DETUNE"), FT(P_ALLOC, "ASSIGN"), F0, F0}},
 };
 
-/* the engine's place in the colours and the tags: 0 PROPHET, 1 FM6, 2 CZ-1, 3 JUNO-106, 4 HYDRA */
+#if SAADET_PPG
+/* PPG's pages, as docs/ppg/mocks.html draws them (Kerem: "Go ahead as drawn", 2026-11-06): the 2.2's knobs in its own
+ * 0..63, its codes by name. The mocks' own pictures (the table's slots, the sweep's stair, the routings) are not drawn
+ * yet: the envelopes and the filter use the common ones, the rest the faders */
+static const ui_stop_t ST_EDIT_PPG[] = {
+    {"PROGRAM", "GROUPS", PIC_FADERS, {FQ(PGX_SEL, "GROUP"), FQ(PGX_KEYB, "KEYB"), FQ(PGX_SPLIT, "SPLIT"), F0}},
+    {"WAVES", "TABLE", PIC_FADERS, {FQ(PG_TABLE, "TABLE"), FQ(PG_OSC, "OSC"), FQ(PG_SUB, "SUB"), FQ(PG_SW, "SUB")}},
+    {"WAVES", "SWEEP", PIC_FADERS, {FQ(PG_E1W, "ENV 1"), FQ(PG_KW, "KEYS"), FQ(PG_UW, "UPPER"), F0}},
+    {"TUNE", "PITCH", PIC_FADERS, {FQ(PG_SEMI, "SEMI"), FQ(PG_DETU, "DETUNE"), FQ(PG_BI, "BEND"), FQ(PG_BD, "BEND TO")}},
+    {"TUNE", "SEMI 1-4", PIC_FADERS, {FQ(PGX_V1, "V1"), FQ(PG_SEMI2, "V2"), FQ(PG_SEMI3, "V3"), FQ(PG_SEMI4, "V4")}},
+    {"TUNE", "SEMI 5-8", PIC_FADERS, {FQ(PG_SEMI5, "V5"), FQ(PG_SEMI6, "V6"), FQ(PG_SEMI7, "V7"), FQ(PG_SEMI8, "V8")}},
+    {"FILTER", "LOW-PASS", PIC_FILTER, {FQ(PG_CUT, "CUTOFF"), FQ(PG_EMPH, "EMPH"), FQ(PG_E1F, "ENV 1"), FQ(PG_KF, "KEYS")}, 4},
+    {"ENV 1", "SHAPE", PIC_P5ENV, {FQ(PG_A1, "ATTACK"), FQ(PG_D1, "DECAY"), FQ(PG_S1, "SUSTAIN"), FQ(PG_R1, "RELEASE")}, 4},
+    {"LOUD", "ENV 2", PIC_P5ENV, {FQ(PG_A2, "ATTACK"), FQ(PG_D2, "DECAY"), FQ(PG_S2, "SUSTAIN"), FQ(PG_R2, "RELEASE")}, 5},
+    {"LOUD", "LEVEL", PIC_FADERS, {FQ(PG_LOUD, "LEVEL"), FQ(PG_KL, "KEYS"), F0, F0}},
+    {"ENV 3", "PITCH", PIC_FADERS, {FQ(PG_A3, "ATTACK"), FQ(PG_D3, "DECAY"), FQ(PG_E3AMT, "AMOUNT"), FQ(PG_E3TO, "TO")}},
+    {"LFO", "LFO", PIC_FADERS, {FQ(PG_RATE, "RATE"), FQ(PG_SHAPE, "SHAPE"), FQ(PG_DELAY, "DELAY"), FQ(PG_WHEEL, "WHEEL")}},
+    {"LFO", "TO", PIC_FADERS, {FQ(PG_MP, "PITCH"), FQ(PG_MW, "WAVES"), FQ(PG_MF, "FILTER"), FQ(PG_ML, "LOUD")}},
+    {"PLAY", "TOUCH", PIC_FADERS, {FQ(PG_TW, "WAVES"), FQ(PG_TF, "FILTER"), FQ(PG_TL, "LOUD"), FQ(PG_TM, "MOD")}},
+    {"PLAY", "VELOCITY", PIC_FADERS, {FQ(PG_VF, "FILTER"), FQ(PG_VL, "LOUD"), F0, F0}},
+};
+#endif
+/* the engine's place in the colours and the tags: 0 PROPHET, 1 FM6, 2 CZ-1, 3 JUNO-106, 4 HYDRA (5 PPG, where built) */
+#if SAADET_PPG
+static uint32_t eng_tint(uint32_t e) { return e == ENGI_FM6 ? 1u : e == ENGI_CZ ? 2u : e == ENGI_J106 ? 3u : e == ENGI_HYDRA ? 4u : e == ENGI_PPG ? 5u : 0u; }
+static const char *const ENG_TAG[6] = {"P5", "FM6", "CZ-1", "J106", "HYDRA", "PPG"};
+#else
 static uint32_t eng_tint(uint32_t e) { return e == ENGI_FM6 ? 1u : e == ENGI_CZ ? 2u : e == ENGI_J106 ? 3u : e == ENGI_HYDRA ? 4u : 0u; }
 static const char *const ENG_TAG[5] = {"P5", "FM6", "CZ-1", "J106", "HYDRA"};
+#endif
 static int sx_staged(void);                             /* sound.c: a dump waits for its slots */
 
 static ui_place_t place_of(uint32_t p)
@@ -307,12 +355,21 @@ static ui_place_t place_of(uint32_t p)
         break;
     case PL_SCL: SET(ST_SCL); break;
     case PL_ENV:
+#if SAADET_PPG
+        if (e == 5u) { SET(ST_ENV_PPG); break; }
+#endif
         if (e == 0u) SET(ST_ENV_P5); else if (e == 1u) SET(ST_ENV_FM6); else if (e == 2u) SET(ST_ENV_CZ); else if (e == 3u) SET(ST_ENV_J106); else SET(ST_ENV_HY);
         break;
     case PL_LFO:
+#if SAADET_PPG
+        if (e == 5u) { SET(ST_LFO_PPG); break; }
+#endif
         if (e == 0u) SET(ST_LFO_P5); else if (e == 1u) SET(ST_LFO_FM6); else if (e == 2u) SET(ST_LFO_CZ); else if (e == 3u) SET(ST_LFO_J106); else SET(ST_LFO_HY);
         break;
     case PL_EDIT:
+#if SAADET_PPG
+        if (e == 5u) { SET(ST_EDIT_PPG); break; }
+#endif
         if (e == 0u) SET(ST_EDIT_P5); else if (e == 1u) SET(ST_EDIT_FM6); else if (e == 2u) SET(ST_EDIT_CZ); else if (e == 3u) SET(ST_EDIT_J106); else SET(ST_EDIT_HY);
         break;
     case PL_GLO: SET(ST_GLO); break;
@@ -327,7 +384,7 @@ static ui_place_t place_of(uint32_t p)
 /* HOME's macros, the engine's eight in two rows of four (a turn shows the name and value over the whole screen). HOME's
  * four knobs edit one row, SELECT on HOME picks which; the SMK-37's 8 KNOBS bank has both at once (ui_smk.c), K5..K8
  * the second. HYDRA's are its own eight macros, named and routed by the sound (LFO > MACRO 1..8) */
-static const ui_field_t HOME_F[5][8] = {
+static const ui_field_t HOME_F[UI_ENG_N][8] = {
     {FP(P5_CUTOFF, "CUTOFF"), FP(P5_RESONANCE, "RESONANCE"), FP(P5_ENV_FILTER, "ENV AMOUNT"), FP(P5_RELEASE_AMP, "RELEASE"),
      FP(P5_ATTACK_AMP, "ATTACK"), FP(P5_DECAY_FILTER, "FILT DECAY"), FP(P5_FINE_B, "B FINE"), FP(P5_LFO_RATE, "LFO RATE")},
     {FT(P_E2, "MOD LEVEL"), FT(P_E3, "MOD RATIO"), FT(P_E4, "MOD EG"), FT(P_E6, "DETUNE"),
@@ -337,6 +394,10 @@ static const ui_field_t HOME_F[5][8] = {
     {FJ(J106_VCF_FREQ, "CUTOFF"), FJ(J106_VCF_RES, "RESONANCE"), FJ(J106_VCF_ENV, "ENV AMOUNT"), FJ(J106_ENV_R, "RELEASE"),
      FJ(J106_ENV_A, "ATTACK"), FJ(J106_LFO_RATE, "LFO RATE"), FJ(J106_VCF_LFO, "VCF LFO"), FJ(J106_DCO_PWM, "PWM")},
     {FT(P_E0, 0), FT(P_E1, 0), FT(P_E2, 0), FT(P_E3, 0), FT(P_E4, 0), FT(P_E5, 0), FT(P_E6, 0), FT(P_E7, 0)},
+#if SAADET_PPG                                   /* (PPG: the filter and the loudness's release, then the waves) */
+    {FQ(PG_CUT, "CUTOFF"), FQ(PG_EMPH, "EMPHASIS"), FQ(PG_E1F, "ENV 1 VCF"), FQ(PG_R2, "RELEASE"),
+     FQ(PG_OSC, "WAVE"), FQ(PG_E1W, "SWEEP"), FQ(PG_A2, "ATTACK"), FQ(PG_RATE, "LFO RATE")},
+#endif
 };
 
 /* the buttons' places (panel.c B_*); REC is no place (it latches). FX opens the library */

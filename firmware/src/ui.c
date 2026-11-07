@@ -553,7 +553,8 @@ static void vm_state(char *b, uint32_t n)        /* what changes the notes now: 
 /* the list's five sounds around the one chosen (an empty list: its word in name); the count */
 static uint32_t vm_list_of(ui_vm_t *v, uint32_t src)
 {
-    static const char *const EMPTY[LIB_N] = {"NO FAVOURITES YET", "NO USER SOUNDS YET", "", "", "", "", "", "NO SETUPS YET"};
+    static const char *const EMPTY[LIB_N] = {[LIB_FAV] = "NO FAVOURITES YET", [LIB_USER] = "NO USER SOUNDS YET",
+                                             [LIB_P5 ... LIB_PERF - 1] = "", [LIB_PERF] = "NO SETUPS YET"};
     lib_item_t w[5];
     uint32_t n = lib_count(src), i, at = n ? lib.at[src] % n : 0u;
     lib_scan(src, (int32_t)at - 2, w, 5u);

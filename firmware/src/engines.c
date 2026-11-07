@@ -21,6 +21,9 @@
 #include "eng_fm6.c"            /* FM6: 6-operator FM rendered as Dexed renders it (fm6_core.c) */
 #include "eng_j106.c"           /* JUNO-106 (MPL-2.0) */
 #include "eng_hydra.c"          /* HYDRA: wave scanning, mutants, two filters (hydra_patch.h, tools/gen_hy_waves.py) */
+#if SAADET_PPG
+#include "eng_ppg.c"            /* PPG: the Wave 2.2's tables from a local image of its EPROMs (tools/gen_ppg_waves.py) */
+#endif
 #if MELODEE_SLICE
 #include "eng_slice.c"
 #else
@@ -51,6 +54,9 @@ _Static_assert(sizeof(p5_part_t) <= 16384u, "Prophet state exceeds the linker en
 #endif
 _Static_assert(sizeof(j106_part_t) <= 16384u, "JUNO-106 state exceeds the linker engine budget");
 _Static_assert(HY_BYTES_OF(HY_ROWS) <= 16384u, "HYDRA state exceeds the linker engine budget");
+#if SAADET_PPG
+_Static_assert(sizeof(ppg_part_t) <= 16384u, "PPG state exceeds the linker engine budget");
+#endif
 static uint32_t eng_state_size(uint32_t e)
 {
     switch (e) {
@@ -68,6 +74,9 @@ static uint32_t eng_state_size(uint32_t e)
     case ENGI_FM6: return sizeof(fm6_part_t);
     case ENGI_J106: return sizeof(j106_part_t);
     case ENGI_HYDRA: return HY_BYTES_OF(HY_ROWS);   /* (the most: both oscillators scanning; hy_bytes the patch's) */
+#if SAADET_PPG
+    case ENGI_PPG: return sizeof(ppg_part_t);
+#endif
 #if MELODEE_SLICE
     case ENGI_SLICE: return sizeof(slc_rb_t);
 #endif
@@ -92,6 +101,9 @@ static drw_part_t *drw_of(const track_t *t) { return resource_get(RES_ENGINE0 + 
 static fm6_part_t *fm6_part(uint32_t part) { return resource_get(RES_ENGINE0 + part % NPART, sizeof(fm6_part_t)); }
 static cz_part_t *cz_part(uint32_t part) { return resource_get(RES_ENGINE0 + part % NPART, sizeof(cz_part_t)); }
 static j106_part_t *j106_part(uint32_t part) { return resource_get(RES_ENGINE0 + part % NPART, sizeof(j106_part_t)); }
+#if SAADET_PPG
+static ppg_part_t *ppg_part(uint32_t part) { return resource_get(RES_ENGINE0 + part % NPART, sizeof(ppg_part_t)); }
+#endif
 /* HYDRA's state: the patch's size (hy_bytes) when the arena has room; else it keeps what it holds (at least the
  * HY_ROWS_MIN wave copies, which play each oscillator's first wave: hy_base's fallback) and asks for a refused size
  * again every 64 blocks (~46 ms; a failed ask is a search of the arena). A new size is asked at once, as is a shrink */
@@ -186,6 +198,12 @@ static const engine_t *const ENGINES[NENGINES] = {
     &ENG_RETIRED,                /* 22: reserved: the JUNO-106's user namespace (USER_NATIVE_J106) */
     &ENG_RETIRED, &ENG_RETIRED,  /* 23, 24 reserved */
     &ENG_HYDRA,                  /* 25: HYDRA */
+#if SAADET_PPG
+    &ENG_RETIRED,                /* 26: reserved: HYDRA's user namespace (USER_NATIVE_HYDRA) */
+    &ENG_RETIRED, &ENG_RETIRED,  /* 27, 28: kept for GR and its user namespace (branch gr-engine) */
+    &ENG_PPG,                    /* 29: PPG */
+    &ENG_RETIRED,                /* 30: reserved: PPG's user namespace (USER_NATIVE_PPG) */
+#endif
 };
 
 /* a track's engine number as an index (the audio paths: a compare, cheaper than % NENGINES; a bad number: 0) */
@@ -223,6 +241,9 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
     ENGI_J106,                    /* JUNO-106 (the library's lists follow this order: ui_pages.c eng_tint) */
     ENGI_HYDRA,                   /* HYDRA */
 #endif
+#if SAADET_PPG
+    ENGI_PPG,                     /* PPG (sixth: the library's list LIB_PPG and the colour 5) */
+#endif
 #if MELODEE_SLICE
     13,                          /* SLICE */
 #endif
@@ -241,7 +262,7 @@ static int eng_extra_retired(uint32_t e)
  * eng_vis(n), e's place among them eng_rank(e), the next / previous one eng_step(e, dir) (wraps) */
 static int eng_ok(uint32_t e)
 {
-    return e != ENGI_DRUM && e < NENGINES && !(e >= 16u && e <= 18u) && e != USER_NATIVE_P5 && !(e >= USER_NATIVE_J106 && e <= 24u) && !eng_extra_retired(e) && e != 4u && e != 8u && e != 14u && (MELODEE_SLICE || e != ENGI_SLICE);
+    return e != ENGI_DRUM && e < NENGINES && !(e >= 16u && e <= 18u) && e != USER_NATIVE_P5 && !(e >= USER_NATIVE_J106 && e <= 24u) && !(e >= USER_NATIVE_HYDRA && e < ENGI_PPG) && e != USER_NATIVE_PPG && !eng_extra_retired(e) && e != 4u && e != 8u && e != 14u && (MELODEE_SLICE || e != ENGI_SLICE);
 }
 static uint32_t eng_sound_idx(uint32_t e)
 {

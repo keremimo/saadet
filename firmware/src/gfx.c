@@ -128,7 +128,16 @@ static struct {
 #define T_LINE ux.line           /* a bar's track, rules */
 #define T_WELL ux.well           /* an unlit key, an empty slot */
 #define T_THEME ux.theme         /* the sound's engine: the value being turned, curves, the engine's tag */
+#if SAADET_PPG                  /* 5 PPG: cyan (60, 200, 230), outside the generated palettes until every build has PPG;
+                                 * the GRAY test palette keeps its own gray */
+#define UI_ENG_N 6u
+#define T_ENG_PPG 0x3E5Cu
+#define T_ENG(k) ((k) % UI_ENG_N == 5u ? (uint16_t)(ux.mono ? UI_PALETTES[ux.pal].eng[4] : T_ENG_PPG) : \
+                  UI_PALETTES[ux.pal].eng[(k) % UI_ENG_N])
+#else
+#define UI_ENG_N 5u
 #define T_ENG(k) UI_PALETTES[ux.pal].eng[(k) % 5u]   /* engine k's colour: 0 PROPHET, 1 FM6, 2 CZ-1, 3 JUNO-106 (SID's), 4 HYDRA */
+#endif
 #define NPALETTES UI_NPALETTES
 #ifdef UI_TEST_PALETTE
 #define UI_PAL_ENTRIES (UI_NPALETTES + 1u)   /* + GRAY (host tests: every screen must stay gray in it) */
@@ -167,16 +176,16 @@ static void palette_set(uint32_t i)
 #endif
     ux.bg = p->bg; ux.text = p->text; ux.mid = p->mid; ux.dim = p->dim; ux.faint = p->faint;
     ux.fill = p->fill; ux.lit = p->lit; ux.off = p->off; ux.line = p->line; ux.well = p->well;
-    ux.theme = p->eng[ux.eng % 5u];
+    ux.theme = T_ENG(ux.eng);
     ux.light = ux_luma(p->bg) > 128u;
     ux.gen++;                                    /* the text ramps follow */
 }
 /* THEME takes engine k's colour (0 PROPHET, 1 FM6, 2 CZ-1, 3 SID); 1 = it changed (redraw everything) */
 static int theme_engine(uint32_t k)
 {
-    if (ux.eng == k % 5u)
+    if (ux.eng == k % UI_ENG_N)
         return 0;
-    ux.eng = (uint8_t)(k % 5u);
+    ux.eng = (uint8_t)(k % UI_ENG_N);
     ux.theme = T_ENG(k);
     return 1;
 }

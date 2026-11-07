@@ -119,6 +119,9 @@ static void host_preset_values(track_t *t, uint32_t e, uint32_t pi, const preset
     if(e==ENGI_PROPHET){uint32_t k=(uint32_t)(t-trk)%NTRK;p5_ready[k]=1;p5_preset_loaded(t,pi);}   /* (its program, as ui.c) */
     if(e==ENGI_J106)j106_preset_loaded(t,pi);
     if(e==ENGI_HYDRA)hy_preset_loaded(t,pi);
+#if SAADET_PPG
+    if(e==ENGI_PPG)ppg_preset_loaded(t,pi);
+#endif
     fm6_track_loaded(t);                          /* FM6: the preset's patch (ui.c apply_preset_to) */
 }
 static void host_preset_req(track_t *t, uint32_t e, uint32_t pi)

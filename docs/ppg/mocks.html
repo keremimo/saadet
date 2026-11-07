@@ -1,0 +1,342 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PPG Engine Mocks</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75,700;85,600;100,500;100,800&display=swap">
+<style>
+/* Layout as docs/smk37-ux/mocks.html: each scene is the 240 x 240 screen at 2x with its caption. The screen keeps
+   Saadet's STAGE palette (tools/gen_ui_palettes.py) in either theme, as the panel has one look; the desk around it
+   follows the reader's light or dark setting. */
+:root {
+  color-scheme: dark;
+  --z: 2;
+  --desk: #121113; --desk-2: #1a191c; --rule: #312f36; --bezel: #2a2830;
+  --ink: #ece9f0; --ink-2: #a9a4b3; --ink-3: #6f6a7a; --accent: #48d6a0;
+  --bg: #050506;
+  --ui: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --desk: #f3f1f5; --desk-2: #ffffff; --rule: #dcd8e1; --bezel: #2b2930;
+    --ink: #1b1a1f; --ink-2: #4f4b57; --ink-3: #7a7583; --accent: #137a55;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --desk: #f3f1f5; --desk-2: #ffffff; --rule: #dcd8e1; --bezel: #2b2930;
+  --ink: #1b1a1f; --ink-2: #4f4b57; --ink-3: #7a7583; --accent: #137a55;
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--desk); color: var(--ink); font-family: var(--ui); font-weight: 500;
+  padding: 28px 16px 64px; }
+main { max-width: 1040px; margin: 0 auto; }
+h1 { font-size: 28px; font-weight: 800; margin: 0 0 6px; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 15px; font-weight: 600; font-stretch: 85%; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-2); margin: 44px 0 18px; padding-top: 16px; border-top: 1px solid var(--rule); }
+p, li { line-height: 1.5; color: var(--ink-2); }
+p { max-width: 72ch; margin: 0 0 10px; }
+.lead { font-size: 16px; }
+strong { color: var(--ink); font-weight: 600; }
+code { font-family: var(--mono); font-size: 0.9em; color: var(--ink); }
+ul.notes { padding-left: 18px; max-width: 80ch; margin: 14px 0 0; font-size: 14px; }
+ul.notes li { margin-bottom: 6px; }
+
+.sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(240px * var(--z)), 1fr)); gap: 28px 32px; }
+.fig { margin: 0; min-width: 0; }
+.shell { width: calc(240px * var(--z)); height: calc(240px * var(--z)); border-radius: 10px; overflow: hidden;
+  background: var(--bg); box-shadow: 0 0 0 1px #000, 0 0 0 5px var(--bezel); position: relative; }
+.fig figcaption { margin-top: 14px; max-width: calc(240px * var(--z)); font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.fig figcaption b { color: var(--ink); font-weight: 700; font-stretch: 85%; letter-spacing: 0.04em; margin-right: 6px; }
+
+/* the panel's own screen: positions in its pixels, faces as gfx.c's roles */
+.screen { width: 240px; height: 240px; position: relative; transform: scale(var(--z)); transform-origin: 0 0;
+  background: var(--bg); font-family: var(--ui); color: #fff; overflow: hidden; }
+.screen * { position: absolute; white-space: nowrap; line-height: 1; margin: 0; }
+.screen svg { left: 0; top: 0; overflow: visible; }
+.hd { font-size: 14px; font-weight: 800; font-stretch: 100%; }   /* TY_HD */
+.tx { font-size: 14px; font-weight: 500; font-stretch: 100%; }   /* TY_TX */
+.lb { font-size: 13px; font-weight: 600; font-stretch: 85%; }    /* TY_LB */
+.rw { font-size: 18px; font-weight: 600; font-stretch: 85%; }    /* TY_RW */
+.vl { font-size: 22px; font-weight: 700; font-stretch: 75%; }    /* TY_VL */
+.nm { font-size: 32px; font-weight: 700; font-stretch: 75%; }    /* TY_NM */
+.rect { display: block; }
+.measure { position: absolute; left: -9999px; top: 0; visibility: hidden; transform: none; }
+
+@media (max-width: 560px) { :root { --z: 1.5; } }
+@media (max-width: 400px) { :root { --z: 1.375; } }
+</style>
+
+
+<main>
+<h1>PPG, the pages</h1>
+<p class="lead">Mocks of a PPG Wave 2.2 engine's EDIT pages on the panel's own 240 × 240 geometry, for review before any page is written in firmware. The header, the four cards and the faces follow <code>ui_view.c</code>, drawn with the helpers of <code>docs/hydra-lab/mocks.html</code>. <strong>The waves are stand-ins</strong> computed here. The unit draws the ROM's, and this public file holds none of PPG's data.</p>
+<ul class="notes">
+  <li><strong>One part plays one group.</strong> A 2.2 program holds two sounds, groups A and B, and its keyboard modes 0..8 layer or split them over eight voices. Here a part is one group: layers and splits come from Saadet's two parts (MULTI), and a performance stores both. KEYB modes 1..8 then need no page of their own.</li>
+  <li><strong>The 2.2's own numbers.</strong> Every knob shows 0..63 as the 2.2's ANALOG display did, stepped as the original quantises it (attack 16 steps, emphasis 16, decay/sustain/release 32, cutoff and the waves 64). Old patch sheets then read the same. ENV 3's amount is shown signed (−32..+31) instead of the 2.2's 32-centred number.</li>
+  <li><strong>Stepping, not crossfading.</strong> The wave number moves in whole waves, as on the 2.2; the blends between the ROM's key waves are built when a table loads (the "over 1800 waves"), not while a note plays. Slots 60..63 are triangle, pulse, square and saw in every table.</li>
+  <li><strong>Velocity is MIDI velocity.</strong> The 2.2 had no velocity keyboard: its VELOSITY effect took the pressure on the first held key. VF/VL here follow the note's own velocity.</li>
+  <li><strong>Open, from the OS code later:</strong> how tables 28 (phasing saw) and 29 (pulse widths) are computed, the LFO's four shapes (the manual does not name them, so they show as 1..4), and the envelope and rate curves. Table 31 (piano and sax samples) is not in the wave image; TABLE stops at UPPER until those samples are found.</li>
+  <li><strong>For Kerem:</strong> the name on the engine list (PPG here), its colour (cyan here, beside FM6's blue and HYDRA's green), the page order, and whether the groups-as-parts reading holds.</li>
+</ul>
+
+<h2>The twelve pages</h2>
+<div class="sheet" id="pages"></div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  /* STAGE, and the proposed PPG colour as T_THEME */
+  var C = { bg: "#050506", text: "#ffffff", mid: "#a3a3ab", dim: "#7a7a84", faint: "#55555e", fill: "#5c5c66",
+            lit: "#4a4a54", off: "#3a3a42", line: "#222227", well: "#1c1c21", theme: "#3cc8e6" };
+  var TAU = 2 * Math.PI;
+
+  /* ------------------------------------------------------------- stand-in waves --- */
+  /* Not the ROM: a key wave k is a sum of k + 1 sine harmonics, rounded to 8 bits as the 2.2 stores waves, and the
+     slots between keys are straight blends, as the engine builds a table. Slots 60..63: triangle, pulse, square, saw. */
+  var N = 128;
+  function q8(xs) { var m = 1e-9; xs.forEach(function (v) { m = Math.max(m, Math.abs(v)); }); return xs.map(function (v) { return Math.round(v / m * 127) / 127; }); }
+  function keyWave(k) { var xs = []; for (var i = 0; i < N; i++) { var v = 0; for (var h = 1; h <= k + 1; h++) v += Math.sin(TAU * h * i / N) * (h % 2 ? 1 : 0.6) / h; xs.push(v); } return q8(xs); }
+  function std(slot) {
+    var xs = [];
+    for (var i = 0; i < N; i++) {
+      var p = i / N;
+      xs.push(slot === 60 ? (p < 0.25 ? 4 * p : p < 0.75 ? 2 - 4 * p : 4 * p - 4) :
+              slot === 61 ? (p < 0.08 ? 1 : -0.2) : slot === 62 ? (p < 0.5 ? 1 : -1) : 2 * p - 1);
+    }
+    return xs;
+  }
+  var KEYS = [0, 8, 16, 24, 32, 40, 48, 60];                     /* an example layout, not a ROM table's */
+  function slotWave(s) {
+    if (s >= 60) return std(s);
+    for (var j = 0; j + 1 < KEYS.length; j++) {
+      if (s >= KEYS[j] && s <= KEYS[j + 1]) {
+        var a = keyWave(2 * j), b = keyWave(2 * j + 2), t = (s - KEYS[j]) / (KEYS[j + 1] - KEYS[j]);
+        return a.map(function (v, i) { return Math.round(((1 - t) * v + t * b[i]) * 127) / 127; });
+      }
+    }
+    return keyWave(0);
+  }
+
+  /* ------------------------------------------------------------- drawing (as docs/hydra-lab/mocks.html) --- */
+  function el(tag, cls, style, txt) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (style) for (var k in style) e.style[k] = style[k];
+    if (txt != null) e.textContent = txt;
+    return e;
+  }
+  var meter = el("div", "screen measure");
+  function measure(face, str) {
+    if (!meter.parentNode) document.body.appendChild(meter);
+    var e = el("span", face, null, str); meter.appendChild(e);
+    var w = e.getBoundingClientRect().width; meter.removeChild(e); return w;
+  }
+  function fit(face, str, maxw) { var s = str; while (s.length && measure(face, s) > maxw) s = s.slice(0, -1); return s.replace(/\s+$/, ""); }
+  function rect(s, x, y, w, h, c) { s.appendChild(el("i", "rect", { left: x + "px", top: y + "px", width: w + "px", height: h + "px", background: c })); }
+  function text(s, x, y, face, str, c) { s.appendChild(el("span", face, { left: x + "px", top: y + "px", color: c }, str)); return x + measure(face, str); }
+  function textR(s, x, y, face, str, c) { s.appendChild(el("span", face, { right: (240 - x) + "px", top: y + "px", color: c }, str)); }
+  function textFit(s, x, y, face, str, c, maxw) { return text(s, x, y, face, fit(face, str, maxw), c); }
+  function disc(s, cx, cy, d, c) { s.appendChild(el("i", "rect", { left: (cx - d / 2) + "px", top: (cy - d / 2) + "px", width: d + "px", height: d + "px", borderRadius: d / 2 + "px", background: c })); }
+  var NS = "http://www.w3.org/2000/svg";
+  function poly(s, pts, c, w) {
+    var svg = document.createElementNS(NS, "svg"), p = document.createElementNS(NS, "polyline");
+    svg.setAttribute("width", "240"); svg.setAttribute("height", "240");
+    p.setAttribute("points", pts.map(function (q) { return q[0].toFixed(2) + "," + q[1].toFixed(2); }).join(" "));
+    p.setAttribute("fill", "none"); p.setAttribute("stroke", c); p.setAttribute("stroke-width", w);
+    p.setAttribute("stroke-linejoin", "round"); p.setAttribute("stroke-linecap", "round");
+    svg.appendChild(p); s.appendChild(svg);
+  }
+  function header(s, o) {
+    var x = text(s, 10, 8, "hd", o.head, C.text);
+    var right = o.ndots > 1 ? 216 - 10 * o.ndots : 230;
+    if (o.sub) textFit(s, x + 8, 8, "tx", o.sub, C.mid, right - x - 8);
+    for (var i = 0; o.ndots > 1 && i < o.ndots; i++) disc(s, 227 - 10 * (o.ndots - 1 - i), 16, 6, i === o.dot ? C.text : C.off);
+  }
+  function cols(s, o) {
+    for (var i = 0; i < 4; i++) {
+      var c = o.cols[i]; if (!c) continue;
+      var x = 7 + 59 * i, hot = i === o.hot, ink = hot ? C.theme : c.dim ? C.dim : C.text;
+      var bar = hot ? C.theme : c.dim ? C.line : C.fill;
+      text(s, x, 184, "lb", c.l, c.dim ? C.dim : C.mid);
+      var face = "vl";
+      if (measure("vl", c.v) > 54) face = measure("rw", c.v) > 54 ? "lb" : "rw";
+      textFit(s, x, 199 + (face === "rw" ? 3 : face === "lb" ? 6 : 0), face, c.v, ink, 54);
+      rect(s, x, 231, 50, 2, C.line);
+      if (c.bar === "fill") rect(s, x, 231, Math.round(c.a * 50), 2, bar);
+      else if (c.bar === "bip") { rect(s, x + 24, 228, 1, 8, C.fill); var e = 25 + Math.round(c.a * 25); rect(s, x + Math.min(25, e), 231, Math.abs(e - 25), 2, bar); }
+      else if (c.bar === "tick") rect(s, x + Math.round(c.a * 44), 231, 6, 2, bar);
+      else if (c.bar === "steps") { var sw = Math.floor((50 - 2 * (c.b - 1)) / c.b); for (var k = 0; k < c.b; k++) rect(s, x + k * (sw + 2), 231, sw, 2, k === c.a ? bar : C.line); }
+    }
+  }
+  function labels(s, page, right) { text(s, 10, 32, "lb", page, C.dim); if (right) textR(s, 230, 32, "lb", right, C.mid); }
+  function cyclePts(xs, x0, w, cy, amp) { var pts = []; for (var i = 0; i <= N; i++) pts.push([x0 + w * i / N, cy - xs[i % N] * amp]); return pts; }
+
+  /* ------------------------------------------------------------- pictures --- */
+  /* TABLE: the cycle at OSC (theme) over SUB's (grey); under it the 64 slots, keys tall, 60..63 apart */
+  function picTable(s, osc, sub) {
+    rect(s, 12, 86, 216, 1, C.line);
+    poly(s, cyclePts(slotWave(sub), 12, 216, 86, 34), C.fill, 1.5);
+    poly(s, cyclePts(slotWave(osc), 12, 216, 86, 34), C.theme, 2);
+    var y = 160;
+    for (var k = 0; k < 64; k++) {
+      var x = 13 + k * 3.35, key = KEYS.indexOf(k) >= 0 && k < 60, top = k >= 60;
+      rect(s, Math.round(x), y - (key ? 18 : top ? 12 : 7), 2, key ? 18 : top ? 12 : 7, key ? C.mid : top ? C.dim : C.off);
+    }
+    rect(s, 12, y + 1, 216, 1, C.line);
+    disc(s, 14 + osc * 3.35, y + 8, 7, C.theme); disc(s, 14 + sub * 3.35, y + 8, 5, C.text);
+  }
+  /* an ADSR of 0..63 values: the 2.2 times are unknown curves, so the widths only scale with the numbers */
+  function adsrPts(a, d, su, r, x0, w, top, base) {
+    var ta = 4 + a * 0.9, td = 6 + d * 0.9, hold = 40, tr = 6 + r * 0.9, sc = w / (ta + td + hold + tr), sy = top + (base - top) * (1 - su / 63);
+    var x1 = x0 + ta * sc, x2 = x1 + td * sc, x3 = x2 + hold * sc, x4 = x3 + tr * sc;
+    return [[x0, base], [x1, top], [x2, sy], [x3, sy], [x4, base]];
+  }
+  function picAdsr(s, v, hot) {
+    rect(s, 12, 150, 216, 1, C.line);
+    var pts = adsrPts(v[0], v[1], v[2], v[3], 14, 212, 56, 150);
+    poly(s, pts, C.theme, 2.5);
+    pts.slice(1, 4).forEach(function (p, i) { disc(s, p[0], p[1], i + 1 === hot || (hot === 0 && i === 0) ? 9 : 6, i + 1 === hot || (hot === 0 && i === 0) ? C.theme : C.text); });
+  }
+  /* SWEEP: the wave number over a held note, ENV 1 times AMOUNT from OSC, in whole waves */
+  function picSweep(s, start, amt) {
+    var base = 156, top = 52, n = 108, env = adsrPts(28, 34, 20, 30, 0, n, 0, 1), pts = [];
+    function at(t) { for (var i = 0; i + 1 < env.length; i++) if (t <= env[i + 1][0]) { var a = env[i], b = env[i + 1]; return 1 - (a[1] + (b[1] - a[1]) * (t - a[0]) / Math.max(1e-6, b[0] - a[0])); } return 0; }
+    for (var t = 0; t <= n; t++) {
+      var wv = Math.min(63, start + Math.floor(at(t) * amt + 1e-6)), y = base - (wv / 63) * (base - top), x = 12 + t * 2;
+      if (pts.length) pts.push([x, pts[pts.length - 1][1]]);
+      pts.push([x, y]);
+    }
+    rect(s, 12, base + 1, 216, 1, C.line);
+    rect(s, 12, base - (60 / 63) * (base - top), 216, 1, C.off);
+    text(s, 14, base - (60 / 63) * (base - top) + 4, "lb", "60", C.dim);
+    poly(s, pts, C.theme, 2);
+  }
+  /* FILTER: a 24 dB low-pass with its emphasis peak, cutoff marked */
+  function picFilter(s, cut, emph) {
+    var base = 156, top = 56, pts = [], fc = 0.15 + cut / 63 * 0.7, q = 0.6 + emph / 63 * 2.4;
+    for (var i = 0; i <= 108; i++) {                   /* two 2-pole sections: 24 dB an octave, the peak at the cutoff */
+      var r = Math.pow(2, (i / 108 - fc) * 7), g = 1 / Math.sqrt(Math.pow(1 - r * r, 2) + Math.pow(r / q, 2));
+      var db = Math.max(-40, Math.min(16, 20 * Math.log10(g * g)));
+      pts.push([12 + 2 * i, top + 26 - db * 1.8]);
+    }
+    rect(s, 12, base + 1, 216, 1, C.line); rect(s, Math.round(12 + fc * 216), 50, 1, base - 50, C.off);
+    rect(s, 12, top + 26, 216, 1, C.line);
+    poly(s, pts, C.theme, 2.5);
+  }
+  /* PITCH: OSC and SUB on a ruler of semitones (-12..+24) */
+  function picPitch(s, semi, sub, label) {
+    var y = 104, x0 = 20, w = 200;
+    rect(s, x0, y, w, 1, C.line);
+    for (var k = -12; k <= 24; k++) rect(s, Math.round(x0 + (k + 12) / 36 * w), y - (k % 12 ? 3 : 8), 1, k % 12 ? 3 : 8, k ? C.off : C.fill);
+    function at(v) { return x0 + (v + 12) / 36 * w; }
+    disc(s, at(semi), y, 12, C.theme); text(s, at(semi) - 12, y + 14, "lb", "OSC", C.theme);
+    disc(s, at(semi + sub), y - 26, 9, C.text); text(s, at(semi + sub) - 10, y - 48, "lb", label, C.mid);
+  }
+  /* KEYS: loudness or tracking across the keyboard's five octaves */
+  function picKeys(s, from, to) {
+    var base = 150, top = 64;
+    for (var o = 0; o < 5; o++) rect(s, 12 + o * 43, base + 6, 41, 10, C.well);
+    poly(s, [[12, base - from * (base - top)], [227, base - to * (base - top)]], C.theme, 2.5);
+    rect(s, 12, base + 1, 216, 1, C.line);
+  }
+  /* ENV 3: attack and decay of a bipolar move away from the played pitch and back */
+  function picAd(s, a, d, amt) {
+    var mid = 104, x0 = 14, ta = 6 + a * 1.2, td = 10 + d * 2.4, sc = 200 / (ta + td + 20), peak = mid - amt / 32 * 46;
+    rect(s, 12, mid, 216, 1, C.line);
+    poly(s, [[x0, mid], [x0 + ta * sc, peak], [x0 + (ta + td) * sc, mid], [x0 + (ta + td + 20) * sc, mid]], C.theme, 2.5);
+    disc(s, x0 + ta * sc, peak, 8, C.text);
+  }
+  /* LFO: four cycles of the shape, faded in over DELAY */
+  function picLfo(s, shape, delay) {
+    var mid = 104, pts = [];
+    for (var i = 0; i <= 216; i++) {
+      var p = (i / 54) % 1, v = shape === 0 ? (p < 0.25 ? 4 * p : p < 0.75 ? 2 - 4 * p : 4 * p - 4) : shape === 1 ? 1 - 2 * p : shape === 2 ? 2 * p - 1 : (p < 0.5 ? 1 : -1);
+      var fade = Math.min(1, i / Math.max(1, delay * 4));
+      pts.push([12 + i, mid - v * 40 * fade]);
+    }
+    rect(s, 12, mid, 216, 1, C.line); poly(s, pts, C.theme, 2);
+  }
+  /* the routings at a glance: sources down, destinations across, the page's row in colour */
+  var SRC = ["KEYS", "LFO", "TOUCH", "VEL", "BEND"], DST = ["WAVES", "FILTER", "LOUD", "PITCH"];
+  function picRoutes(s, on, row) {
+    var x0 = 76, dx = 46, y0 = 58, dy = 22;
+    DST.forEach(function (d, j) { text(s, Math.round(x0 + j * dx - measure("lb", d) / 2), 34, "lb", d, C.dim); });
+    SRC.forEach(function (r, i) {
+      text(s, 12, y0 + i * dy - 7, "lb", r, i === row ? C.theme : C.mid);
+      DST.forEach(function (d, j) {
+        var v = on[r] && on[r][j];
+        disc(s, x0 + j * dx, y0 + i * dy, v ? 11 : 7, v ? (i === row ? C.theme : C.text) : C.off);
+      });
+    });
+  }
+
+  /* ------------------------------------------------------------- cards and pages --- */
+  function n63(v) { return { v: String(v), bar: "fill", a: v / 63 }; }
+  function card(l, o) { o.l = l; return o; }
+  function stepsCard(l, names, i) { return { l: l, v: names[i], bar: "steps", a: i, b: names.length }; }
+  var ONOFF = ["OFF", "ON"];
+  var ROUTES = { KEYS: [1, 1, 0, 0], LFO: [1, 0, 0, 1], TOUCH: [1, 0, 0, 0], VEL: [0, 1, 1, 0], BEND: [0, 0, 0, 1] };
+  function g(sub, dot, nd) { return { head: "EDIT", sub: sub, ndots: nd, dot: dot }; }
+
+  var PAGES = [
+    { t: "WAVES · TABLE", cap: "Table 15, OSC on wave 12, SUB 16 waves above it (PARA keeps that distance). Under the cycles the table's 64 slots: tall ticks are the ROM's key waves, short ones the blends, the last four the standard waves. SUB MODE is the 2.2's SW 0..3.",
+      draw: function (s) { header(s, g("WAVES", 0, 2)); labels(s, "TABLE", "WAVE 12 · 28"); picTable(s, 12, 28);
+        cols(s, { hot: 1, cols: [card("TABLE", { v: "15", bar: "tick", a: 15 / 30 }), card("OSC", { v: "12", bar: "tick", a: 12 / 63 }),
+          card("SUB", { v: "+16", bar: "tick", a: 16 / 63 }), stepsCard("SUB", ["PARA", "FIXED", "ENV 3", "OFF"], 0)] }); } },
+    { t: "WAVES · SWEEP", cap: "ENV 1 walks the wave number up from OSC and back, in whole waves (the stair). Past 63 it would run into the upper table, as on the 2.2. KEYS is KW 0..7 (4 spreads the table over the keyboard); UPPER is UW.",
+      draw: function (s) { header(s, g("WAVES", 1, 2)); labels(s, "SWEEP", "FROM 12"); picSweep(s, 12, 40);
+        cols(s, { hot: 0, cols: [card("ENV 1", n63(40)), card("KEYS", { v: "0", bar: "steps", a: 0, b: 8 }), stepsCard("UPPER", ONOFF, 0), null] }); } },
+    { t: "TUNE", cap: "SEMI moves the part (the 2.2 tuned each of its eight voices; the part's one SEMI stands for them all). DETUNE is DETU 0..7: four beats, then the SUB a fifth, an octave or two octaves up. BEND is BI, BEND TO is BD 0..7.",
+      draw: function (s) { header(s, g("TUNE", 0, 1)); labels(s, "PITCH", ""); picPitch(s, 0, 7, "SUB");
+        cols(s, { hot: 1, cols: [card("SEMI", { v: "0", bar: "bip", a: 0 }), stepsCard("DETUNE", ["OFF", "1", "2", "3", "4", "5TH", "OCT", "2 OCT"], 5),
+          stepsCard("BEND", ["2ND", "3RD", "5TH", "OCT"], 0), card("BEND TO", { v: "PITCH", bar: "steps", a: 1, b: 8 })] }); } },
+    { t: "FILTER", cap: "The 24 dB low-pass: CUTOFF in 64 steps, EMPH(asis) in 16 shown on 0..63, ENV 1's depth (the 2.2's ENVELOPE 1 - VCF knob), and KEYS as KF 0..7 (3: an octave a key octave).",
+      draw: function (s) { header(s, g("FILTER", 0, 1)); labels(s, "LOW-PASS 24 dB", ""); picFilter(s, 30, 40);
+        cols(s, { hot: 0, cols: [card("CUTOFF", n63(30)), card("EMPH", n63(40)), card("ENV 1", n63(44)), card("KEYS", { v: "3", bar: "steps", a: 3, b: 8 })] }); } },
+    { t: "ENV 1", cap: "ADSR 1 moves the filter and the waves; each takes its own depth (FILTER's ENV 1, SWEEP's ENV 1). The widths here only scale with the numbers: the 2.2's time curves are still to be read from its OS.",
+      draw: function (s) { header(s, g("ENV 1", 0, 1)); labels(s, "FILTER AND WAVES", ""); picAdsr(s, [20, 34, 24, 30], 2);
+        cols(s, { hot: 1, cols: [card("ATTACK", n63(20)), card("DECAY", n63(34)), card("SUSTAIN", n63(24)), card("RELEASE", n63(30))] }); } },
+    { t: "LOUD · ENV 2", cap: "ADSR 2 is the loudness. Above 52 the 2.2's ATTACK keeps swelling after the key is let go (only A and R count then), and the clone keeps that.",
+      draw: function (s) { header(s, g("LOUD", 0, 2)); labels(s, "ENV 2", ""); picAdsr(s, [0, 40, 50, 28], 4);
+        cols(s, { hot: 3, cols: [card("ATTACK", n63(0)), card("DECAY", n63(40)), card("SUSTAIN", n63(50)), card("RELEASE", n63(28))] }); } },
+    { t: "LOUD · LEVEL", cap: "LEVEL is ENVELOPE 2 - LOUDN., which must be up for any sound. KEYS is KL 0..7: 4 is flat, below it the top keys are loudest, above it the bottom ones.",
+      draw: function (s) { header(s, g("LOUD", 1, 2)); labels(s, "LEVEL ACROSS THE KEYS", ""); picKeys(s, 0.45, 1);
+        cols(s, { hot: 1, cols: [card("LEVEL", n63(56)), card("KEYS", { v: "1", bar: "steps", a: 1, b: 8 }), null, null] }); } },
+    { t: "ENV 3", cap: "The attack-decay envelope: it pulls the pitch of OSC, SUB or both away and back, signed (ENV 3 ATT, 32 = none on the 2.2). With SUB MODE on ENV 3 it also walks the SUB's waves.",
+      draw: function (s) { header(s, g("ENV 3", 0, 1)); labels(s, "PITCH AWAY AND BACK", ""); picAd(s, 0, 10, 6);
+        cols(s, { hot: 2, cols: [card("ATTACK", n63(0)), card("DECAY", n63(10)), card("AMOUNT", { v: "+6", bar: "bip", a: 6 / 32 }), stepsCard("TO", ["OFF", "OSC", "SUB", "BOTH"], 1)] }); } },
+    { t: "LFO", cap: "RATE in 32 steps, SHAPE one of the 2.2's four (named 1..4 until the OS says what they are), DELAY in 16, and WHEEL: the mod wheel's depth, which the 2.2 stores with the sound.",
+      draw: function (s) { header(s, g("LFO", 0, 2)); labels(s, "LFO", ""); picLfo(s, 0, 20);
+        cols(s, { hot: 3, cols: [card("RATE", n63(40)), stepsCard("SHAPE", ["1", "2", "3", "4"], 0), card("DELAY", n63(20)), card("WHEEL", n63(24))] }); } },
+    { t: "LFO · TO", cap: "Where the LFO goes: PITCH is MO/MS (OSC, SUB or both), WAVES MW, FILTER MF, LOUD ML (a tremolo, which the wheel and DELAY do not reach). The picture is every routing of the sound, this page's row in colour.",
+      draw: function (s) { header(s, g("LFO", 1, 2)); picRoutes(s, ROUTES, 1);
+        cols(s, { hot: 1, cols: [stepsCard("PITCH", ["OFF", "OSC", "SUB", "BOTH"], 3), stepsCard("WAVES", ONOFF, 1), stepsCard("FILTER", ONOFF, 0), stepsCard("LOUD", ONOFF, 0)] }); } },
+    { t: "PLAY · TOUCH", cap: "Aftertouch to the waves (TW: harder goes deeper into the table), the filter (TF), the loudness (TL) and the LFO's depth (TM).",
+      draw: function (s) { header(s, g("PLAY", 0, 2)); picRoutes(s, ROUTES, 2);
+        cols(s, { hot: 0, cols: [stepsCard("WAVES", ONOFF, 1), stepsCard("FILTER", ONOFF, 0), stepsCard("LOUD", ONOFF, 0), stepsCard("MOD", ONOFF, 0)] }); } },
+    { t: "PLAY · VELOCITY", cap: "Velocity to the filter (VF) and the loudness (VL), from the note's MIDI velocity.",
+      draw: function (s) { header(s, g("PLAY", 1, 2)); picRoutes(s, ROUTES, 3);
+        cols(s, { hot: 1, cols: [stepsCard("FILTER", ONOFF, 1), stepsCard("LOUD", ONOFF, 1), null, null] }); } }
+  ];
+
+  function build() {
+    var host = document.getElementById("pages"); host.textContent = "";
+    PAGES.forEach(function (sc) {
+      var fig = el("figure", "fig"), shell = el("div", "shell"), scr = el("div", "screen");
+      sc.draw(scr); shell.appendChild(scr); fig.appendChild(shell);
+      var cap = el("figcaption"); cap.appendChild(el("b", "", null, sc.t)); cap.appendChild(document.createTextNode(sc.cap));
+      fig.appendChild(cap); host.appendChild(fig);
+    });
+  }
+  build();
+  if (document.fonts) {
+    var again = 0;
+    document.fonts.addEventListener && document.fonts.addEventListener("loadingdone", function () { clearTimeout(again); again = setTimeout(build, 30); });
+    document.fonts.ready.then(build);
+  }
+})();
+</script>

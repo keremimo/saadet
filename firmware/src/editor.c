@@ -143,6 +143,9 @@ static uint32_t ed_native_hash(uint32_t tr)
     if (e == ENGI_HYDRA) return ed_fnv(h, hy_patch_of(t)->raw, HY_BYTES);
     if (e == ENGI_CZ) return ed_fnv(h, cz_patch[tr % NTRK].raw, CZ_BYTES);
     if (e == ENGI_FM6) return ed_fnv(ed_fnv(ed_fnv(h, fm6_patch[tr % NTRK], FP_SIZE), fm6_fn[tr % NTRK], FM6_NFN), &fm6_on[tr % NTRK], 1);
+#if SAADET_PPG
+    if (e == ENGI_PPG) return ed_fnv(h, ppg_patch_of(t), sizeof(ppg_patch_t));
+#endif
     return 0;
 }
 static void ed_native_seen(void)                         /* the editor knows the parts' native patches as they are */
@@ -316,6 +319,7 @@ static int ed_flash_stop(void) { return transport_busy(); }
 #include "editor_prophet.c"
 #include "editor_j106.c"
 #include "editor_hydra.c"
+#include "editor_ppg.c"
 #include "editor_parts.c"
 
 /* after the editor's own request for a part's native patch (read or written): it knows the patch, so no PUSH for it */
@@ -329,7 +333,7 @@ static void ed_seen_after(uint32_t cmd, const uint8_t *a, uint32_t na)
     }
     if (na < 2u || a[1] >= NTRK)
         return;
-    if ((cmd >= 95u && cmd <= 97u) || cmd == ED_FM6_FN || ((cmd == ED_FM6_GET || cmd == ED_FM6_PUT) && a[0] == ED_FM6_TRACK) ||
+    if ((cmd >= 95u && cmd <= 97u) || cmd == ED_PPG || cmd == ED_FM6_FN || ((cmd == ED_FM6_GET || cmd == ED_FM6_PUT) && a[0] == ED_FM6_TRACK) ||
         ((cmd == ED_CZ_GET || cmd == ED_CZ_PUT) && (a[0] == 0u || a[0] == ED_CZ_LIVE)))
         ed_w.nh[a[1]] = ed_native_hash(a[1]);
 }
@@ -374,7 +378,7 @@ static __attribute__((minsize)) void ed_handle(const uint8_t *f, uint32_t n)   /
         return;
     ed_begin(cmd);
     if(ed_prophet_handle(cmd,a,na) || ed_j106_handle(cmd,a,na) || ed_hydra_handle(cmd,a,na) || ed_fm6_handle(cmd,a,na) ||
-       ed_cz_handle(cmd,a,na)){ed_send();ed_seen_after(cmd,a,na);return;}
+       ed_cz_handle(cmd,a,na) || ed_ppg_handle(cmd,a,na)){ed_send();ed_seen_after(cmd,a,na);return;}
     if (ed_parts_handle(cmd, a, na)) { ed_send(); return; }
 
     if (ed_ui_handle(cmd, a, na)) { ed_send(); return; }
@@ -585,6 +589,9 @@ static __attribute__((minsize)) void ed_handle(const uint8_t *f, uint32_t n)   /
         ed_b(0x48);ed_b(1);ed_b(ENGI_HYDRA);ed_b(USER_NATIVE_HYDRA);ed_b(ED_HYDRA);ed_b(HY_BYTES&127u);ed_b(HY_BYTES>>7); /* HYDRA: command 97 */
         ed_b(0x57);ed_b(1);ed_b(ED_HYWAVE);ed_b(HY_USER0);ed_b(HY_UWAVES);ed_b(HY_UMAX); /* HYDRA's user waves: command 98 */
         ed_b(0x45);ed_b(1);ed_b(ED_FEATURES);ed_b(ED_PERF);ed_b(ED_PUSH);ed_b(ED_VOICES);ed_b(ED_FM6_FN);ed_b(PERF_SLOTS); /* editor features */
+#if SAADET_PPG
+        ed_b(0x50);ed_b(1);ed_b(ENGI_PPG);ed_b(USER_NATIVE_PPG);ed_b(ED_PPG);ed_b(PPG_REC&127u);ed_b(PPG_REC>>7); /* PPG: command 102 */
+#endif
         break;
     case ED_GET:
     case ED_SET:

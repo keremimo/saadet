@@ -52,10 +52,15 @@ static const uint8_t star_juno_tag[4] = {'J', '6', 'F', 2};
 static const uint8_t star_scale_tag[4] = {'S', 'C', 'L', 1};
 static const uint8_t star_hydra_tag[4] = {'H', 'Y', 'F', 1};
 
+#if defined(USER_NATIVE_PPG) && defined(SAADET_PPG) && SAADET_PPG
+#define STAR_PPG_SPACE(e) ((e) == USER_NATIVE_PPG)   /* (PPG's user namespace, PPG builds) */
+#else
+#define STAR_PPG_SPACE(e) 0
+#endif
 static int star_user_namespace(uint32_t engine)
 {
     return engine == USER_GENERAL || engine == USER_NATIVE_P5 || engine == USER_NATIVE_FM ||
-           engine == USER_NATIVE_CZ || engine == USER_NATIVE_J106 || engine == USER_NATIVE_HYDRA;
+           engine == USER_NATIVE_CZ || engine == USER_NATIVE_J106 || engine == USER_NATIVE_HYDRA || STAR_PPG_SPACE(engine);
 }
 static int favorite_has(uint32_t engine, uint32_t preset)
 {

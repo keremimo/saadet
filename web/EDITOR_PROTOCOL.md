@@ -26,6 +26,10 @@ performances, 4 the voice budget, 8 a CZ-1 tone into a playing part without a cu
 BUDGET is the instrument's voice budget), then the commands for performances (99), PUSH (100), VOICES (101) and FM6's
 function settings (82), and the number of performances (12). Firmware without the marker has none of these.
 
+Builds with PPG (`SAADET_PPG`) add `50 01 1D 1E 66 73 00` after it: PPG, engine 29, favourites namespace 30, command 102
+and a program of 115 bytes (two digits, low first). Engines 26..28 and 30 are reserved (HYDRA's user namespace, GR's two,
+PPG's user namespace).
+
 | Commands | Purpose |
 |---|---|
 | 1–5, 8, 10 | INFO, parameter get/set/dump/descriptors, preset selection, factory names |
@@ -44,6 +48,7 @@ function settings (82), and the number of performances (12). Firmware without th
 | 96 | Native JUNO-106 transfers |
 | 97 | Native HYDRA transfers |
 | 98 | HYDRA user waves |
+| 102 | Native PPG transfers (PPG builds) |
 | 82 | A part's FM6 function settings and operator switches |
 | 99 | Performances: list, load, store, rename, delete |
 | 100 | PUSH: the parts' native patches and sounds, HYDRA's user waves |
@@ -81,7 +86,7 @@ are 0–383; displayed slots are 1–384.
 Operations are list (0, at most 16 entries), get (1), put (2), store current sound
 (3), load (4), erase (5) and rename (6). Store/load accept only part zero.
 Native payload kinds are FM6 (1, 128 bytes), CZ-1 (2, 144 bytes), Prophet
-(3, 138 bytes), JUNO-106 (4, 31 bytes) and HYDRA (5, 144 bytes). Native data is grouped in seven-byte chunks preceded by the
+(3, 138 bytes), JUNO-106 (4, 31 bytes), HYDRA (5, 144 bytes) and PPG (6, 115 bytes, PPG builds). Native data is grouped in seven-byte chunks preceded by the
 chunk's high-bit mask. Legacy phrase fields in the numeric wire layout remain
 reserved; no phrase is applied or recorded.
 
@@ -126,6 +131,22 @@ operation, part, payload and replies operation (GET and PUT reply 1), result, pa
 Its message is Saadet's own, `F0 7D 48 59 01`, the nibble pairs, `F7`: outside the editor header it auditions the patch and
 waits in SAVE for its slots, as other native dumps do. Favourites use namespace 25 for the presets (INIT, 16 factory sounds)
 and 26 for user slots.
+
+## PPG programs
+
+A program is 115 bytes (`firmware/src/ppg_patch.h` `ppg_patch_t`): group A's 50 bytes in `PG_*` order, group B's 50, KEYB
+(0..8), SPLIT (0..60, keys from the lowest C), the selected group (0 A, 1 B), then a twelve-character space-padded name.
+A group's bytes are the 2.2's own numbers (knobs 0..63, codes by their ranges in `PG_MAX`); SEMI and SEMI2..8 (each voice's
+SEMIT) are stored + 24, ENV 3's AMOUNT + 32. TABLE 31 plays the 2.2's natural sounds. Command 102 takes operation, part,
+payload and replies operation (GET and PUT reply 1), result, part:
+
+- 0 GET: the program as low-first nibble pairs (230 bytes).
+- 1 PUT: the same; the part plays the program.
+- 2 byte edit: byte (0..102), value as two seven-bit digits, low first; refused where the program would leave its ranges.
+- 3 name: 1-12 printable characters.
+- 4: refused (the 2.2 has no single-program message).
+
+Presets are the 2.2's 100 factory programs (preset k is program k) and INIT (100). User slots use namespace 30.
 
 ## HYDRA user waves
 

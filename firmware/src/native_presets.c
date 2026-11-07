@@ -38,4 +38,4 @@ static int legacy_native_used(uint32_t e,uint32_t k)
     const native_fm_t *b=native_fm_bank(k/16u);return native_fm_valid(b) && (b->used>>(k%16u)&1u);
 }
 static const uint8_t *legacy_native_raw(uint32_t e,uint32_t k){(void)e;return native_fm_bank(k/16u)->tone[k%16u];}
-static uint32_t native_size(uint32_t e){return e==ENGI_PROPHET?sizeof(p5_patch_t):e==ENGI_FM6?FM6_PACKED:e==ENGI_J106?sizeof(j106_patch_t):e==ENGI_HYDRA?sizeof(hy_patch_t):CZ_BYTES;}
+static uint32_t native_size(uint32_t e){return e==ENGI_PROPHET?sizeof(p5_patch_t):e==ENGI_FM6?FM6_PACKED:e==ENGI_J106?sizeof(j106_patch_t):e==ENGI_HYDRA?sizeof(hy_patch_t):PPG_ON(e)?PPG_REC:CZ_BYTES;}

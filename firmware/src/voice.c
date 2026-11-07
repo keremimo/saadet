@@ -683,6 +683,8 @@ static VOICE_EVENT void trk_note_on_work(track_t *t, uint32_t note, uint32_t vel
         t->lfo_fade = 0;
     }
     if (mode == V_POLY) {
+        if (ENGINES[t->engine]->poly_key)
+            ENGINES[t->engine]->poly_key(t, note);
         AP_START(alloc_start);voice_t *v = voice_alloc(t, note);AP_END(AP_ALLOC,alloc_start);
         if (!v) {
             voice_wait(t, note, vel);
