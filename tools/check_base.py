@@ -84,6 +84,12 @@ report={'app_bytes':len(image),'low_ram_bytes':sym('_bss_end')-0x1c08000,
         'engine_arena_bytes':sym('_resource_end')-sym('_resource_start'),
         'package_sha256':hashlib.sha256(package.read_bytes()).hexdigest()}
 (OUT/(package.stem+'-validation.json')).write_text(json.dumps(report,indent=2)+'\n')
+if os.environ.get('SAADET_BOARD')=='smk37':
+    smk=(BASE/'device/plat_smk37.c').read_text()
+    assert smk.count('plat_store_save(')==1 and \
+        'fm1_ms - smk_master_t >= SMK_MASTER_SAVE_MS && !app_sounding()) {' in smk,'MASTER\'s flash save must wait for quiet'
+    assert 'int app_sounding(void){return saadet_sounding();}' in app and \
+        'int saadet_sounding(void){return sounding();}' in (ROOT/'platform/instrument.c').read_text()
 print('Saadet target checks passed: CPU1, bootstrap PC guards, SRAM code, packed image, arena, boot layout')
 print(json.dumps(report))
 # Licences: every repository file compiled into this build must be MPL-2.0 or permissive; no GPL exceptions.

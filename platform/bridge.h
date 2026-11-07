@@ -91,6 +91,7 @@ void sd_smk_lights(uint32_t extra, const uint32_t *pad_rgb);
 void sd_master_set(uint32_t q12);
 int32_t sd_k5(int lend);   /* K5 lent (1): its detents since the last call, and it turns no MASTER; 0: MASTER's */
 void sd_smk_config(uint32_t vel, uint32_t trs_off);
+int saadet_sounding(void); /* a note sounding: the base's MASTER save waits, as settings_poll does (a flash write stops the audio) */
 #endif
 
 void saadet_deadline(uint32_t us,uint32_t budget);

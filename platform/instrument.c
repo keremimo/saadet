@@ -279,6 +279,9 @@ void saadet_render(int32_t *out,uint32_t n,uint32_t gain)
     midi_render_timed=0;
 }
 void saadet_input_only(void){sd_poll();ui_input();}
+#ifdef SAADET_SMK37
+int saadet_sounding(void){return sounding();}
+#endif
 void saadet_frame(void)
 {
     sd_poll();song.batt_raw=(int16_t)sd_battery();

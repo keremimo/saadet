@@ -202,12 +202,18 @@ int32_t plat_k5_lend(int on)
 }
 static void smk_main_poll(void)''')
         s=replace(s,'    int32_t s = fm1_enc_take(SMK_MASTER_ENC);\n','    int32_t s = smk_k5_lent ? 0 : fm1_enc_take(SMK_MASTER_ENC);\n')
-        p.write_text('/* Saadet pedal rest fix and K5 lending Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
+        # MASTER's level is kept in the panel object 2 s after the last turn. A flash write stops the audio (3 missed
+        # renders for each write under held notes, measured on an Elite 2026-11-05: docs/SMK37_PORT.md), so a turn with a
+        # note held sounded broken. The save waits for quiet, as Saadet's settings writes do; the level applies at once.
+        s=replace(s,'    if (smk_master_t && fm1_ms - smk_master_t >= SMK_MASTER_SAVE_MS) {\n',
+            '    if (smk_master_t && fm1_ms - smk_master_t >= SMK_MASTER_SAVE_MS && !app_sounding()) {\n')
+        p.write_text('/* Saadet pedal rest fix, K5 lending and the quiet MASTER save Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
         p=work/'include/plat.h';s=p.read_text()
         s=replace(s,"void plat_master_set(uint32_t q12);    /* the virtual MASTER's level, 0..4096 */\n",
                   "void plat_master_set(uint32_t q12);    /* the virtual MASTER's level, 0..4096 */\n"
-                  "int32_t plat_k5_lend(int on);         /* Saadet: on, K5 turns no MASTER; its detents since the last call */\n")
-        p.write_text('/* Saadet K5 lending Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
+                  "int32_t plat_k5_lend(int on);         /* Saadet: on, K5 turns no MASTER; its detents since the last call */\n"
+                  "int app_sounding(void);               /* Saadet: a note sounding; MASTER's save waits for quiet */\n")
+        p.write_text('/* Saadet K5 lending and the quiet MASTER save Copyright (C) 2026 Kerem Kilic (Ellic Studio) */\n'+s)
     p=work/'tools/build.py';s=p.read_text()
     s=replace(s,'    img = bytearray((OUT / "text.bin").read_bytes())', '    tc("common/bin/objcopy", "-O", "binary", "-j", ".audio_text", elf, OUT / "audio.bin")\n    img = bytearray((OUT / "text.bin").read_bytes())')
     s=replace(s,'    (OUT / (NAME + ".dis")).write_text(dis)', '    (OUT / (NAME + ".dis")).write_text(dis)\n    (OUT / (NAME + ".symbols")).write_text(syms)')
