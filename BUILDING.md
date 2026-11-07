@@ -149,6 +149,12 @@ licence bundle, checksums and static installer site. Commit the complete source 
 records the source file hashes and pinned dependency revisions; changed firmware, dirty source or a mismatched
 source archive is refused. The source ZIP includes the exact fm1-base and felucca-bsp source copies as well.
 
+It also builds the three SMK-37 packages (Pro, Elite, MKE-P37) from the same commit on the board layer pinned as
+`SMK_SOURCE` in `tools/build_base.py`, so that checkout must be present and clean; the source ZIP carries its copy
+under `dependencies/fm1-base-smk37/`. An SMK-37 release identity ends in three digits at most, for compatibility:
+`_9`, then the major and minor version one digit each (`SMK-37 Elite_910` for 1.0.0; a patch release keeps it). The site's `release.json` lists a package per model, and the installer installs
+the one whose model the connected device's identity names (never its port name). `--no-smk` leaves them out.
+
 ```sh
 build/venv/bin/python tools/prepare_public_release.py 1.0.0
 python3 -m http.server 8846 --bind 127.0.0.1 --directory build/releases/1.0.0/site

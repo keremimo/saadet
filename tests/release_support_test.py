@@ -81,6 +81,33 @@ class ReleaseSupportTest(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "does not match"):
             R.validate_source_archive(archive, "0.1.0", self.receipt)
 
+    def test_smk37_board_layer_is_archived_with_each_receipt(self):
+        smk_base = repository(self.folder / "smk", {"LICENSE": "MPL-2.0", "board.c": "smk board\n", ".gitignore": "bsp/\n"})
+        smk_bsp = repository(smk_base / "bsp", {"LICENSE": "MPL-2.0", "smk37.c": "smk bsp\n"})
+        revs = [command(r, "rev-parse", "HEAD").decode().strip() for r in (smk_base, smk_bsp)]
+        receipts = []
+        for name, product in (("saadet-smk37-elite-0.1.0.fwsc", "SMK-37 Elite_901"),
+                              ("saadet-smk37-mke-0.1.0.fwsc", "MKE-P37_901")):
+            package = self.root / "build" / name
+            package.write_bytes(product.encode())
+            receipts.append(R.record_build(self.root, package, R.source_state(self.root), "0.1.0", product, True, *revs))
+        archive = self.folder / "source.zip"
+        R.make_source_archive(self.root, "0.1.0", archive, self.receipt, self.base, receipts, smk_base)
+        info = R.validate_source_archive(archive, "0.1.0", self.receipt, receipts)
+        self.assertEqual(info["smk37_dependencies"], {"fm1-base": revs[0], "felucca-bsp": revs[1]})
+        prefix = "saadet-0.1.0-source/"
+        with zipfile.ZipFile(archive) as source:
+            self.assertEqual(source.read(prefix + "dependencies/fm1-base-smk37/board.c"), b"smk board\n")
+            self.assertEqual(source.read(prefix + "dependencies/fm1-base-smk37/bsp/smk37.c"), b"smk bsp\n")
+            self.assertIn(b"fm1-base-smk37", source.read(prefix + "SOURCE_README.txt"))
+            self.assertIn(prefix + "SOURCE_INFO-saadet-smk37-mke-0.1.0.json", source.namelist())
+        with self.assertRaisesRegex(SystemExit, "different board layer"):
+            R.make_source_archive(self.root, "0.1.0", self.folder / "b.zip", self.receipt, self.base,
+                                  [receipts[0], {**receipts[1], "dependencies": {"fm1-base": "x", "felucca-bsp": "y"}}],
+                                  smk_base)
+        with self.assertRaisesRegex(SystemExit, "metadata differs"):
+            R.validate_source_archive(archive, "0.1.0", self.receipt, [{**receipts[0], "product": "SMK-37 Pro_901"}])
+
     def test_source_changed_during_build_has_no_receipt(self):
         before = R.source_state(self.root)
         (self.root / "app.c").write_text("changed while compiling\n")

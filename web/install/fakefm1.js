@@ -1,19 +1,22 @@
 // SPDX-License-Identifier: MPL-2.0
 // Copyright (C) 2026 Kerem Kilic (Ellic Studio)
 //
-// A simulated FM-1 behind a Web MIDI access object, for the installer's demo (?demo) and its tests. It speaks the
+// A simulated FM-1 or SMK-37 behind a Web MIDI access object, for the installer's demo (?demo) and its tests. It speaks the
 // update protocol as felucca-bsp's chip/ota.c and loader do: the identity on the handshake; on the upgrade
 // message, read requests (cmd 0x30) answered within 3 tries of 5 s, then the "success" question; a restart (the
 // port goes away, then comes back). Step 1 (the running firmware) reads a little and restarts into the update
-// loader ("ota-FM-1_015"); step 2 (the loader) reads the image twice and restarts into the new firmware. Served
+// loader ("ota-FM-1_015"; an SMK-37's: fm1-base's, "ota-SMK-37 Elite_900"); step 2 (the loader) reads the image twice and restarts into the new firmware. Served
 // m-bootloader's installer instead, step 1 restarts into the same firmware. The device tells the two packages
 // apart by their first bytes, as the real one reads their headers. Nothing is written anywhere.
 //
-//   fakeAccess({ images, identity, after, state, interruptAt, stride, timers }) -> { access, device }
+//   fakeAccess({ images, model, identity, after, state, loader, port, interruptAt, stride, timers }) -> { access, device }
 //     images       { firmware, boot }: the logical images the page serves (boot optional)
+//     model        "FM-1" (default), "SMK-37 Pro", "SMK-37 Elite" or "MKE-P37": its port names and update loader
 //     identity     what the running firmware reports ("FM-1_016": M-VAVE's own)
 //     after        what it reports after a write (the package's identity)
 //     state        "app" (default) or "loader" (an install was interrupted: the device waits in update mode)
+//     loader       the update loader's identity (default: the model's, above; "ota-SMK-37 Elite_016": M-VAVE's)
+//     port         one port name for every state, as macOS shows a name it cached for another firmware or model
 //     interruptAt  0..1: step 2 loses the cable at that share of its reads, once (the device stays in update mode)
 //     stride       reads only every stride-th block of a pass (a quicker demo; 1 = all)
 //     timers       { set, clear }: the device's own clock (the tests throttle the page's, not the device's)
@@ -22,9 +25,15 @@ import { pack7, unpack7 } from "./fm1ota.js";
 
 const HS_QUERY = [0xF0, 0x00, 0x32, 0x45, 0x00, 0x00, 0x00, 0x40, 0x7F, 0xF7];
 const HS_FULL = [0xF0, 0x00, 0x32, 0x45, 0x08, 0x00, 0x00, 0x40, 0x00, 0x7E, 0x01, 0xF7];
-const ON_THE_BASE = /^FM-1_9\d{6}$/;           // a firmware on felucca-bsp's chip/ota.c: its whole identity only when asked so
+const ON_THE_BASE = /^[^_]+_9\d{6}$/;         // a firmware on felucca-bsp's chip/ota.c: its whole identity only when asked so
 const UPGRADE = [0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7];
-const LOADER_ID = "ota-FM-1_015";
+// the model's port names (running Saadet, M-VAVE's firmware, in update mode) and its update loader
+const MODELS = {
+  "FM-1": { app: "Saadet FM-1", stock: "FM-1", loader: "FM-1", id: "ota-FM-1_015" },
+  "SMK-37 Pro": { app: "Saadet Pro SMK-37", stock: "SMK-37 Pro Midi", loader: "Felucca Update", id: "ota-SMK-37 Pro_900" },
+  "SMK-37 Elite": { app: "Saadet Elite SMK-37", stock: "SMK-37 Elite Midi", loader: "Felucca Update", id: "ota-SMK-37 Elite_900" },
+  "MKE-P37": { app: "Saadet MKE SMK-37", stock: "MKE-P37 MIDI", loader: "Felucca Update", id: "ota-MKE-P37_900" },
+};
 const BLOCK = 512, TRY_MS = 5000, TRIES = 3;
 const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 
@@ -75,6 +84,9 @@ class Device {
   constructor(o) {
     this.clock = o.timers || { set: (f, ms) => setTimeout(f, ms), clear: (t) => clearTimeout(t) };
     this.images = o.images || {};
+    this.model = MODELS[o.model || "FM-1"];
+    this.loaderId = o.loader || this.model.id;
+    this.port = o.port || null;
     this.identity = o.identity || "FM-1_016";
     this.after = o.after || this.identity;
     this.state = o.state || "app";
@@ -85,8 +97,8 @@ class Device {
     this.log = [];                            // what the device did, in words
     this.reply = null;                        // the pending read's resolver
     this.busy = false;
-    this.input = new Port(this, "Saadet FM-1", "input");
-    this.output = new Port(this, "Saadet FM-1", "output");
+    this.input = new Port(this, this.portName(), "input");
+    this.output = new Port(this, this.portName(), "output");
   }
 
   emit(bytes) {
@@ -94,11 +106,17 @@ class Device {
     if (h && this.online) h({ data: Uint8Array.from(bytes), timeStamp: performance.now() });
   }
 
-  get text() { return this.state === "loader" ? LOADER_ID : this.identity; }
+  get text() { return this.state === "loader" ? this.loaderId : this.identity; }
+
+  portName() {
+    if (this.port) return this.port;
+    if (this.state === "loader") return this.model.loader;
+    return /_0\d\d$/.test(this.identity) ? this.model.stock : this.model.app;
+  }
 
   receive(bytes) {
     if (!this.online) return;
-    if (same(bytes, HS_QUERY)) { this.emit(identityFrame(ON_THE_BASE.test(this.text) ? this.text.slice(0, 8) : this.text)); return; }
+    if (same(bytes, HS_QUERY)) { this.emit(identityFrame(ON_THE_BASE.test(this.text) ? this.text.slice(0, this.text.indexOf("_") + 4) : this.text)); return; }
     if (same(bytes, HS_FULL)) { if (ON_THE_BASE.test(this.text)) this.emit(identityFrame(this.text)); return; }
     if (same(bytes, UPGRADE)) { if (!this.busy) this.session(); return; }
     if (this.reply && bytes[0] === 0xF0) {
@@ -125,7 +143,7 @@ class Device {
     this.online = false;
     this.state = state;
     if (identity) this.identity = identity;
-    this.input.name = this.output.name = state === "loader" ? "FM-1" : "Saadet FM-1";
+    this.input.name = this.output.name = this.portName();
     return new Promise((r) => this.clock.set(() => { this.online = true; r(); }, ms));
   }
 

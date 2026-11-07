@@ -9,7 +9,7 @@ import {createHash} from 'node:crypto';
 import {Updater} from './install/fm1ota.js';
 import {SteadyUpdater, GAP_MS} from './install/transfer.js';
 import {fakeAccess} from './install/fakefm1.js';
-import {describeDevice, planFor, progressModel, afterFailure, releaseVersion, remaining} from './install/flow.js';
+import {PORTS, describeDevice, planFor, progressModel, afterFailure, releaseVersion, remaining} from './install/flow.js';
 
 const realSet = globalThis.setTimeout, realClear = globalThis.clearTimeout;
 /* the page's clock in a background tab: nothing sooner than THROTTLE ms. Waits of a second or more (fm1ota.js's
@@ -22,7 +22,8 @@ function throttle() {
 }
 const image = (n, seed) => { const b = new Uint8Array(n); for (let i = 0; i < n; i++) b[i] = (i * 31 + seed * 17 + (i >> 9)) & 0xFF; return b; };
 const firmware = image(0x8000, 1), boot = image(0x1000, 2);
-const PRODUCT = 'FM-1_9010000';
+const PRODUCT = 'FM-1_9010000', ELITE = 'SMK-37 Elite_910';
+const PRODUCTS = {'FM-1': PRODUCT, 'SMK-37 Pro': 'SMK-37 Pro_910', 'SMK-37 Elite': ELITE, 'MKE-P37': 'MKE-P37_910'};
 
 { /* a full install from M-VAVE's firmware, in a throttled page: every answer leaves at once, timestamped */
   const {access, device: fm1} = fakeAccess({images: {firmware, boot}, identity: 'FM-1_016', after: PRODUCT, timers: device});
@@ -86,18 +87,73 @@ const PRODUCT = 'FM-1_9010000';
   console.log('interrupted install resumed in update mode');
 }
 
+{ /* an SMK-37 Elite on M-VAVE's firmware: its port is none of fm1-base's usual names, so the page asks it by the
+     SMK-37's; it installs the Elite's package through fm1-base's SMK loader and comes back running it */
+  const {access} = fakeAccess({images: {firmware}, model: 'SMK-37 Elite', identity: 'SMK-37 Elite_016', after: ELITE, timers: device});
+  assert.equal(await new SteadyUpdater(access).find(), null, 'without the SMK-37 names its port is never asked');
+  const up = new SteadyUpdater(access);
+  up.setNames(PORTS);
+  const found = await up.find();
+  assert.equal(found?.id.text, 'SMK-37 Elite_016');
+  found.link.close();
+  const wrong = await up.install(firmware, PRODUCT, () => {}).then(() => null, (e) => e);
+  assert.equal(wrong?.code, 'model', 'the FM-1 package is refused on an SMK-37');
+  const restore = throttle();
+  const got = await up.install(firmware, ELITE, () => {});
+  restore();
+  assert.equal(got, ELITE);
+  const back = await up.find();
+  back.link.close();
+  assert.deepEqual(describeDevice(back.id, PRODUCTS), {kind: 'this', model: 'SMK-37 Elite', version: '1.0'});
+  console.log('SMK-37 Elite install from stock, found by its port name');
+}
+
+{ /* the model is the one the device answers, never its port's name: an SMK-37 Elite behind a name macOS cached for
+     an FM-1 is an SMK-37 Elite, takes only the Elite's package, and comes back as one */
+  const {access} = fakeAccess({images: {firmware}, model: 'SMK-37 Elite', identity: 'SMK-37 Elite_016', after: ELITE,
+                               port: 'Saadet FM-1', timers: device});
+  const up = new SteadyUpdater(access);
+  up.setNames(PORTS);
+  const found = await up.find();
+  found.link.close();
+  assert.equal(found.name, 'Saadet FM-1');
+  assert.deepEqual(describeDevice(found.id, PRODUCTS), {kind: 'stock', model: 'SMK-37 Elite', version: 'V16'});
+  assert.equal((await up.install(firmware, PRODUCT, () => {}).then(() => null, (e) => e))?.code, 'model');
+  const restore = throttle();
+  assert.equal(await up.install(firmware, ELITE, () => {}), ELITE);
+  restore();
+  console.log('model taken from the identity the device answers, not its cached port name');
+}
+
 { /* the installer's decisions */
   assert.equal(releaseVersion('FM-1_9010000'), '1.0');
   assert.equal(releaseVersion('FM-1_9010203'), '1.2.3');
   assert.equal(releaseVersion('FM-1_900'), null);
-  const d = (text, extra = {}) => describeDevice({text, model: text.split('_')[0], ...extra}, PRODUCT);
-  assert.deepEqual(d('FM-1_016'), {kind: 'stock', version: 'V16'});
-  assert.deepEqual(d(PRODUCT), {kind: 'this', version: '1.0'});
-  assert.deepEqual(d('FM-1_9000900'), {kind: 'saadet', version: '0.9'});
+  assert.equal(releaseVersion(ELITE, 'SMK-37 Elite_9', true), '1.0');
+  assert.equal(releaseVersion('SMK-37 Elite_9010000', 'SMK-37 Elite_9', true), null);
+  assert.equal(releaseVersion('FM-1_910'), null);
+  const d = (text, extra = {}) => describeDevice({text, model: text.split('_')[0], ...extra}, PRODUCTS);
+  assert.deepEqual(d('FM-1_016'), {kind: 'stock', model: 'FM-1', version: 'V16'});
+  assert.deepEqual(d(PRODUCT), {kind: 'this', model: 'FM-1', version: '1.0'});
+  assert.deepEqual(d('FM-1_9000900'), {kind: 'saadet', model: 'FM-1', version: '0.9'});
   assert.equal(d('FM-1_900').kind, 'dev');
-  assert.equal(d('ota-FM-1_015').kind, 'loader');
+  assert.deepEqual(d('ota-FM-1_015'), {kind: 'loader', model: 'FM-1'});
+  assert.deepEqual(d('ota-FM1C_1a2b'), {kind: 'loader', model: 'FM-1'});
   assert.equal(d('FM1_OFFICIAL_OPEN', {open: true}).kind, 'open');
   assert.equal(d('FM-1_6000900').kind, 'other');
+  /* the SMK-37s: each by its own model, in update mode only through fm1-base's loader */
+  assert.deepEqual(d('SMK-37 Elite_016'), {kind: 'stock', model: 'SMK-37 Elite', version: 'V16'});
+  assert.deepEqual(d('SMK-37 Pro_015'), {kind: 'stock', model: 'SMK-37 Pro', version: 'V15'});
+  assert.deepEqual(d('MKE-P37_910'), {kind: 'this', model: 'MKE-P37', version: '1.0'});
+  assert.deepEqual(d('SMK-37 Elite_909'), {kind: 'saadet', model: 'SMK-37 Elite', version: '0.9'});
+  assert.equal(d('SMK-37 Elite_9010000').kind, 'other');
+  assert.equal(d('SMK-37 Elite_900').kind, 'dev');
+  assert.deepEqual(d('ota-SMK-37 Elite_900'), {kind: 'loader', model: 'SMK-37 Elite'});
+  assert.deepEqual(d('ota-SMK-37 Elite_016'), {kind: 'vendor', model: 'SMK-37 Elite', text: 'ota-SMK-37 Elite_016'});
+  assert.equal(d('SMK-37 Elite_91405').kind, 'other');
+  assert.deepEqual(d('Keystep_100'), {kind: 'model', model: 'Keystep', text: 'Keystep_100'});
+  assert.equal(describeDevice({text: 'SMK-37 Elite_016', model: 'SMK-37 Elite'}, {'FM-1': PRODUCT}).kind, 'model');
+  assert.equal(planFor('vendor', false), null);
   assert.deepEqual(planFor('stock', false), {firmware: true, resume: false, boot: false});
   assert.deepEqual(planFor('this', true), {firmware: false, resume: false, boot: true});
   assert.deepEqual(planFor('loader', true), {firmware: true, resume: true, boot: true});

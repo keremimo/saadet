@@ -102,20 +102,43 @@ def _archive_repository(archive, root, prefix, timestamp):
             archive.writestr(info, data)
 
 
-def make_source_archive(root, version, output, receipt, base):
+def smk_info_name(receipt):
+    """an SMK-37 package's receipt in the source archive: SOURCE_INFO-<its package's stem>.json"""
+    return f"SOURCE_INFO-{Path(receipt['package']).stem}.json"
+
+
+def make_source_archive(root, version, output, receipt, base, smk=(), smk_base=None):
+    """smk: the SMK-37 packages' receipts, built from the same source on the board layer at smk_base (one revision)"""
     state = source_state(root)
     if state["dirty"] or state != receipt["source"]:
         raise SystemExit("Source no longer matches the clean firmware build.")
-    for name, repo in (("fm1-base", base), ("felucca-bsp", base / "bsp")):
-        if git(repo, "rev-parse", "HEAD").decode().strip() != receipt["dependencies"][name] or git(repo, "status", "--porcelain"):
-            raise SystemExit(f"Pinned {name} source changed; cannot archive a matching dependency.")
+    if any(r["source"] != receipt["source"] for r in smk):
+        raise SystemExit("The SMK-37 packages were not built from the FM-1 package's source.")
+    if len({json.dumps(r["dependencies"], sort_keys=True) for r in smk}) > 1:
+        raise SystemExit("The SMK-37 packages were built on different board layer revisions.")
+    deps = [(receipt, base)] + ([(smk[0], smk_base)] if smk else [])
+    for r, repo_base in deps:
+        for name, repo in (("fm1-base", repo_base), ("felucca-bsp", repo_base / "bsp")):
+            if git(repo, "rev-parse", "HEAD").decode().strip() != r["dependencies"][name] or git(repo, "status", "--porcelain"):
+                raise SystemExit(f"Pinned {name} source changed; cannot archive a matching dependency.")
     prefix = f"saadet-{version}-source/"
     timestamp = time.gmtime(int(git(root, "show", "-s", "--format=%ct", "HEAD")))[:6]
+    smk_readme = "" if not smk else (
+        "The SMK-37 packages (beta) were built from the same source on the SMK-37\n"
+        "board layer, whose exact copy is under dependencies/fm1-base-smk37/ and its\n"
+        "bsp/; SOURCE_INFO-*.json records each package. Rebuild one with\n"
+        f"./build.sh --board smk37 --model pro|elite|mke --release {version},\n"
+        "with that copy where tools/build_base.py's SMK_SOURCE points.\n")
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         _archive_repository(archive, root, prefix, timestamp)
         _archive_repository(archive, base, prefix + "dependencies/fm1-base/", timestamp)
         _archive_repository(archive, base / "bsp", prefix + "dependencies/fm1-base/bsp/", timestamp)
         archive.writestr(prefix + "SOURCE_INFO.json", json.dumps(receipt, indent=2) + "\n")
+        if smk:
+            _archive_repository(archive, smk_base, prefix + "dependencies/fm1-base-smk37/", timestamp)
+            _archive_repository(archive, smk_base / "bsp", prefix + "dependencies/fm1-base-smk37/bsp/", timestamp)
+            for r in smk:
+                archive.writestr(prefix + smk_info_name(r), json.dumps(r, indent=2) + "\n")
         archive.writestr(prefix + "SOURCE_README.txt", f"""Saadet {version} matching firmware source
 
 Application commit: {state['commit']}
@@ -124,7 +147,7 @@ Package SHA-256: {receipt['package_sha256']}
 The application source is at this directory's root. Exact fm1-base and
 felucca-bsp source copies are under dependencies/fm1-base/ and its bsp/.
 SOURCE_INFO.json records the revisions and application file hashes.
-
+{smk_readme}
 Follow BUILDING.md to rebuild with ./build.sh --release {version}.
 The wrapper fetches the recorded revisions into build/deps/.
 The JieLi compiler and SDK must be installed separately as described there;
@@ -136,10 +159,10 @@ Factory sound data retains its vendor attribution and separate terms.
 """)
     if source_state(root) != state:
         raise SystemExit("Source changed while assembling its release archive.")
-    validate_source_archive(output, version, receipt)
+    validate_source_archive(output, version, receipt, smk)
 
 
-def validate_source_archive(path, version, receipt):
+def validate_source_archive(path, version, receipt, smk=()):
     prefix = f"saadet-{version}-source/"
     with zipfile.ZipFile(path) as archive:
         if archive.testzip():
@@ -150,8 +173,19 @@ def validate_source_archive(path, version, receipt):
         for name, digest in receipt["source"]["files"].items():
             if sha256(archive.read(prefix + name)) != digest:
                 raise SystemExit(f"Source archive does not match the firmware: {name}")
-        for name in ("dependencies/fm1-base/LICENSE", "dependencies/fm1-base/bsp/LICENSE"):
+        names = ["dependencies/fm1-base/LICENSE", "dependencies/fm1-base/bsp/LICENSE"]
+        if smk:
+            names += ["dependencies/fm1-base-smk37/LICENSE", "dependencies/fm1-base-smk37/bsp/LICENSE"]
+        for name in names:
             if prefix + name not in archive.namelist():
                 raise SystemExit("Dependency source/notices missing from the source archive.")
-    return {"sha256": sha256(path.read_bytes()), "commit": receipt["source"]["commit"],
+        for r in smk:
+            if r["source"] != receipt["source"]:
+                raise SystemExit("An SMK-37 package was not built from the FM-1 package's source.")
+            if prefix + smk_info_name(r) not in archive.namelist() or json.loads(archive.read(prefix + smk_info_name(r))) != r:
+                raise SystemExit(f"Source archive metadata differs from the build receipt of {r['package']}.")
+    info = {"sha256": sha256(path.read_bytes()), "commit": receipt["source"]["commit"],
             "licence": "MPL-2.0", "dependencies": receipt["dependencies"]}
+    if smk:
+        info["smk37_dependencies"] = smk[0]["dependencies"]
+    return info

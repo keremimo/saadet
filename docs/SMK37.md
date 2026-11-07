@@ -70,8 +70,10 @@ GLOBAL > KEYS has VELOCITY (NORMAL, SOFT, HARD, FIXED), PADS (their brightness) 
 
 ## Install
 
-Install the package for your model. Each is refused on any other model. Have the manufacturer's package and updater for your model
-ready: they are the way back to stock.
+Install it from [the web installer](https://keremimo.github.io/saadet/install/), as on the FM-1: it asks the connected keyboard
+which model it is and installs that model's package. Each package is also refused on any other model by the keyboard itself.
+Have the manufacturer's package and updater for your model ready: they are the way back to stock. m-bootloader is the FM-1's
+only.
 
 The first start clears what other firmware left in the shared store. It never touches the Bluetooth pairing, the factory
 calibration, the stock resources or the key area.

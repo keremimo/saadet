@@ -216,6 +216,13 @@ static void smk_main_poll(void)''')
         # FM-1's tools read platform/build's saadet.bin.
         s=replace(s,'CONF = read_conf(APP / "fm1.toml")','CONF = read_conf(SRC / "saadet-fm1.toml")')
         s=replace(s,'    OUT = APP / "build"\n','    OUT = APP / "build" / f"smk37-{MODEL}"\n')
+        # A release's identity ends in three digits at most on the SMK-37 (compatibility): its prefix's 9, then the major
+        # and minor version one digit each ("SMK-37 Elite_910" for 1.0.x; a patch release keeps its minor's identity).
+        # The development build's stays "SMK-37 Elite_900".
+        s=replace(s,'        PRODUCT = prefix + "%02d%02d%02d" % (int(m[1]), int(m[2]), int(m[3] or 0))\n',
+            '        if int(m[1]) > 9 or int(m[2]) > 9:\n'
+            '            raise SystemExit(f"--release {a.release}: an SMK-37 identity has one digit each for the major and minor")\n'
+            '        PRODUCT = prefix + "%d%d" % (int(m[1]), int(m[2]))\n')
     p.write_text(s)
     # boot_pack: the resident audio code is a load image too, and much the largest. Its own record after .data's.
     p=work/'tools/boot_pack.py';s=p.read_text()

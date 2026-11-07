@@ -5,8 +5,8 @@
      Portions Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
      Saadet's web installer: connect, choose, install, with the install itself in a screen of its own that asks the
      player to stay. After fm1-base's web/installer.html (its m-bootloader option, stock firmware and crash report).
-     The firmware and m-bootloader come from release.json beside this page (tools/make_site.py); ?demo runs the
-     same page against a simulated FM-1 (fakefm1.js). Logic: installer.js; transfer: transfer.js. -->
+     The firmware for each model (the FM-1 and the SMK-37s) and m-bootloader come from release.json beside this page
+     (tools/make_site.py); ?demo runs the same page against a simulated FM-1, ?demo=smk an SMK-37 Elite (fakefm1.js). Logic: installer.js; transfer: transfer.js. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -98,7 +98,8 @@
   .device svg.i { width: 28px; height: 28px; }
   .device .what { flex: 1; min-width: 0; line-height: 1.35; }
   .device .what b { display: block; font-weight: 620; }
-  .device .what span { color: var(--dim); font-size: 14px; }
+  .device .what > span { color: var(--dim); font-size: 14px; }
+  .device .what .tag { margin-left: 6px; vertical-align: 2px; }
   .chip { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; background: var(--card); color: var(--dim); }
   .chip.ok { background: var(--ok-bg); color: var(--ok); }
   .chip.warn { background: var(--warn-bg); color: var(--warn); }
@@ -214,7 +215,7 @@
   <symbol id="i-fm1" viewBox="0 0 24 24"><rect x="1.5" y="6" width="21" height="12" rx="2"/><path d="M4.5 9h5v2.5h-5zM13 9.5h.01M16 9.5h.01M19 9.5h.01M5 14v4M8.5 14v4M12 14v4M15.5 14v4M19 14v4"/></symbol>
 </svg>
 
-<div class="demo" id="demo" hidden><span data-t="demo">Demo: a simulated FM-1. Nothing is written.</span> <a href="./" data-t="demoleave">Leave the demo</a></div>
+<div class="demo" id="demo" hidden><span data-t="demo">Demo: a simulated instrument. Nothing is written.</span> <a href="./" data-t="demoleave">Leave the demo</a></div>
 
 <header class="site">
   <a class="brand" href="https://saadet.ellicstudio.com">Saadet</a>
@@ -227,7 +228,7 @@
 
 <main>
   <section class="hero">
-    <p class="kicker" data-t="kicker">Firmware for the M-VAVE FM-1</p>
+    <p class="kicker" data-t="kicker">Firmware for the M-VAVE FM-1 and SMK-37</p>
     <h1><span data-t="title">Install Saadet</span> <span class="v" id="hver"></span></h1>
     <p class="lede" data-t="lede">Six engines on two parts: Prophet, FM6, CZ-1, JUNO-106, HYDRA and PPG, installed over USB from this page.</p>
     <ul class="facts">
@@ -239,7 +240,7 @@
 
   <div class="banner" id="resumebanner" hidden>
     <svg class="i"><use href="#i-pause"/></svg>
-    <p><b data-t="resumeBannerH">An installation didn't finish.</b> <span data-t="resumeBanner">Your FM-1 is waiting in update mode. Connect it and press Find FM-1 to finish.</span></p>
+    <p><b data-t="resumeBannerH">An installation didn't finish.</b> <span data-t="resumeBanner">Your FM-1 is waiting in update mode. Connect it and press Find device to finish.</span></p>
   </div>
   <div class="banner" id="pagefail" hidden role="alert">
     <svg class="i"><use href="#i-alert"/></svg>
@@ -249,15 +250,15 @@
   <ol class="steps">
     <li class="step" id="st-connect" data-state="active">
       <div>
-        <h2 data-t="s1h">Connect the FM-1</h2>
+        <h2 data-t="s1h">Connect the FM-1 or SMK-37</h2>
         <p data-t="s1p">Plug it straight into this computer, without a hub, and switch it on. Close other music apps and editor tabs. When the browser asks to use MIDI devices, choose Allow.</p>
         <div class="device" id="device" hidden>
           <svg class="i"><use href="#i-fm1"/></svg>
-          <div class="what"><b>FM-1</b><span id="devwhat"></span></div>
+          <div class="what"><b><span id="devname">FM-1</span><span class="tag" id="devbeta" hidden data-t="beta">beta</span></b><span id="devwhat"></span></div>
           <span class="chip" id="devchip"></span>
         </div>
         <p class="msg" id="connmsg" role="alert"></p>
-        <button type="button" class="btn" id="find"><span data-t="find">Find FM-1</span></button>
+        <button type="button" class="btn" id="find"><span data-t="find">Find device</span></button>
       </div>
     </li>
 
@@ -280,7 +281,7 @@
         <h2 data-t="s3h">Install</h2>
         <p id="plantext" data-t="s3p">Back up your sounds first: Device, then Back up now, in Saadet Studio.</p>
         <button type="button" class="btn primary big" id="go" disabled></button>
-        <p class="small" id="gohint" data-t="gohint">Find your FM-1 first.</p>
+        <p class="small" id="gohint" data-t="gohint">Find your FM-1 or SMK-37 first.</p>
       </div>
     </li>
   </ol>
@@ -289,8 +290,8 @@
     <details id="d-resume">
       <summary data-t="mResumeH">If an installation stopped</summary>
       <div class="in">
-        <p data-t="mResume1">Nothing is lost. Until an installation finishes, the FM-1 starts in update mode: its screen shows UPDATING, or stays dark. That holds even after switching it off.</p>
-        <p data-t="mResume2">Connect it, open this page and press Find FM-1. The page offers to resume, and continues from the start of the write.</p>
+        <p data-t="mResume1">Nothing is lost. Until an installation finishes, the FM-1 or SMK-37 starts in update mode: its screen shows UPDATING, or stays dark. That holds even after switching it off.</p>
+        <p data-t="mResume2">Connect it, open this page and press Find device. The page offers to resume, and continues from the start of the write.</p>
       </div>
     </details>
     <details id="d-stock">
@@ -300,8 +301,9 @@
         <ol>
           <li><span data-t="mStock2">Download M-VAVE's firmware:</span> <a href="https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/firmware/FM-1.fwsc">FM-1.fwsc</a></li>
           <li><label for="stockfile" data-t="mStock3">Choose the file you downloaded:</label><br><input type="file" id="stockfile" accept=".fwsc"></li>
-          <li data-t="mStock4">Connect the FM-1, press Find FM-1 above, then the button below.</li>
+          <li data-t="mStock4">Connect the FM-1, press Find device above, then the button below.</li>
         </ol>
+        <p class="small" data-t="mStockSmk">On an SMK-37 or MKE-P37, use M-VAVE's own updater and firmware for your model instead.</p>
         <p class="msg" id="stockmsg" role="alert"></p>
         <button type="button" class="btn" id="stockgo" disabled data-t="mStockGo">Install M-VAVE's firmware</button>
       </div>
@@ -309,7 +311,7 @@
     <details id="d-report">
       <summary data-t="mReportH">Report a problem</summary>
       <div class="in">
-        <p data-t="mReport1">If the FM-1 crashed, don't switch it off: the crash record survives a restart, not a power cycle. Connect it and read the record, then send it with what you were doing.</p>
+        <p data-t="mReport1">If Saadet crashed, don't switch the instrument off: the crash record survives a restart, not a power cycle. Connect it and read the record, then send it with what you were doing.</p>
         <p><button type="button" class="btn" id="reportgo" data-t="mReportGo">Read the crash report</button>
           <button type="button" class="btn ghost" id="reportcopy" hidden data-t="mReportCopy">Copy</button></p>
         <p id="reportstatus" role="status"></p>
@@ -330,7 +332,7 @@
 
 <footer>
   <p data-t="credits">Saadet by Kerem Kilic (Ellic Studio). Built on fm1-base by Charles Vestal and felucca-bsp, from Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments. m-bootloader by Julius Vitkauskas.</p>
-  <p data-t="legal">Firmware: MPL-2.0. Editor: GPL-3.0-only. Third-party terms apply. Without warranty. M-VAVE and FM-1 are trademarks of their respective owners.</p>
+  <p data-t="legal">Firmware: MPL-2.0. Editor: GPL-3.0-only. Third-party terms apply. Without warranty. M-VAVE, FM-1, SMK-37 and MKE-P37 are trademarks of their respective owners.</p>
   <!-- RELEASE_DOWNLOADS -->
 </footer>
 
@@ -355,7 +357,7 @@
 </dialog>
 
 <dialog id="run" aria-labelledby="runtitle" data-state="running">
-  <div class="run-warn" role="note"><svg class="i"><use href="#i-alert"/></svg><span data-t="runwarn">Keep this tab open and in front. Don't unplug the FM-1.</span></div>
+  <div class="run-warn" role="note"><svg class="i"><use href="#i-alert"/></svg><span id="runwarn" data-t="runwarn">Keep this tab open and in front. Don't unplug the FM-1.</span></div>
   <div class="run-main">
     <div class="live">
       <p class="run-kicker" id="runtitle"></p>

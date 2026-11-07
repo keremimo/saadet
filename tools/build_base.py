@@ -103,7 +103,9 @@ if target:
         image = (out/"saadet.bin").read_bytes()
         if ('c"SAADET v' + version.upper() + r'\00"') not in editor_ir:
             raise SystemExit("The compiled editor INFO does not advertise its requested version.")
-        if ("SAADET " + version.upper()).encode() not in image:
+        # the boot announcement names the product: "SAADET 1.0.0", on an SMK-37 "SAADET ELITE 1.0.0"
+        announced = ("Saadet " + SMK_MODELS[model][0] if smk else "Saadet").upper() + " " + version.upper()
+        if announced.encode() not in image:
             raise SystemExit("The release image announcement does not match its requested version.")
     from fm1_install import product_of
     package = out/(stem+".fwsc")
