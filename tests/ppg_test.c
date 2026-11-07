@@ -287,6 +287,10 @@ static void factory(void)
            start == 2u && voice0()->cur[0] == 27u && P->r[0].loop == 27u && peak > 0);
         ppg(); host_preset(TSEL, ENGI_PPG, 40); trk_note_on(TSEL, 57, 100); block(out);
         ok("40 SAX starts at stretch 31 (the piano's last, then the saxophone's)", voice0()->cur[0] == 31u);
+        ppg(); host_preset(TSEL, ENGI_PPG, 91); trk_note_on(TSEL, 34, 100);   /* A#1: a cycle a stretch, slowly */
+        int held = 1;
+        for (uint32_t b = 0; b < 1600u; b++) { block(out); held &= voice0()->cur[0] == 38u; }
+        ok("91's group A (start 38, loop 23) holds its start: no run round the memory through the standard waves", held);
         ppg(); host_preset(TSEL, ENGI_PPG, 17); block(out);
         ok("leaving TABLE 31 builds the upper table again", !memcmp(ppg_part(0)->wave[64], up[0], sizeof up));
     }

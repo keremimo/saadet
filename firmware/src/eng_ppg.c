@@ -229,7 +229,9 @@ static inline __attribute__((always_inline)) float ppg_osc(uint32_t *ph, const u
 }
 /* TABLE 31, the 2.2's short-loop transient mode (owner's manual 7.3.6; Seib, "Transient Sounds"): the wave memory
  * read straight, 128 bytes a cycle at the oscillator's own clock (no mirrored half), from the start stretch onwards a
- * stretch a cycle, round the 64, until the loop stretch, which then repeats. The same staircase and BLEP as ppg_osc */
+ * stretch a cycle while it is short of the loop stretch, which then repeats. A start at or past the loop holds the start:
+ * 91 FLUEGEL MIT WAVE SOUND's group A (start 38, loop 23) is a single sax cycle, the "wave sound" its name gives, not a run
+ * round the memory through the standard waves (which popped). The same staircase and BLEP as ppg_osc */
 static inline __attribute__((always_inline)) float ppg_tosc(uint32_t *ph, uint32_t *unit, uint32_t loop, const uint8_t *ram,
                                                             uint32_t inc, float *carry)
 {
@@ -243,7 +245,7 @@ static inline __attribute__((always_inline)) float ppg_tosc(uint32_t *ph, uint32
         for (uint32_t k = 1; k <= steps; k++, b += 1u << 25) {
             uint32_t j = (i + k) & 127u;
             if (!j) {                                        /* a cycle done: the next stretch, until the loop's */
-                if (*unit != loop) *unit = (*unit + 1u) & 63u;
+                if (*unit < loop) *unit = *unit + 1u;
                 w = ram + (*unit << 7);
             }
             float cur = (float)((int32_t)w[j] - 128), h = cur - prev, t = (float)(uint32_t)(b - p) * rinc, a = 1.0f - t;
