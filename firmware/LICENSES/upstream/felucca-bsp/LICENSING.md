@@ -3,7 +3,7 @@
 **Status: settled.** The contributors whose Felucca code is here have answered: Leo Kuroshita for the code he owns
 (https://github.com/hugelton/felucca-bsp/issues/4) and keremimo for his part of `chip/usb.c` (below).
 
-Every file under `chip/`, `boards/`, `loader/` and `examples/` is MPL-2.0 (SPDX header in each file). The full text
+Every file under `chip/`, `boards/`, `loader/` and `examples/` is MPL-2.0 (SPDX header in each file), except two Apache-2.0 files in `chip/` from JieLi's AC79 SDK: `ble_rf_tables_v15.h` (the radio's start-up program) and `fm1_rf_cal.h` (its calibration in C). For details, see NOTICE. The full text
 is in `LICENSE`. The files carry no "Incompatible With Secondary Licenses" notice, so they can
 be combined with GPL code under MPL-2.0 section 3.3.
 
@@ -20,6 +20,16 @@ these files here; copies already distributed under GPL-3.0-only stay under that 
 the MIDI clock and transport sync by keremimo (Felucca commit 019e2ad, through Felucca pull request 8). keremimo
 agreed to license it, and the TRS ring fix 57f2aa0, under MPL-2.0: https://github.com/hugelton/felucca-bsp/pull/3. Firmwares and loader images built
 from this tree no longer become GPL-3.0 through it. Felucca's own copy of `usb.c` stays GPL-3.0-only (see below).
+
+## USB MIDI host
+
+`chip/usb_host.c`, `chip/usb_host_desc.h`, the host routines in `chip/fm1_usb.h` and
+`tests/usb_host_test.c` are ported from Melodee under MPL-2.0. Adrien Tibi
+(Recursive Field Instruments / recursivefieldinstruments) confirmed permission in
+[Melodee #75](https://github.com/keremimo/melodee/pull/75#issuecomment-6384184014).
+Kerem Kilic (Ellic Studio) also licenses his output, recovery, tests and BSP integration
+under MPL-2.0. Both authors are credited in the files; exact source revisions are in
+`NOTICE`. This permission applies to these contributions, not to the rest of Melodee.
 
 ## Forks of Felucca
 

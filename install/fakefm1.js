@@ -21,6 +21,8 @@
 import { pack7, unpack7 } from "./fm1ota.js";
 
 const HS_QUERY = [0xF0, 0x00, 0x32, 0x45, 0x00, 0x00, 0x00, 0x40, 0x7F, 0xF7];
+const HS_FULL = [0xF0, 0x00, 0x32, 0x45, 0x08, 0x00, 0x00, 0x40, 0x00, 0x7E, 0x01, 0xF7];
+const ON_THE_BASE = /^FM-1_9\d{6}$/;           // a firmware on felucca-bsp's chip/ota.c: its whole identity only when asked so
 const UPGRADE = [0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7];
 const LOADER_ID = "ota-FM-1_015";
 const BLOCK = 512, TRY_MS = 5000, TRIES = 3;
@@ -96,7 +98,8 @@ class Device {
 
   receive(bytes) {
     if (!this.online) return;
-    if (same(bytes, HS_QUERY)) { this.emit(identityFrame(this.text)); return; }
+    if (same(bytes, HS_QUERY)) { this.emit(identityFrame(ON_THE_BASE.test(this.text) ? this.text.slice(0, 8) : this.text)); return; }
+    if (same(bytes, HS_FULL)) { if (ON_THE_BASE.test(this.text)) this.emit(identityFrame(this.text)); return; }
     if (same(bytes, UPGRADE)) { if (!this.busy) this.session(); return; }
     if (this.reply && bytes[0] === 0xF0) {
       const r = parseReply(bytes);

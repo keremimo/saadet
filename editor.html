@@ -56,6 +56,12 @@
   .browser { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
   .browser select[size] { min-width: 150px; }
   .slots { display: grid; grid-template-columns: auto auto auto auto; gap: 3px 8px; align-items: center; justify-content: start; }
+  .hywgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; margin: 0 0 8px; }
+  .hywgrid button { display: grid; gap: 2px; padding: 3px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); text-align: left; }
+  .hywgrid button[aria-pressed="true"] { border-color: var(--fg); outline: 1px solid var(--fg); }
+  .hywgrid button.free { color: var(--dim); }
+  .hywgrid canvas { width: 100%; height: 32px; }
+  .hywcanvas { display: block; width: 100%; max-width: 512px; border: 1px solid var(--line); margin: 0 0 6px; touch-action: none; cursor: crosshair; }
   table { border-collapse: collapse; }
   th { font-weight: 400; color: var(--dim); text-align: left; padding: 0 6px 2px 0; }
   td { padding: 1px 6px 1px 0; }
@@ -201,6 +207,7 @@
 
   <section class="panel" id="p-sound" data-tab="sound" data-dev hidden>
     <div class="browser" id="browser">
+      <label id="partbox" hidden><span data-t="part"></span><br><select id="part"><option value="0">A</option><option value="1">B</option></select></label>
       <label><span data-t="engine"></span><br><select id="engine"></select></label>
       <label><span data-t="presets"></span><br><select id="preset" size="8"></select></label>
       <div>
@@ -227,6 +234,28 @@
         <select id="j106voices" aria-label="Imported JUNO-106 tone"></select><button id="j106read">Read track</button><button id="j106send">Send to track</button>
         <button id="j106export">Export tone .syx</button><button id="j106exportbank">Export imported library .syx</button><button id="j106library">Add to library</button></p>
       <label>Name <input id="j106name" maxlength="12"></label><div id="j106controls" class="groups"></div>
+    </div>
+    <div id="hypanel" class="group" hidden>
+      <h2>HYDRA native patches</h2>
+      <p class="dim">Three wave-scanning oscillators, four mutants, two filters. Read the sound before editing; Send to track plays the edited patch. Save patches in the shared user bank. Import also reads ASM Hydrasynth patches (.syx dumps, ASM Manager .hydra banks and .patch files) and converts them, as near as HYDRA goes.</p>
+      <p class="bar"><button id="hyimport">Import .syx</button><input id="hyfile" type="file" accept=".syx,.hydra,.patch" hidden>
+        <select id="hyvoices" aria-label="Imported HYDRA patch"></select><button id="hyread">Read track</button><button id="hysend">Send to track</button>
+        <button id="hyexport">Export patch .syx</button><button id="hyexportbank">Export imported library .syx</button><button id="hylibrary">Add to library</button></p>
+      <label>Name <input id="hyname" maxlength="12"></label><div id="hycontrols" class="groups"></div>
+      <div id="hywpanel" hidden>
+        <h2>HYDRA user waves</h2>
+        <p class="dim">Waves of your own for any slot of any HYDRA sound: draw one, shape its harmonics, start from a factory wave, or import a .wav (one cycle, or a wavetable's frames). Each change is heard at once and kept when the unit rests. Sounds you export or add to the library carry the user waves they use.</p>
+        <div id="hywgrid" class="hywgrid"></div>
+        <p class="bar"><label>Name <input id="hywname" maxlength="7"></label>
+          <select id="hywfrom" aria-label="Wave to start from"></select><button id="hywstart">Start from</button>
+          <button id="hywrevert">Revert</button><button id="hywclear">Clear</button><button id="hywstore">Keep now</button></p>
+        <canvas id="hywdraw" class="hywcanvas" width="512" height="176" aria-label="The wave: draw over it"></canvas>
+        <canvas id="hywharm" class="hywcanvas" width="512" height="112" aria-label="Harmonics 1 to 64: drag for a level, Alt-drag for a phase"></canvas>
+        <p class="bar"><span class="dim">Draw on the wave; drag the harmonics' bars (Alt: their phase).</span></p>
+        <p class="bar"><button id="hywimport">Import .wav or .syx</button><input id="hywfile" type="file" accept=".wav,.syx" hidden>
+          <label><input type="checkbox" id="hywscan"> A wavetable's frames become OSC 1's scan list</label>
+          <button id="hywexport">Export user waves .syx</button></p>
+      </div>
     </div>
     <div id="czpanel" class="group" hidden>
       <h2>CZ-1 native patches</h2>
@@ -310,7 +339,7 @@
           <button id="libsave" data-t="saveToLib" data-ic="port_disk"></button>
           <button id="libimport" data-t="import" data-ic="symbol_upload"></button>
           <button id="libexport" data-t="exportLib" data-ic="symbol_download"></button>
-          <input type="file" id="libfile" accept=".json,.syx,.SYX,application/json,application/octet-stream" multiple hidden>
+          <input type="file" id="libfile" accept=".json,.syx,.SYX,.hydra,.patch,application/json,application/octet-stream" multiple hidden>
           <span class="dim" id="libcount"></span>
         </p>
       </div>
@@ -329,7 +358,7 @@
             <button id="bkerase" data-t="erase" data-ic="symbol_trash"></button>
           </p>
           <p class="bar">
-            <button id="bknativeimport" hidden>Import .syx</button><input id="bknativefile" type="file" accept=".syx" hidden>
+            <button id="bknativeimport" hidden>Import .syx</button><input id="bknativefile" type="file" accept=".syx,.hydra,.patch" hidden>
             <button id="bkrefresh" data-t="reload" data-ic="control_arrow_loop"></button>
             <button id="bkexport" data-t="exportBank" data-ic="symbol_download"></button>
             <span class="dim" data-t="dndHelp"></span>
@@ -397,7 +426,7 @@ const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 
   TRACK_PARAM: 31, TRACK_CHANGED: 32, SONG: 33, PATTERN: 73, BANK_SONG: 74,
   UI_STATE: 34, UI_SET: 35, UI_PALETTES: 36, FAV_GET: 37, FAV_SET: 38,
   MOTION: 64, BACKUP_LIST: 65, BACKUP_GET: 66, BACKUP_PUT: 67,
-  FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71, CZ_GET: 75, CZ_PUT: 76, CZ_BANK: 77, NATIVE: 78, LIBRARY:80, PROPHET:95, J106:96 };
+  FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71, CZ_GET: 75, CZ_PUT: 76, CZ_BANK: 77, NATIVE: 78, LIBRARY:80, PROPHET:95, J106:96, HYDRA:97, HYWAVE:98 };
 /* frames the device sends on its own (while WATCH is on); never replies */
 
 /*P5-FACTORY-BEGIN*/
@@ -448,6 +477,326 @@ const J106 = {
   nibbles(b) { if(!J106.valid(b))throw Error("Invalid JUNO-106 tone");return b.flatMap(x=>[x&15,x>>4]); },
   bytes(a) { if(a.length!==62||a.some(x=>x>15))throw Error("Invalid JUNO-106 record");const b=Array.from({length:31},(_,i)=>a[i*2]|a[i*2+1]<<4);if(!J106.valid(b))throw Error("Invalid JUNO-106 record");return b; }
 };
+
+/* HYDRA's user waves (firmware/src/hydra_bank.h, command 98): wave ids 1..56 are the factory waves, the user waves follow
+   from 57 (INFO says where they start and how many the unit has; 64 ids are reserved for them). A wave is 256 int16 points,
+   kept as the factory waves are (tools/gen_hy_waves.py): its first 64 harmonics, no DC, its peak at 30000. Its file message
+   is Saadet's own: F0 7D 48 59 02, the wave's id, seven name bytes (0 past the name), the points (low byte first) packed
+   seven to eight, F7. */
+const HYW = (() => {
+  const N=256,H=64,PEAK=30000,USER0=57,UMAX=64,NAME=7,PACKED=586;
+  const TAB=Array.from({length:256},(_,n)=>{let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;return c>>>0;});
+  const bytesOf=pts=>{const b=new Uint8Array(2*N);for(let i=0;i<N;i++){const u=pts[i]&0xFFFF;b[2*i]=u&255;b[2*i+1]=u>>8;}return b;};
+  /* the CRC-32 the unit lists (st_crc32 over the points as RAM holds them) */
+  const crc=pts=>{let c=0xFFFFFFFF;for(const x of bytesOf(pts))c=TAB[(c^x)&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;};
+  const pack=pts=>{const b=bytesOf(pts),a=[];for(let off=0;off<b.length;off+=7){const c=b.subarray(off,off+7);a.push(c.reduce((m,x,i)=>m|(x>>7)<<i,0),...Array.from(c,x=>x&127));}return a;};
+  const unpack=a=>{
+    if(a.length!==PACKED)throw Error("Invalid wave points");
+    const b=new Uint8Array(2*N);let i=0,j=0;
+    while(j<b.length){const n=Math.min(7,b.length-j),m=a[i++];if(m>>n)throw Error("Invalid wave points");
+      for(let k=0;k<n;k++){if(a[i]>127)throw Error("Invalid wave points");b[j++]=a[i++]|(m>>k&1)<<7;}}
+    return Int16Array.from({length:N},(_,k)=>(b[2*k]|b[2*k+1]<<8)<<16>>16);
+  };
+  const cleanName=s=>String(s??"").replace(/[^ -~]/g," ").trim().slice(0,NAME).trimEnd();
+  const name7=s=>{const c=cleanName(s);return Array.from({length:NAME},(_,i)=>i<c.length?c.charCodeAt(i):0);};
+  const readName=a=>{const e=Array.from(a).indexOf(0);const s=String.fromCharCode(...Array.from(a).slice(0,e<0?NAME:e));if(/[^ -~]/.test(s))throw Error("Invalid wave name");return s;};
+  /* a cycle of any length -> its harmonics 1..64 (x = sum re cos + im sin) */
+  const spectrum=xs=>{const L=xs.length,re=new Float64Array(H+1),im=new Float64Array(H+1);
+    for(let k=1;k<=H&&k<L/2;k++){let a=0,b=0;const w=2*Math.PI*k/L;for(let i=0;i<L;i++){a+=xs[i]*Math.cos(w*i);b+=xs[i]*Math.sin(w*i);}re[k]=2*a/L;im[k]=2*b/L;}
+    return {re,im};};
+  const synth=({re,im})=>{const out=new Float64Array(N);for(let k=1;k<=H;k++){if(!re[k]&&!im[k])continue;const w=2*Math.PI*k/N;for(let i=0;i<N;i++)out[i]+=re[k]*Math.cos(w*i)+im[k]*Math.sin(w*i);}return out;};
+  const normal=xs=>{let m=0;for(const v of xs)m=Math.max(m,Math.abs(v));return m<1e-9?new Int16Array(N):Int16Array.from(xs,v=>Math.round(v*PEAK/m));};
+  /* any drawn or imported cycle -> a wave as the unit keeps them: band-limited, DC-free, normalised */
+  const finish=xs=>normal(synth(spectrum(xs)));
+  const frame=(id,name,pts)=>Uint8Array.from([240,0x7D,0x48,0x59,2,id,...name7(name),...pack(pts),247]);
+  const isFrame=f=>f.length>5&&f[0]===240&&f[1]===0x7D&&f[2]===0x48&&f[3]===0x59&&f[4]===2;
+  const decode=f=>{f=Array.from(f);
+    if(f.length!==1+5+NAME+PACKED+1||!isFrame(f)||f.at(-1)!==247||f[5]<USER0||f[5]>=USER0+UMAX)throw Error("Invalid HYDRA wave message");
+    return {id:f[5],name:readName(f.slice(6,6+NAME)),pts:unpack(f.slice(6+NAME,-1))};};
+  /* a .wav: PCM 8/16/24/32-bit or 32-bit float, mixed to mono; a wavetable's frame size from its "clm " chunk (<!>2048, as
+     Serum writes it), else 2048 when the file is a whole number of them. -> up to max waves, evenly spread over its frames */
+  const fromWav=(bytes,max=8)=>{
+    const v=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),tag=at=>String.fromCharCode(...bytes.slice(at,at+4));
+    if(bytes.length<12||tag(0)!=="RIFF"||tag(8)!=="WAVE")throw Error("Not a WAV file");
+    let fmt=null,data=null,cycle=0;
+    for(let at=12;at+8<=bytes.length;){const id=tag(at),n=v.getUint32(at+4,true),body=at+8;
+      if(id==="fmt "){fmt={kind:v.getUint16(body,true),ch:v.getUint16(body+2,true),bits:v.getUint16(body+14,true)};
+        if(fmt.kind===0xFFFE&&n>=26)fmt.kind=v.getUint16(body+24,true);}   /* (EXTENSIBLE: its sub-format) */
+      else if(id==="data")data=[body,Math.min(n,bytes.length-body)];
+      else if(id==="clm "){const m=/<!>(\d+)/.exec(String.fromCharCode(...bytes.slice(body,body+Math.min(n,64))));if(m)cycle=+m[1];}
+      at=body+n+(n&1);}
+    if(!fmt||!data)throw Error("A WAV file needs fmt and data");
+    const {kind,ch,bits}=fmt,bps=bits/8;
+    if(!(kind===1||kind===3)||!ch||![8,16,24,32].includes(bits)||(kind===3&&bits!==32))throw Error("Unsupported WAV format");
+    const count=Math.floor(data[1]/(bps*ch)),xs=new Float64Array(count),rd=at=>bits===8?(bytes[at]-128)/128:bits===16?v.getInt16(at,true)/32768:
+      bits===24?((bytes[at]|bytes[at+1]<<8|bytes[at+2]<<16)<<8>>8)/8388608:kind===3?v.getFloat32(at,true):v.getInt32(at,true)/2147483648;
+    for(let i=0;i<count;i++){let s=0;for(let c=0;c<ch;c++)s+=rd(data[0]+(i*ch+c)*bps);xs[i]=s/ch;}
+    if(!count)throw Error("An empty WAV file");
+    if(!cycle&&count%2048===0&&count>=4096)cycle=2048;
+    const frames=cycle&&count%cycle===0&&count>=2*cycle?count/cycle:1,size=frames>1?cycle:count,n=Math.min(max,frames);
+    return Array.from({length:n},(_,j)=>{const f=n>1?Math.round(j*(frames-1)/(n-1)):0;return finish(xs.subarray(f*size,(f+1)*size));});
+  };
+  /* waves that travel with sounds -> the unit's bank: the same points already there are reused, the others go to free waves.
+     bundle [{id,name,pts}], list (LIST) [{id,used,name,crc}] -> {map: old id -> id, puts: the waves to PUT} */
+  const plan=(bundle,list)=>{
+    const map=new Map(),puts=[],taken=new Set();
+    for(const w of bundle){if(map.has(w.id))continue;const c=crc(w.pts);
+      const same=list.find(e=>e.used&&e.crc===c)||puts.find(p=>crc(p.pts)===c&&p);
+      if(same){map.set(w.id,same.id);continue;}
+      const free=list.find(e=>!e.used&&!taken.has(e.id));if(!free)throw Error("HYDRA's user wave bank is full");
+      taken.add(free.id);map.set(w.id,free.id);puts.push({id:free.id,name:w.name,pts:w.pts});}
+    return {map,puts};
+  };
+  return {N,H,PEAK,USER0,UMAX,NAME,PACKED,crc,pack,unpack,cleanName,name7,readName,spectrum,synth,normal,finish,frame,isFrame,decode,fromWav,plan};
+})();
+
+/* HYDRA patches (firmware/src/hydra_patch.h): 144 bytes, the name in the last twelve. A field's raw byte is its value - min.
+   Its message is Saadet's own: F0 7D 48 59 01, two nibbles a byte (low first), F7. The macros: eight names, then a pool of
+   14 slots, each the macro (high three bits) and its destination (low five, 0 free) in one byte, then the depth + 127. */
+const HY = (() => {
+  const WAVES=["SINE","TRI","SAW","SQR","PULSE25","PULSE10","SOFTSW","HALFSIN","OCTAVE","FIFTHS","ODD 5","EVEN","DRAWBR","ORGAN 2","BRIGHT","HOLLOW","VOX A","VOX E","VOX I","VOX O","VOX U","VOX AE","CHOIR","NASAL","BELL","CHIME","GLASS","TINE","MALLET","STEEL","GONG","KALIMBA","SYNC 2","SYNC 3","SYNC 5","PM 1","PM 2","PM 3","BITS","STEPS","COMB","NOTCH","RAMP UP","THIN","BUZZ","FORMNT","TWIN PK","AIR","GRIT","DUST","FUZZ","CRUSH","WIRE","REED","BRASS","STRING"],ID_LAST=HYW.USER0+HYW.UMAX-1;
+  /* the lists the fields show: the factory waves, then the unit's user waves by their names (setUser) */
+  const ALL=[...WAVES,...Array.from({length:14},(_,i)=>`USER ${i+1}`)],SLOTS=["EMPTY",...ALL];
+  const fields=[],f=(id,label,min,max,names)=>{fields.push({id,label,min,max,...(names?{names}:{})});};
+  const osc=(b,n)=>{f(b,`${n} mode`,0,1,["Single","Scan"]);f(b+1,`${n} wave`,0,ID_LAST-1,ALL);for(let i=0;i<8;i++)f(b+2+i,`${n} slot ${i+1}`,0,ID_LAST,SLOTS);
+    f(b+10,`${n} scan`,0,127);f(b+11,`${n} semitones`,-36,36);f(b+12,`${n} cents`,-50,50);f(b+13,`${n} key tracking %`,0,200);};
+  const MUT=["Off","FM-LIN","Stack","Sync","PW","Squeeze","Warp","Harmonic"],SRC=["OSC 1","OSC 2","OSC 3","Ring","Noise"],OSCS=["OSC 1","OSC 2","OSC 3"];
+  const mut=(b,n)=>{f(b,`Mutant ${n} mode`,0,7,MUT);f(b+1,`Mutant ${n} FM source`,0,4,SRC);f(b+2,`Mutant ${n} ratio`,0,127);f(b+3,`Mutant ${n} depth`,0,127);f(b+4,`Mutant ${n} feedback / window`,0,127);f(b+5,`Mutant ${n} wet`,0,127);};
+  osc(0,"OSC 1");osc(14,"OSC 2");f(28,"OSC 3 wave",0,ID_LAST-1,ALL);f(29,"OSC 3 semitones",-36,36);f(30,"OSC 3 cents",-50,50);f(31,"OSC 3 key tracking %",0,200);
+  mut(32,1);mut(38,2);mut(44,3);mut(50,4);
+  f(56,"Ring A",0,2,OSCS);f(57,"Ring B",0,2,OSCS);f(58,"Noise colour",0,2,["White","Pink","Brown"]);
+  ["OSC 1","OSC 2","OSC 3","Ring","Noise"].forEach((n,i)=>{f(59+i,`${n} level`,0,127);f(64+i,`${n} to filter 2`,0,127);});
+  f(69,"Filter route",0,1,["Series","Parallel"]);
+  f(70,"Filter 1 type",0,10,["Ladder 12","Ladder 24","Fat 12","Fat 24","MS-20 LP","MS-20 HP","LPG","3-pole LP","3-pole BP","3-pole HP","Vowel"]);
+  f(71,"Filter 1 cutoff",0,127);f(72,"Filter 1 resonance",0,127);f(73,"Filter 1 drive",0,127);f(74,"Filter 1 drive order",0,1,["Pre","Post"]);
+  f(75,"Filter 1 ENV 1",-63,63);f(76,"Filter 1 key tracking %",0,200);f(77,"Filter 1 velocity",0,127);
+  f(79,"Filter 2 type",0,1,["Band","Notch"]);f(80,"Filter 2 pass",0,127);f(81,"Filter 2 cutoff",0,127);f(82,"Filter 2 resonance",0,127);f(83,"Filter 2 ENV 1",-63,63);f(84,"Filter 2 key tracking %",0,200);
+  f(85,"Level",0,127);f(86,"ENV 1 to scan 1",-63,63);f(87,"ENV 1 to scan 2",-63,63);f(88,"ENV 1 to mutant 1",-63,63);
+  f(89,"ENV 1 delay",0,127);f(90,"ENV 1 attack",0,127);f(91,"ENV 1 hold",0,127);f(92,"ENV 1 decay",0,127);f(93,"ENV 1 sustain",0,127);f(94,"ENV 1 release",0,127);
+  const MACRO_NAMES=["AUTO","BRIGHT","DARK","TONE","GRIT","BITE","EDGE","RES","SCAN","MORPH","MOTION","SWEEP","WARP","FM","SYNC","STACK","SQUEEZE","PW","HARMONIC","DETUNE","WIDTH","SUB","BODY","AIR","NOISE","RING","BELL","GLASS","METAL","VOWEL","CHOIR","BREATH","ATTACK","DECAY","RELEASE","PLUCK","SWELL","PASS","BLEND","COLOR","SHAPE","FAT","THIN","SPACE","LEVEL","FILTER","ENV","TALK"];
+  const TARGETS=["None","OSC 1 scan","OSC 2 scan","OSC 2 cents","Mutant 1 depth","Mutant 2 depth","Mutant 3 depth","Mutant 4 depth","Mutant 1 ratio","Mutant 3 ratio","Mutant 1 feedback / window","Mutant 1 wet","Mutant 3 wet","OSC 1 level","OSC 2 level","OSC 3 level","Ring level","Noise level","Filter 1 cutoff","Filter 1 resonance","Filter 1 drive","Filter 1 ENV 1","Filter 2 pass","Filter 2 cutoff","Filter 2 resonance","Filter 2 ENV 1","Level","ENV 1 to scan 1","ENV 1 to mutant 1","ENV 1 attack","ENV 1 decay","ENV 1 release"];
+  for(let m=0;m<8;m++)f(95+m,`Macro ${m+1} name`,0,MACRO_NAMES.length-1,MACRO_NAMES);
+  for(let k=0;k<14;k++){const b=103+2*k;   /* (the slot's two halves: fields of their own past the patch's bytes) */
+    fields.push({id:300+2*k,label:`Slot ${k+1} macro`,min:1,max:8,get:x=>(x[b]>>5)+1,set:(x,v)=>{x[b]=(v-1)<<5|(x[b]&31);}});
+    fields.push({id:301+2*k,label:`Slot ${k+1} destination`,min:0,max:31,names:TARGETS,get:x=>x[b]&31,set:(x,v)=>{x[b]=v?(x[b]&0xE0)|v:0;if(!v)x[b+1]=127;}});
+    f(b+1,`Slot ${k+1} depth`,-127,127);}
+  const WAVE_BYTES=[1,15,28],SLOT_BYTES=[2,16];   /* (a WAVE byte holds the id - 1, a slot the id) */
+  const HY={ENGINE:25,RECORD:144,NAME:132,WAVES,ALL,SLOTS,ID_LAST,FIELDS:fields,MACRO_NAMES,TARGETS,
+    setUser(names) { ALL.length=WAVES.length;ALL.push(...names);SLOTS.length=1;SLOTS.push(...ALL); },
+    /* the user waves a patch names, by id (both oscillators' lists whatever their mode: a mode change makes them heard) */
+    userIds(b) { const s=new Set();for(const i of WAVE_BYTES)if(b[i]+1>=HYW.USER0)s.add(b[i]+1);
+      for(const o of SLOT_BYTES)for(let k=0;k<8;k++)if(b[o+k]>=HYW.USER0)s.add(b[o+k]);return [...s].sort((x,y)=>x-y); },
+    remap(b,map) { const r=b.slice();for(const i of WAVE_BYTES)if(map.has(r[i]+1))r[i]=map.get(r[i]+1)-1;
+      for(const o of SLOT_BYTES)for(let k=0;k<8;k++)if(map.has(r[o+k]))r[o+k]=map.get(r[o+k]);return r; },
+    GROUPS:[['OSC 1',0,14],['OSC 2',14,28],['OSC 3',28,32],['Mutants 1, 2 (OSC 1)',32,44],['Mutants 3, 4 (OSC 2)',44,56],['Mixer',56,70],['Filter 1',70,79],['Filter 2',79,85],['ENV 1 and level',85,95],['Macros',95,400]],
+    get(b,id) { const d=fields.find(x=>x.id===id);return d.get?d.get(b):b[id]+d.min; },
+    set(b,id,v) { const d=fields.find(x=>x.id===id);if(d.set)d.set(b,v);else b[id]=v-d.min; },
+    valid(b) { return Array.isArray(b)&&b.length===144&&b.every(x=>Number.isInteger(x)&&x>=0&&x<=255)&&fields.every(d=>d.get||b[d.id]<=d.max-d.min)&&b.slice(132).every(x=>x>=32&&x<=126); },
+    name(b) { return String.fromCharCode(...b.slice(132,144)).trimEnd(); },
+    setName(b,name) { b.splice(132,12,...Array.from(String(name).replace(/[^ -~]/g," ").slice(0,12).padEnd(12," "),x=>x.charCodeAt(0))); },
+    init() { const b=[0,2,3,33,34,35,0,0,0,0,0,36,50,100,0,2,1,2,4,7,0,0,0,0,0,36,57,100,0,36,50,100,0,2,32,0,0,127,0,2,32,0,0,127,0,2,32,0,0,127,0,2,32,0,0,127,0,1,0,100,0,0,0,0,0,0,0,0,0,0,1,127,0,0,0,63,0,0,0,0,0,127,0,63,0,100,63,63,63,0,0,0,64,0,50,0,0,0,0,0,0,0,0,1,191,36,191,82,191,115,191,149,191,180,191,221,191,254,191,0,0,0,0,0,0,0,0,0,0,0,0,0];b.length=132;HY.setName(b,"INIT HYDRA");return b; },
+    sysex(b) { if(!HY.valid(b))throw Error("Invalid HYDRA patch");return new Uint8Array([240,0x7D,0x48,0x59,1,...HY.nibbles(b),247]); },
+    decode(f) { if(f.length!==294||f[0]!==240||f[1]!==0x7D||f[2]!==0x48||f[3]!==0x59||f[4]!==1||f[293]!==247)throw Error("Invalid HYDRA SysEx frame");return HY.bytes(f.slice(5,293)); },
+    /* patches, and the user waves that travel with them (HYW's messages) */
+    read(bytes) {
+      const voices=[],waves=[];
+      for(let i=0;i<bytes.length;){if(bytes[i]!==240)throw Error("Unexpected byte outside HYDRA SysEx");const end=bytes.indexOf(247,i+1);if(end<0)throw Error("Truncated HYDRA SysEx");
+        const f=Array.from(bytes.slice(i,end+1));i=end+1;
+        if(HYW.isFrame(f))waves.push(HYW.decode(f));else{const raw=HY.decode(f);voices.push({name:HY.name(raw),raw});}}
+      if(!voices.length&&!waves.length)throw Error("Empty HYDRA library");
+      for(const v of voices){const ids=new Set(HY.userIds(v.raw));v.waves=waves.filter(w=>ids.has(w.id));}
+      return {voices,waves};
+    },
+    nibbles(b) { if(!HY.valid(b))throw Error("Invalid HYDRA patch");return b.flatMap(x=>[x&15,x>>4]); },
+    bytes(a) { if(a.length!==288||a.some(x=>x>15))throw Error("Invalid HYDRA record");const b=Array.from({length:144},(_,i)=>a[i*2]|a[i*2+1]<<4);if(!HY.valid(b))throw Error("Invalid HYDRA record");return b; }
+  };
+  return HY;
+})();
+
+/* ASM Hydrasynth patches into HYDRA: our own converter, from the layout Edisyn's reverse-engineered notes give
+   (github.com/eclab/edisyn, edisyn/synth/asmhydrasynth/info, Apache-2.0; no Edisyn code). A Hydrasynth SysEx message is
+   F0 00 20 2B 00 6F, base64 of [the info's CRC-32, each byte from 255, low byte first; the info], F7; a patch is 22 chunks
+   of info 16 00 n 16 + 128 bytes (the last 102): 2790 bytes. ASM Manager's .hydra banks are stored ZIPs of .patch files,
+   the patch from its byte 4. Most values are 16 bits, low byte first, 0..1024 (512 the centre of a signed one).
+   What HYDRA has is taken: OSC 1..3 (waves by family: we do not have the Hydrasynth's tables), the four mutants, ring,
+   noise, the mixer, both filters, ENV 1, the amplitude, and the eight macros with their names, destinations and depths
+   (as the patch has them set: each macro's 0 is where its knob was saved). ENV 2 becomes the part's ADSR, the voice mode
+   and glide its own parameters. The LFOs, ENV 3..5, the matrix, the arpeggiator and the effects are left. */
+const HYS = (() => {
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = b => { let c = 0xFFFFFFFF; for (const x of b) c = CRC[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const b64enc = b => { let s = ""; for (let i = 0; i < b.length; i += 3) { const n = b[i] << 16 | (b[i + 1] ?? 0) << 8 | (b[i + 2] ?? 0);
+    s += B64[n >> 18 & 63] + B64[n >> 12 & 63] + (i + 1 < b.length ? B64[n >> 6 & 63] : "=") + (i + 2 < b.length ? B64[n & 63] : "="); } return s; };
+  const b64dec = s => { const out = []; let buf = 0, bits = 0; for (const ch of s) { if (ch === "=") break; const v = B64.indexOf(ch);
+    if (v < 0) throw Error("Invalid Hydrasynth SysEx"); buf = (buf << 6 | v) & 0xFFFFFF; bits += 6; if (bits >= 8) { bits -= 8; out.push(buf >> bits & 255); } } return out; };
+  const HEAD = [0xF0, 0x00, 0x20, 0x2B, 0x00, 0x6F];
+  const check = info => { const c = crc32(info); return [255 - (c & 255), 255 - (c >>> 8 & 255), 255 - (c >>> 16 & 255), 255 - (c >>> 24 & 255)]; };
+  /* info bytes -> one Hydrasynth message; a message -> its info (null: not the Hydrasynth's) */
+  const message = info => [...HEAD, ...Array.from(b64enc([...check(info), ...info]), x => x.charCodeAt(0)), 0xF7];
+  function infoOf(m) {
+    if (m.length < 8 || HEAD.some((x, i) => m[i] !== x) || m[m.length - 1] !== 0xF7) return null;
+    const p = b64dec(String.fromCharCode(...m.slice(6, -1)));
+    return p.length > 4 ? p.slice(4) : null;   /* (the checksum is not held against it: Edisyn's reader does not either) */
+  }
+  const isSyx = b => { const s = b.indexOf(0xF0); return s >= 0 && HEAD.every((x, i) => b[s + i] === x); };
+  const isZip = b => b[0] === 0x50 && b[1] === 0x4B && b[2] === 3 && b[3] === 4;
+  const isPatch = b => (b.length === 2786 || b.length === 1762) && b[0] !== 0xF0;
+  /* -> [{data}] (data: the patch as its SysEx carries it, 2790 bytes or a 1.5 patch's 1766) */
+  function fromSyx(b) {
+    const out = []; let cur = null;
+    for (let i = 0; i < b.length; i++) {
+      if (b[i] !== 0xF0) continue;
+      const end = b.indexOf(0xF7, i + 1); if (end < 0) throw Error("Truncated Hydrasynth SysEx");
+      const inf = infoOf(Array.from(b.slice(i, end + 1))); i = end;
+      if (!inf || inf[0] !== 0x16 || inf[1] !== 0 || inf[3] !== 0x16) continue;   /* (header, footer, names, requests) */
+      if (inf[2] === 0) cur = [];
+      if (!cur || cur.length !== inf[2]) { cur = null; continue; }
+      cur.push(inf.slice(4));
+      if (cur.length === 22) { const data = cur.flat(); if (data.length >= 1766) out.push({ data }); cur = null; }
+    }
+    if (!out.length) throw Error("No Hydrasynth patch in this SysEx");
+    return out;
+  }
+  function fromZip(b) {
+    const out = [], u16 = o => b[o] | b[o + 1] << 8, u32 = o => (b[o] | b[o + 1] << 8 | b[o + 2] << 16 | b[o + 3] << 24) >>> 0;
+    for (let o = 0; o + 30 <= b.length && u32(o) === 0x04034B50;) {
+      const method = u16(o + 8), size = u32(o + 18), nlen = u16(o + 26), xlen = u16(o + 28);
+      const name = String.fromCharCode(...b.slice(o + 30, o + 30 + nlen)), at = o + 30 + nlen + xlen;
+      if (u16(o + 6) & 8) throw Error("Unsupported Hydrasynth bank");
+      if (/\.patch$/i.test(name)) { if (method !== 0) throw Error("Compressed Hydrasynth bank: save it again from ASM Manager"); out.push({ data: [6, 0, 0, 0, ...b.slice(at, at + size)] }); }
+      o = at + size;
+    }
+    if (!out.length) throw Error("No Hydrasynth patch in this bank");
+    return out;
+  }
+
+  /* HYDRA's patch (firmware/src/hydra_patch.h) */
+  const O = [0, 14], O3 = 28, M = [32, 38, 44, 50], RING_A = 56, LVL = 59, BAL = 64, ROUTE = 69, F1 = 70, F2_TYPE = 79,
+    AMP = 85, E1_SC1 = 86, E1 = 89, MNAME = 95, MA = 103;
+  const TGT_BYTE = [0, 10, 24, 26, 35, 41, 47, 53, 34, 46, 36, 37, 49, 59, 60, 61, 62, 63, 71, 72, 73, 75, 80, 81, 82, 83, 85, 86, 88, 90, 92, 94];
+  const span = g => g === 3 ? 100 : g === 21 || g === 25 || g === 27 || g === 28 ? 126 : 127;
+  /* a Hydrasynth macro destination (its list's index) -> HYDRA's (hydra_patch.h HY_TARGETS) */
+  const DEST = { 13: 1, 16: 2, 194: 3, 21: 4, 34: 5, 47: 6, 60: 7, 20: 8, 46: 9, 22: 10, 23: 10, 24: 11, 50: 12, 73: 13, 74: 14, 75: 15,
+    72: 16, 76: 16, 77: 17, 88: 18, 89: 19, 90: 20, 92: 21, 95: 22, 96: 23, 97: 24, 98: 25, 102: 26, 119: 29, 121: 30, 123: 31 };
+  /* its 219 waves by family -> ours (gen_hy_waves.py's order), as their names suggest */
+  const FAMILIES = [[1, [0]], [1, [1]], [1, [6]], [1, [2]], [1, [3]], [6, [4, 4, 4, 5, 5, 5]], [8, [7, 6, 15, 14, 42, 43, 44, 46]],
+    [5, [32, 33, 34, 34, 44]], [4, [53, 54, 55, 44]], [6, [13, 12, 8, 9, 11, 10]], [7, [8, 9, 10, 11, 12, 14, 15]],
+    [7, [40, 41, 43, 14, 15, 46, 44]], [5, [24, 25, 26, 30, 29]], [3, [35, 36, 37]], [9, [35, 36, 37, 52, 50, 48, 44, 51, 49]],
+    [5, [24, 25, 27, 28, 31]], [8, [23, 45, 53, 54, 55, 22, 16, 19]], [7, [26, 25, 24, 29, 30, 27, 31]], [2, [3, 24]], [3, [2, 4, 3]],
+    [3, [50, 52, 48]], [3, [49, 38, 39]], [6, [16, 17, 18, 19, 20, 21]], [5, [35, 36, 37, 40, 41]], [8, [6, 7, 15, 14, 43, 46, 42, 44]],
+    [6, [38, 39, 51, 44, 3, 5]], [6, [46, 8, 9, 40, 15, 14]], [4, [50, 48, 52, 44]], [7, [28, 27, 31, 24, 25, 26, 29]],
+    [8, [40, 41, 30, 47, 49, 48, 51, 52]], [5, [43, 14, 44, 23, 45]], [8, [13, 12, 8, 9, 11, 10, 15, 14]], [7, [53, 23, 45, 54, 55, 44, 43]],
+    [7, [2, 3, 4, 6, 14, 44, 43]], [4, [22, 55, 54, 53]], [4, [27, 28, 24, 15]], [15, [3, 3, 4, 4, 5, 5, 15, 10, 10, 44, 43, 38, 39, 51, 50]],
+    [23, [0, 8, 9, 11, 10, 12, 13, 15, 14, 6, 2, 8, 9, 11, 10, 12, 13, 15, 14, 6, 2, 44, 43]]];
+  const WAVE = FAMILIES.flatMap(([n, w]) => w.slice(0, n));
+  const NAMES = { BRIGHTEN: "BRIGHT", CUTOFF: "BRIGHT", DARKEN: "DARK", RESO: "RES", WAVESCAN: "SCAN", WAVSTACK: "STACK", PWM: "PW",
+    PULSWDTH: "PW", SPREAD: "WIDTH", RINGMOD: "RING", REVERB: "SPACE", DELAY: "SPACE", "ENV AMT": "ENV", THICKEN: "FAT", MAKEHUGE: "FAT",
+    DISTORT: "GRIT", OVERDRIV: "GRIT", CRUNCH: "GRIT", DRIVE: "GRIT", WOBBLE: "MOTION", "DRY/WET": "BLEND", MORPH: "MORPH" };
+  /* ENV times: the Hydrasynth's steps (value / 8) in ms; ours are TIME_MS_X10's, 1 ms .. 10 s over 128 steps */
+  const hsMs = i => i < 20 ? i : i < 30 ? (i - 20) * 2 + 20 : i < 40 ? (i - 30) * 4 + 40 : i < 50 ? (i - 40) * 8 + 80 : i < 60 ? (i - 50) * 16 + 160 :
+    i < 70 ? (i - 60) * 32 + 320 : i < 80 ? (i - 70) * 64 + 640 : i < 90 ? (i - 80) * 128 + 1280 : i < 100 ? (i - 90) * 256 + 2560 :
+    i < 110 ? (i - 100) * 512 + 5120 : i < 120 ? (i - 100) * 1000 : ((i - 120) * 2 + 20) * 1000;
+  const SYNC = ["0", "1/64 T", "1/64", "1/32 T", "1/64 D", "1/32", "1/16 T", "1/32 D", "1/16", "1/8 T", "1/16 D", "1/8", "1/4 T", "1/8 D", "1/4",
+    "1/2 T", "1/4 D", "1/2", "1/1 T", "1/2 D", "1/1", "1/1 D", "8", "12", "16", "24", "32", "64"];
+  const syncMs = k => { const s = SYNC[Math.min(k, SYNC.length - 1)], m = /^1\/(\d+)( [TD])?$/.exec(s);   /* (at 120 BPM) */
+    return m ? 2000 / +m[1] * (m[2] === " T" ? 2 / 3 : m[2] === " D" ? 1.5 : 1) : +s * 2000; };
+  const ourTime = ms => Math.max(0, Math.min(127, Math.round(127 * Math.log10(Math.max(ms, 1)) / 4)));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, Math.round(v)));
+
+  function convert(d, defaults) {
+    const u8 = o => d[o] ?? 0, s8 = o => (u8(o) << 24) >> 24, u16 = o => u8(o) | u8(o + 1) << 8, s16 = o => (u16(o) << 16) >> 16;
+    const unit = (o, max = 127) => clamp(u16(o) * max / 1024, 0, max), bip = (o, c, w) => clamp(c + (u16(o) - 512) * w / 512, 0, 2 * c);
+    const r = defaults.slice();
+    r.fill(0, MNAME, MA + 28);
+    for (let i = 0; i < 2; i++) {                                /* OSC 1, 2: a wave or a scan over the list up to its first OFF */
+      const p = i ? 108 : 80, b = O[i], first = u16(p + 12), list = [first];
+      for (let j = 1; j < 8 && u16(p + 12 + 2 * j); j++) list.push(u16(p + 12 + 2 * j) - 2);   /* (-1: SILENCE) */
+      r[b] = u8(p) ? 1 : 0;
+      r[b + 1] = WAVE[Math.min(u16(p + 2), 218)];
+      for (let j = 0; j < 8; j++) { const w = list[Math.round(j * (list.length - 1) / 7)]; r[b + 2 + j] = w < 0 ? 0 : WAVE[Math.min(w, 218)] + 1; }
+      r[b + 10] = unit(p + 10);
+      r[b + 11] = clamp(s8(p + 4) + 36, 0, 72); r[b + 12] = clamp(s8(p + 6) + 50, 0, 100); r[b + 13] = clamp(u8(p + 8), 0, 200);
+    }
+    r[O3] = WAVE[Math.min(u16(136), 218)]; r[O3 + 1] = clamp(s8(138) + 36, 0, 72); r[O3 + 2] = clamp(s8(140) + 50, 0, 100);
+    r[O3 + 3] = clamp(u8(142), 0, 200);
+    const MODE = [1, 2, 3, 4, 5, 6, 7, 4], FMSRC = [2, 2, 0, 1, 2, 3, 4, 2, 2, 2, 2, 2, 2];
+    [144, 158, 204, 218].forEach((p, k) => {                     /* the mutants; one with nothing wet is off (it costs a voice) */
+      const b = M[k], mode = u8(p), wet = unit(p + 12);
+      r[b] = wet ? MODE[mode & 7] : 0;
+      r[b + 1] = mode === 0 ? FMSRC[Math.min(u8(p + 2), 12)] : mode === 2 ? Math.min(u8(p + 2), 2) : 2;
+      r[b + 2] = unit(p + 4); r[b + 3] = unit(p + 6); r[b + 4] = unit(mode === 2 ? p + 8 : p + 10); r[b + 5] = wet;
+    });
+    r[RING_A] = u8(264) < 3 ? u8(264) : 0; r[RING_A + 1] = u8(266) < 3 ? u8(266) : 1; r[RING_A + 2] = [0, 1, 2, 2, 0, 0, 0][u8(272)] ?? 0;
+    [274, 276, 278, 280, 282].forEach((o, k) => { r[LVL + k] = unit(o); });
+    r[LVL + 3] = clamp(r[LVL + 3] * u16(268) / 1024, 0, 127);   /* (ring: its level by its depth) */
+    [292, 294, 296, 304, 306].forEach((o, k) => { r[BAL + k] = unit(o); });
+    r[ROUTE] = u8(302) ? 1 : 0;
+    const vowel = (u8(308) === 16 ? 10 : u8(308)) === 10;
+    r[F1] = [0, 1, 2, 3, 6, 4, 5, 7, 8, 9, 10, 0, 8, 9, 0, 1][u8(308) === 16 ? 10 : Math.min(u8(308), 15)];
+    r[F1 + 1] = unit(vowel ? 314 : 310); r[F1 + 2] = unit(312); r[F1 + 3] = unit(326); r[F1 + 4] = u8(328) ? 1 : 0;
+    r[F1 + 5] = bip(316, 63, 63); r[F1 + 6] = clamp((u16(322) - 512) * 200 / 512, 0, 200); r[F1 + 7] = clamp((u16(320) - 512) * 127 / 512, 0, 127);
+    r[F2_TYPE] = u8(472) ? 1 : 0; r[F2_TYPE + 1] = unit(332); r[F2_TYPE + 2] = unit(334); r[F2_TYPE + 3] = unit(336);
+    r[F2_TYPE + 4] = bip(338, 63, 63); r[F2_TYPE + 5] = clamp((u16(344) - 512) * 200 / 512, 0, 200);
+    r[AMP] = unit(350);
+    r[E1_SC1] = r[E1_SC1 + 1] = r[E1_SC1 + 2] = 63;
+    const env = (p, k) => { const sync = u8(p + 8), t = o => sync ? ourTime(syncMs(u16(o))) : ourTime(hsMs(u16(o) >> 3));
+      return { dly: sync ? ourTime(syncMs(u16(p + 10))) : ourTime(hsMs(u16(p + 10))), atk: t(p), hld: t(p + 12), dec: t(p + 2), sus: unit(p + 4), rel: t(p + 6) }; };
+    const e1 = env(478), e2 = env(506);
+    [e1.dly, e1.atk, e1.hld, e1.dec, e1.sus, e1.rel].forEach((v, k) => { r[E1 + k] = v; });
+    /* the macros as saved: the sound at each knob's place, then each destination of its own with a depth over the whole
+       turn (a Hydrasynth knob goes one way, 0..1024; ours both ways from 0) */
+    /* the matrix as it rests: a route from an envelope (sources 1..5) holds its destination where the envelope sustains
+       (a percussive one at 0.6), one from the note's velocity (19) at 0.8, by its depth, which macros may move ("Matrix n
+       Depth", destinations 154..185); a drawbar organ's levels come from these alone. LFOs, the wheels, pressure and the
+       rest are not taken */
+    const route = k => { const src = u8(902 + 2 * k), g = DEST[u16(966 + 2 * k)], p = [478, 506, 534, 562, 590][src - 1];
+      return g && src === 19 ? { g, lvl: 0.8 } : src >= 1 && src <= 5 && g ? { g, lvl: u16(p + 4) > 51 ? u16(p + 4) / 1024 : 0.6 } : null; };
+    const mdepth = Array.from({ length: 32 }, (_, k) => u16(838 + 2 * k));
+    for (let m = 0; m < 8; m++)
+      for (let j = 0; j < 8; j++) {
+        const t = u16(1222 + 16 * m + 2 * j);
+        if (t >= 154 && t < 186) mdepth[t - 154] += (u16(1094 + 16 * m + 2 * j) - 512) / 512 * u16(1606 + 2 * m);
+      }
+    for (let k = 0; k < 32; k++) {
+      const x = route(k);
+      if (x) r[TGT_BYTE[x.g]] = clamp(r[TGT_BYTE[x.g]] + (Math.max(0, Math.min(1024, mdepth[k])) - 512) / 512 * x.lvl * span(x.g), 0, span(x.g));
+    }
+    const slots = [];
+    for (let j = 0; j < 8; j++)
+      for (let m = 0; m < 8; m++) {
+        const t = u16(1222 + 16 * m + 2 * j), frac = (u16(1094 + 16 * m + 2 * j) - 512) / 512, via = t >= 154 && t < 186 ? route(t - 154) : null;
+        const g = DEST[t];
+        if (!frac || (!g && !via)) continue;
+        if (g) r[TGT_BYTE[g]] = clamp(r[TGT_BYTE[g]] + frac * u16(1606 + 2 * m) / 1024 * span(g), 0, span(g));
+        if (slots.length < 14) slots.push(g ? [m, g, clamp(frac * 127 / 2, -127, 127)] : [m, via.g, clamp(frac * via.lvl * 127, -127, 127)]);
+      }
+    slots.forEach(([m, g, dep], k) => { r[MA + 2 * k] = m << 5 | g; r[MA + 2 * k + 1] = 127 + dep; });
+    for (let m = 0; m < 8; m++) {
+      const n = String.fromCharCode(...Array.from({ length: 8 }, (_, i) => u8(1630 + 17 * m + i))).replace(/[^ -~]/g, "").trim().toUpperCase();
+      const w = NAMES[n] || n, k = HY.MACRO_NAMES.indexOf(w);
+      r[MNAME + m] = k > 0 && slots.some(s => s[0] === m) ? k : 0;
+    }
+    const name = String.fromCharCode(...d.slice(9, 25)).replace(/[^ -~]/g, " ").trim().toUpperCase() || "HYDRASYNTH";
+    HY.setName(r, name);
+    if (!HY.valid(r)) throw Error(`Cannot convert ${name}`);
+    const poly = u8(30);
+    return { name: HY.name(r), raw: r, p: { ATK: e2.atk, DEC: e2.dec, SUS: e2.sus, REL: e2.rel,
+      VCE: poly === 0 ? 0 : poly < 4 ? (u8(58) ? 2 : 1) : 3, GLD: u8(52) ? clamp(u8(54), 0, 127) : 0 } };
+  }
+  /* a file (.syx, .hydra, .patch) -> {voices: [{name, raw, p}]}: p the part's own values by their keys (paramKeys) */
+  function read(bytes) {
+    const b = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes), init = HY.init();
+    const found = isZip(b) ? fromZip(b) : isSyx(b) ? fromSyx(b) : isPatch(b) ? [{ data: [6, 0, 0, 0, ...b] }] : null;
+    if (!found) throw Error("Not a Hydrasynth patch file");
+    return { voices: found.map(x => convert(x.data, init)) };
+  }
+  /* p (by key) -> the part's values by id, the device's defaults elsewhere (null where unknown) */
+  const params = (p, keys, base) => { const out = base ? base.slice() : Array(keys?.length || 0).fill(null);
+    for (const [k, v] of Object.entries(p || {})) { const i = keys ? keys.indexOf(k) : -1; if (i >= 0) out[i] = v; } return out; };
+  return { is: b => isZip(b) || isSyx(b) || isPatch(b), read, message, infoOf, crc32, WAVE, DEST, params, chunks: data =>
+    Array.from({ length: Math.ceil(data.length / 128) }, (_, n) => message([0x16, 0, n, 0x16, ...data.slice(n * 128, n * 128 + 128)])) };
+})();
 
 const P5 = {
   ENGINE:19, RECORD:138, NAME:65, FIELDS:[],
@@ -545,7 +894,7 @@ const CZ = {
 };
 /* user preset bank: name 1..12 printable ASCII, a 16-step pattern of (note, flags 1 acc 2 slide 4 tie) */
 const UP = { NAME_MAX: 12, PAT: 16, LIST_MAX: 16 };
-const F = { INT: 0, PCT: 1, BIPCT: 2, TIME: 3, LFOHZ: 4, CUTOFF: 5, DB: 6, SEMI: 7, ENUM: 8, BPM: 9, NOTE: 10, ONOFF: 11, OCT: 12, STEPS: 13, TONE: 17 };
+const F = { INT: 0, PCT: 1, BIPCT: 2, TIME: 3, LFOHZ: 4, CUTOFF: 5, DB: 6, SEMI: 7, ENUM: 8, BPM: 9, NOTE: 10, ONOFF: 11, OCT: 12, STEPS: 13, TONE: 17, KEY: 18 };
 
 const v14enc = (v) => { const u = Math.max(-8192, Math.min(8191, Math.round(v))) + 8192; return [u & 0x7F, (u >> 7) & 0x7F]; };
 const v14dec = (lo, hi) => (lo | (hi << 7)) - 8192;
@@ -609,12 +958,22 @@ const parse = {
     if(!o.rc&&a.length>3){o.raw=J106.decode([240,...a.slice(3,25),247]);const end=a.indexOf(0,25);J106.setName(o.raw,String.fromCharCode(...a.slice(25,end<0?a.length:end)));}
     return o;
   },
+  /* command 98: LIST {list: [{id,used,name,crc}]}, GET {name,pts} */
+  [CMD.HYWAVE](a) {
+    if(a.length<3)throw Error("Short user wave reply");const o={op:a[0],rc:a[1],id:a[2]};if(o.rc)return o;
+    const r32=at=>(a[at]|a[at+1]<<7|a[at+2]<<14|a[at+3]<<21|a[at+4]<<28)>>>0;
+    if(o.op===0){const n=a[3],u0=a[4];if(a.length!==5+13*n)throw Error("Bad user wave list");
+      o.list=Array.from({length:n},(_,k)=>{const at=5+13*k;return {id:u0+k,used:!!a[at],name:HYW.readName(a.slice(at+1,at+8)),crc:r32(at+8)};});}
+    if(o.op===1){o.name=HYW.readName(a.slice(3,10));o.pts=HYW.unpack(a.slice(10));}
+    return o;
+  },
+  [CMD.HYDRA](a) { if(a.length<3)throw Error("Short HYDRA reply");const o={op:a[0],rc:a[1],track:a[2]};if(!o.rc&&a.length>3)o.raw=HY.bytes(a.slice(3));return o; },
   [CMD.PROPHET](a) { if(a.length<3)throw Error("Short Prophet reply");const o={op:a[0],rc:a[1],track:a[2]};if(!o.rc&&a.length>3)o.raw=P5.decode([240,...a.slice(3),247]);return o; },
   [CMD.NATIVE](a) {
     const r=new Reader(a),o={engine:r.b(),op:r.b(),index:r.b(),rc:r.b()};
     if(o.rc)return o;
     if(o.op===0){o.count=r.b();o.total=r.b()|r.b()<<7;o.slots=Array.from({length:o.count},(_,i)=>({slot:o.index+i,engine:o.engine,used:!!r.b(),name:r.s()}));}
-    if(o.op===1)o.raw=o.engine===15?CZ.bytes(a.slice(4)):o.engine===19?P5.bytes(a.slice(4)):o.engine===21?J106.bytes(a.slice(4)):Array.from(a.slice(4));
+    if(o.op===1)o.raw=o.engine===15?CZ.bytes(a.slice(4)):o.engine===19?P5.bytes(a.slice(4)):o.engine===21?J106.bytes(a.slice(4)):o.engine===25?HY.bytes(a.slice(4)):Array.from(a.slice(4));
     if(o.op===7)o.user=r.b()|r.b()<<7;
     return o;
   },
@@ -633,7 +992,7 @@ const parse = {
     if (trailer.length >= 4 && [0, 16].includes(trailer[0]) && trailer[1] === 0x55 && trailer[2] === 1)
       o.uiCaps = trailer[3] & 63;                 /* tagged preferences; never interpret old PR bytes as SONG */
     o.motionMax = 0; o.chance = false; o.backupCaps = 0;
-    o.synthOnly = o.nstep === 0 && o.ntrk === 1 && trailer[7] === 0x53 && trailer[8] === 1;
+    o.synthOnly = o.nstep === 0 && (o.ntrk === 1 || o.ntrk === 2) && trailer[7] === 0x53 && trailer[8] === 1;
     if (o.synthOnly) {
       o.backupCaps = trailer[4] === 0x42 && trailer[5] === 1 ? trailer[6] & 3 : 0;
       o.fm6 = trailer[9] === 0x46 && trailer[10] === 1 ? {factory:trailer[11], bank:trailer[12]} : null;
@@ -649,6 +1008,11 @@ const parse = {
       const jp=trailer.findIndex((x,i)=>i>=(shared>=0?shared+4:29)&&x===0x4a&&trailer[i+1]===1&&trailer[i+2]===J106.ENGINE);
       o.juno=jp>=0&&trailer[jp+4]===CMD.J106?{engine:trailer[jp+2],namespace:trailer[jp+3],fields:trailer[jp+5]}:null;   /* JUNO-106, command 96 */
       if(o.juno)o.namespace[J106.ENGINE]=o.juno.namespace;
+      const hp=trailer.findIndex((x,i)=>i>=(shared>=0?shared+4:29)&&x===0x48&&trailer[i+1]===1&&trailer[i+2]===HY.ENGINE);
+      o.hydra=hp>=0&&trailer[hp+4]===CMD.HYDRA?{engine:trailer[hp+2],namespace:trailer[hp+3]}:null;   /* HYDRA, command 97 */
+      if(o.hydra)o.namespace[HY.ENGINE]=o.hydra.namespace;
+      const wp=hp<0?-1:trailer.findIndex((x,i)=>i>=hp+7&&x===0x57&&trailer[i+1]===1&&trailer[i+2]===CMD.HYWAVE);
+      o.hywave=wp>=0?{user0:trailer[wp+3],count:trailer[wp+4],max:trailer[wp+5]}:null;   /* HYDRA's user waves, command 98 */
       return o;
     }
     if (o.uiCaps && trailer[4] === 0x4d && [1,2].includes(trailer[5]) && trailer[6] === 64) {
@@ -835,6 +1199,16 @@ const req = {
   j106Put: (track,raw) => [CMD.J106,[1,track,...J106.sysex(raw).slice(1,-1)]],
   j106Edit: (track,id,value) => [CMD.J106,[2,track,id,value]],
   j106Name: (track,name) => [CMD.J106,[3,track,...Array.from(String(name).replace(/[^ -~]/g," ").trim().slice(0,12)||"TONE",x=>x.charCodeAt(0))]],
+  hywList: () => [CMD.HYWAVE,[0]],
+  hywGet: id => [CMD.HYWAVE,[1,id]],
+  hywPut: (id,name,pts) => [CMD.HYWAVE,[2,id,...HYW.name7(name),...HYW.pack(pts)]],
+  hywStore: () => [CMD.HYWAVE,[3]],
+  hywRevert: id => [CMD.HYWAVE,[4,id]],
+  hywClear: id => [CMD.HYWAVE,[5,id]],
+  hyGet: track => [CMD.HYDRA,[0,track]],
+  hyPut: (track,raw) => [CMD.HYDRA,[1,track,...HY.nibbles(raw)]],
+  hyEdit: (track,id,raw) => [CMD.HYDRA,[2,track,id,raw&127,raw>>7]],
+  hyName: (track,name) => [CMD.HYDRA,[3,track,...Array.from(String(name).replace(/[^ -~]/g," ").trim().slice(0,12)||"PATCH",x=>x.charCodeAt(0))]],
   native: (engine,op,index,...args) => [CMD.NATIVE,[engine,op,index,...args]],
   czBank: bank => [CMD.CZ_BANK,[bank]],
   czGet: (target,index) => [CMD.CZ_GET,[target,index]],
@@ -918,6 +1292,7 @@ function replyMatches(cmd, args, a) {
     case CMD.MOTION: return a[0] === args[0];
     case CMD.BACKUP_GET: return a[0] === args[0] && a.slice(2, 7).every((v, i) => v === args[i + 1]);
     case CMD.BACKUP_PUT: return a[0] === args[0] && a[1] === args[1];
+    case CMD.HYWAVE: return a[0] === args[0] && (args[0] === 0 || args[0] === 3 || a[2] === args[1]);
     case CMD.UI_SET: return a[1] === args[0] && a[2] === args[1];
     case CMD.FAV_GET: case CMD.FAV_SET:
       return ![0, 3, 4].includes(a[0]) || (a[1] === args[0] && a[2] === args[1] && a[3] === args[2] && a[4] === args[3]);
@@ -940,6 +1315,36 @@ function replyMatches(cmd, args, a) {
     case CMD.TRACK_STEP: case CMD.TRACK_PARAM: return a[0] === args[0] && a[1] === args[1];
     default: return true;
   }
+}
+
+/* HYDRA's user waves on a unit (command 98). Sounds carry the user waves they name ({id,name,pts}, as the unit numbered
+   them): hyCollect reads them from the unit, hyInstall puts them into another unit's bank (the same points reused, others
+   into free waves) and gives the patches with their ids made the bank's */
+async function hyList(rq) { const r=parse[CMD.HYWAVE](await rq(req.hywList()));if(r.rc)throw Error("Cannot list HYDRA's user waves");return r.list; }
+async function hyCollect(rq,info,raws) {
+  if(!info.hywave)return [];
+  const last=info.hywave.user0+info.hywave.count,out=[];
+  for(const id of [...new Set(raws.flatMap(r=>HY.userIds(r)))].filter(id=>id<last).sort((x,y)=>x-y)){
+    const r=parse[CMD.HYWAVE](await rq(req.hywGet(id)));if(r.rc)throw Error("Cannot read a user wave");out.push({id,name:r.name,pts:r.pts});}
+  return out;
+}
+async function hyInstall(rq,info,raws,waves) {
+  if(!waves?.length)return raws;
+  if(!info.hywave)throw Error("Install firmware with HYDRA user waves first");
+  const {map,puts}=HYW.plan(waves,await hyList(rq));
+  for(const w of puts){const r=parse[CMD.HYWAVE](await rq(req.hywPut(w.id,w.name,w.pts)));if(r.rc)throw Error("User wave rejected");}
+  return raws.map(r=>HY.remap(r,map));
+}
+/* sounds and the user waves they name as one .syx file: the waves first, numbered in the file (distinct points, distinct
+   ids), then the patches with their ids made the file's. items [{raw, waves}] */
+function hyBundle(items) {
+  const byCrc=new Map(),waves=[];
+  const raws=items.map(({raw,waves:ws=[]})=>{const map=new Map();
+    for(const w of ws){const c=HYW.crc(w.pts);let id=byCrc.get(c);
+      if(id==null){id=HYW.USER0+waves.length;if(id>HY.ID_LAST)throw Error("Too many user waves for one file");byCrc.set(c,id);waves.push({id,name:w.name,pts:w.pts});}
+      map.set(w.id,id);}
+    return HY.remap(raw,map);});
+  return new Uint8Array([...waves.flatMap(w=>Array.from(HYW.frame(w.id,w.name,w.pts))),...raws.flatMap(r=>Array.from(HY.sysex(r)))]);
 }
 
 /* strict request/response: one frame in flight, the rest queued. Push frames (CHANGED, RELOAD,
@@ -1054,6 +1459,7 @@ function fmtValue(d, v) {
       return [(ms10 / 10000).toFixed(2), "s"];
     }
     case F.LFOHZ: { const h = 0.05 * Math.pow(800, (v & 127) / 127); return [h < 10 ? h.toFixed(2) : h.toFixed(1), "Hz"]; }
+    case F.KEY: return [`${["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"][v % 12]}${Math.trunc(v / 12) - 1}`, ""];   /* a MIDI note: 60 = C4 */
     case F.TONE: {                                 /* core.h fx_tone_hz: below 0 a high cut, above a low cut */
       const a = Math.min(63, Math.abs(v)), hz = v > 0 ? 150 + Math.floor(a * a * 1130 / 3969) : 120 + Math.floor((64 - a) * (64 - a) * 2520 / 3969);
       return v ? [`${v < 0 ? "Dark" : "Thin"} ${hz}`, "Hz"] : ["Full", ""];
@@ -1215,6 +1621,10 @@ function cleanPatch(pt) {
   if(pt.drum!=null || pt.engine===10)throw Error("Drum sounds are not supported by Saadet");
   if(pt.p5!=null){if(pt.engine!==19||!P5.valid(pt.p5))throw Error("Invalid native Prophet patch");o.p5=pt.p5.slice();}
   if(pt.j106!=null){if(pt.engine!==J106.ENGINE||!J106.valid(pt.j106))throw Error("Invalid native JUNO-106 tone");o.j106=pt.j106.slice();}
+  if(pt.hy!=null){if(pt.engine!==HY.ENGINE||!HY.valid(pt.hy))throw Error("Invalid native HYDRA patch");o.hy=pt.hy.slice();
+    if(Array.isArray(pt.hyWaves)&&pt.hyWaves.length)o.hyWaves=pt.hyWaves.map(w=>{const pts=Array.from(w.pts||[]);
+      if(!Number.isInteger(w.id)||w.id<HYW.USER0||w.id>HY.ID_LAST||pts.length!==HYW.N||pts.some(x=>!Number.isInteger(x)||x<-32768||x>32767))throw Error("Invalid HYDRA user wave");
+      return {id:w.id,name:HYW.cleanName(w.name),pts};});}
   if (pt.cz != null) { if(!CZ.valid(pt.cz))throw new Error("Invalid native CZ patch");o.cz=pt.cz.slice(); }
   if (Array.isArray(pt.fm6) && pt.fm6.length === FM6.PACKED) o.fm6 = pt.fm6.map((x) => (x | 0) & 127);   /* (a converted */
   if (Array.isArray(pt.fm4)) o.fm4 = pt.fm4.map((v) => (Number.isFinite(v) ? Math.round(v) : null));    /* DIGITAL sound) */
@@ -1233,6 +1643,8 @@ function libraryFile(kind, patches, ctx) {
         params: c.p, tags: c.tags, created: c.created, modified: c.modified };
       if(c.p5)o.p5=c.p5;
       if(c.j106)o.j106=c.j106;
+      if(c.hy)o.hy=c.hy;
+      if(c.hyWaves)o.hyWaves=c.hyWaves;
       if (c.cz) o.cz=c.cz;
       if (c.fm6) { o.fm6 = c.fm6; o.fm4 = c.fm4; }   /* a DIGITAL sound converted: its FM6 patch, the DIGITAL values */
       if (Number.isInteger(x.slot)) o.slot = x.slot;
@@ -1244,14 +1656,18 @@ function czLibraryPatch(v,ctx={}) {
   const p=Array(ctx.keys?.length||92).fill(null);p[(ctx.pe0??84)+7]=2;
   return cleanPatch({name:v.name,engine:15,engineName:"CZ-1",p,cz:v.raw,tags:["CZ-1","SysEx"]});
 }
+function hyLibraryPatch(v,ctx={}) {const p=Array(ctx.keys?.length||ctx.pcount||92).fill(null);if(v.p&&ctx.keys)HYS.params(v.p,ctx.keys,p).forEach((x,i)=>{p[i]=x;});
+  return cleanPatch({name:v.name,engine:HY.ENGINE,engineName:"HYDRA",p,hy:v.raw,hyWaves:v.waves,tags:v.p?["HYDRA","Hydrasynth"]:["HYDRA","SysEx"]});}
 function j106LibraryPatch(v,ctx={}) {return cleanPatch({name:v.name,engine:J106.ENGINE,engineName:"JUNO-106",p:Array(ctx.keys?.length||ctx.pcount||92).fill(null),j106:v.raw,tags:["JUNO-106","SysEx"]});}
 function p5LibraryPatch(v,ctx={}) {return cleanPatch({name:v.name,engine:19,engineName:"PROPHET",p:Array(ctx.keys?.length||ctx.pcount||92).fill(null),p5:v.raw,tags:["PROPHET","SysEx"]});}
 /* Library imports work offline too: dispatch by the file's manufacturer, never the selected engine. */
 function readSysexLibrary(bytes, filename, ctx={}) {
+  if (HYS.is(bytes)) return HYS.read(bytes).voices.map(v => hyLibraryPatch(v, ctx));   /* (an ASM Hydrasynth's, converted) */
   const start = bytes.indexOf(0xF0), maker = start < 0 ? -1 : bytes[start + 1];
   if (maker === 0x44) return CZ.read(bytes, filename).voices.map(v => czLibraryPatch(v, ctx));
   if (maker === 0x01) return P5.read(bytes).voices.map(v => p5LibraryPatch(v, ctx));
   if (maker === 0x41) return J106.read(bytes).voices.map(v => j106LibraryPatch(v, ctx));
+  if (maker === 0x7D && bytes[start + 2] === 0x48) return HY.read(bytes.slice(start)).voices.map(v => hyLibraryPatch(v, ctx));
   if (maker !== 0x43) throw new Error("Unknown SysEx manufacturer");
   const imported = FM6.parseSysex(bytes);
   if (!imported.voices.length || imported.badSum) throw new Error("Invalid Yamaha DX7 SysEx file");
@@ -1281,7 +1697,7 @@ function readLibraryFile(obj, ctx) {
     const p = ctx.keys && ctx.pe0 && obj.p.length !== ctx.keys.length ? tailParams(obj.p, ctx.keys.length, ctx.pe0)
       : obj.p.slice(0, ctx.keys ? ctx.keys.length : obj.p.length);
     const pt = fm4({ name: obj.presetName || obj.engineName || "PATCH", engine: e, engineName: obj.engineName, p,
-      p5:obj.p5, j106:obj.j106, cz:obj.cz, cz1:obj.cz1, tags: ["file"] }, obj.engineName,
+      p5:obj.p5, j106:obj.j106, hy:obj.hy, cz:obj.cz, cz1:obj.cz1, tags: ["file"] }, obj.engineName,
       ctx.keys && ctx.pe0 ? ctx.pe0 : p.length - 8);
     return pt ? { patches: [cleanPatch(pt)], skipped: 0, keys: null } : { patches: [], skipped: 1, keys: null };
   }
@@ -1329,15 +1745,15 @@ const nativeBank = {
     if(info.shared){const p=await bank.get(rq,info,slot);return p.engine===engine?p:{used:false,engine,slot};}
     const r=parse[CMD.NATIVE](await rq(req.native(engine,1,slot)));if(r.rc===2)return {used:false,engine,slot};if(r.rc)throw Error("Cannot read native preset");
     const p=Array(info.pcount).fill(null);if(engine===15)p[info.pe0+7]=2;
-    return {used:true,engine,slot,name:engine===19?P5.name(r.raw):engine===21?J106.name(r.raw):engine===15?CZ.name(r.raw):FM6.name(FM6.unpack(r.raw)),p,pattern:null,grid:null,...(engine===19?{p5:r.raw}:engine===21?{j106:r.raw}:engine===15?{cz:r.raw}:{fm6:r.raw})};
+    return {used:true,engine,slot,name:engine===19?P5.name(r.raw):engine===21?J106.name(r.raw):engine===25?HY.name(r.raw):engine===15?CZ.name(r.raw):FM6.name(FM6.unpack(r.raw)),p,pattern:null,grid:null,...(engine===19?{p5:r.raw}:engine===21?{j106:r.raw}:engine===25?{hy:r.raw}:engine===15?{cz:r.raw}:{fm6:r.raw})};
   },
   async put(rq,engine,slot,pt) {
-    let raw=engine===19?pt.p5:engine===21?pt.j106:engine===15?pt.cz:pt.fm6;
+    let raw=engine===19?pt.p5:engine===21?pt.j106:engine===25?pt.hy:engine===15?pt.cz:pt.fm6;
     if(pt.engine!==engine || !raw)throw Error("Choose a preset for this native collection");
-    raw=Array.from(raw);if(engine===21){if(!J106.valid(raw))throw Error("Invalid JUNO-106 tone");}else if(engine===19){if(!P5.valid(raw))throw Error("Invalid Prophet patch");}else if(engine===15){if(!CZ.valid(raw))throw Error("Invalid CZ tone");}else if(raw.length!==128 || raw.some(x=>!Number.isInteger(x)||x<0||x>127))throw Error("Invalid DX7 voice");
-    if(pt.name){const clean=String(pt.name).replace(/[^ -~]/g," ").trim();if(engine===21){if(clean!==J106.name(raw).trim())J106.setName(raw,clean);}else if(engine===19){if(clean!==P5.name(raw).trim())P5.setName(raw,clean);}else if(engine===15){if(clean!==CZ.name(raw).trim())CZ.setName(raw,clean);}else {if(clean!==FM6.name(FM6.unpack(raw)).replace(/[^ -~]/g," ").trim()){const name=clean.slice(0,10).padEnd(10," ");raw.splice(118,10,...Array.from(name,x=>x.charCodeAt(0)));}}}
-    const info=parse[CMD.INFO](await rq(req.info()));if(info.shared)return bank.put(rq,slot,{...pt,[engine===19?"p5":engine===21?"j106":engine===15?"cz":"fm6"]:raw},info);
-    return parse[CMD.NATIVE](await rq(req.native(engine,2,slot,...(engine===19?P5.nibbles(raw):engine===21?J106.nibbles(raw):engine===15?CZ.nibbles(raw):raw)),FLASH_OPT)).rc;
+    raw=Array.from(raw);if(engine===21){if(!J106.valid(raw))throw Error("Invalid JUNO-106 tone");}else if(engine===25){if(!HY.valid(raw))throw Error("Invalid HYDRA patch");}else if(engine===19){if(!P5.valid(raw))throw Error("Invalid Prophet patch");}else if(engine===15){if(!CZ.valid(raw))throw Error("Invalid CZ tone");}else if(raw.length!==128 || raw.some(x=>!Number.isInteger(x)||x<0||x>127))throw Error("Invalid DX7 voice");
+    if(pt.name){const clean=String(pt.name).replace(/[^ -~]/g," ").trim();if(engine===21){if(clean!==J106.name(raw).trim())J106.setName(raw,clean);}else if(engine===25){if(clean!==HY.name(raw).trim())HY.setName(raw,clean);}else if(engine===19){if(clean!==P5.name(raw).trim())P5.setName(raw,clean);}else if(engine===15){if(clean!==CZ.name(raw).trim())CZ.setName(raw,clean);}else {if(clean!==FM6.name(FM6.unpack(raw)).replace(/[^ -~]/g," ").trim()){const name=clean.slice(0,10).padEnd(10," ");raw.splice(118,10,...Array.from(name,x=>x.charCodeAt(0)));}}}
+    const info=parse[CMD.INFO](await rq(req.info()));if(info.shared)return bank.put(rq,slot,{...pt,[engine===19?"p5":engine===21?"j106":engine===25?"hy":engine===15?"cz":"fm6"]:raw},info);
+    return parse[CMD.NATIVE](await rq(req.native(engine,2,slot,...(engine===19?P5.nibbles(raw):engine===21?J106.nibbles(raw):engine===25?HY.nibbles(raw):engine===15?CZ.nibbles(raw):raw)),FLASH_OPT)).rc;
   },
   async store(rq,engine,slot,track,name="") {
     const info=parse[CMD.INFO](await rq(req.info()));if(info.shared)return bank.store(rq,slot,name,info,track);
@@ -1373,21 +1789,22 @@ const sharedBank = {
     for(let i=0;i<16;i++)p.pattern.push([r.b(),r.b()]);
     const kind=r.b();
     if(kind){const size=r.b()|r.b()<<7,raw=czBkUnpack(r.a.slice(r.i));
-      const key={1:"fm6",2:"cz",3:"p5",4:"j106"}[kind],engine={1:12,2:15,3:19,4:21}[kind];
-      if(!key||p.engine!==engine||raw.length!==size||size!==({1:128,2:144,3:138,4:31}[kind]))throw Error("Invalid shared native voice");
-      p[key]=raw;const fullName=kind===1?FM6.name(FM6.unpack(raw)):kind===2?CZ.name(raw):kind===3?P5.name(raw):kind===4?J106.name(raw):p.name;
+      const key={1:"fm6",2:"cz",3:"p5",4:"j106",5:"hy"}[kind],engine={1:12,2:15,3:19,4:21,5:25}[kind];
+      if(!key||p.engine!==engine||raw.length!==size||size!==({1:128,2:144,3:138,4:31,5:144}[kind]))throw Error("Invalid shared native voice");
+      p[key]=raw;const fullName=kind===1?FM6.name(FM6.unpack(raw)):kind===2?CZ.name(raw):kind===3?P5.name(raw):kind===4?J106.name(raw):kind===5?HY.name(raw):p.name;
       if(p.name.trim()===fullName.slice(0,12).trim())p.name=fullName;
     }
     return p;
   },
   async put(rq,info,slot,pt) {
-    const kind=pt.fm6?1:pt.cz?2:pt.p5?3:pt.j106?4:0,raw=kind?(pt.fm6||pt.cz||pt.p5||pt.j106):null;
+    const kind=pt.fm6?1:pt.cz?2:pt.p5?3:pt.j106?4:pt.hy?5:0;let raw=kind?(pt.fm6||pt.cz||pt.p5||pt.j106||pt.hy):null;
     if(pt.drum || pt.engine===10)throw Error("Drum sounds are not supported by Saadet");
-    if(kind && pt.engine!==({1:12,2:15,3:19,4:21}[kind]))throw Error("Native voice does not match its engine");
-    if(kind===1 && (raw.length!==128||raw.some(x=>!Number.isInteger(x)||x<0||x>127)) || kind===2&&!CZ.valid(raw) || kind===3&&!P5.valid(raw) || kind===4&&!J106.valid(raw))throw Error("Invalid native voice");
+    if(kind && pt.engine!==({1:12,2:15,3:19,4:21,5:25}[kind]))throw Error("Native voice does not match its engine");
+    if(kind===1 && (raw.length!==128||raw.some(x=>!Number.isInteger(x)||x<0||x>127)) || kind===2&&!CZ.valid(raw) || kind===3&&!P5.valid(raw) || kind===4&&!J106.valid(raw) || kind===5&&!HY.valid(raw))throw Error("Invalid native voice");
+    if(kind===5&&pt.hyWaves?.length)[raw]=await hyInstall(rq,info,[raw],pt.hyWaves);   /* (its user waves into the bank first) */
     const name=String(pt.name||"PATCH").replace(/[^ -~]/g," ").trim().slice(0,kind?20:12)||"PATCH";
     const values=Array.from({length:info.pcount},(_,i)=>pt.p?.[i]??0),defaults=!pt.p;
-    const nativeName=kind===1?FM6.name(FM6.unpack(raw)):kind===2?CZ.name(raw):kind===3?P5.name(raw):kind===4?J106.name(raw):"";
+    const nativeName=kind===1?FM6.name(FM6.unpack(raw)):kind===2?CZ.name(raw):kind===3?P5.name(raw):kind===4?J106.name(raw):kind===5?HY.name(raw):"";
     const preserveName=kind && kind<=4 && name===nativeName.replace(/[^ -~]/g," ").trim();
     const args=[pt.engine,...strEnc(name),...values.flatMap(v14enc),...Array(32).fill(0),kind|(kind&&defaults?64:0)|(preserveName?32:0)];
     if(kind)args.push(raw.length&127,raw.length>>7,...czBkPack(new Uint8Array(raw)));
@@ -1435,12 +1852,15 @@ async function capturePatch(rq, info, name) {
   if(dump.engine===19){const r=parse[CMD.PROPHET](await rq(req.prophetGet(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0)));if(r.rc)throw Error("Cannot read Prophet patch");p5=r.raw;}
   let j106=null;
   if(dump.engine===J106.ENGINE&&info.juno){const r=parse[CMD.J106](await rq(req.j106Get(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0)));if(r.rc)throw Error("Cannot read JUNO-106 tone");j106=r.raw;}
+  let hy=null;
+  if(dump.engine===HY.ENGINE&&info.hydra){const r=parse[CMD.HYDRA](await rq(req.hyGet(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0)));if(r.rc)throw Error("Cannot read HYDRA patch");hy=r.raw;}
   let cz=null;
   if(dump.engine===15 && dump.p[info.pe0+7]===2) { if(!info.cz)throw new Error("Firmware lacks native CZ support");const r=parse[CMD.CZ_GET](await rq(req.czGet(0,info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0)));if(r.rc)throw new Error("Cannot read CZ patch");cz=r.raw; }
   let fm6=null;
   if(info.engines[dump.engine]==="FM6") { const r=parse[CMD.FM6_GET](await rq(req.fm6Get(FM6.TARGET.TRACK,info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0)));if(r.rc)throw new Error("Cannot read FM6 voice");fm6=Array.from(r.packed); }
   const p=dump.p.map((v,i)=>info.pe0>=100&&i>=96&&i<Math.min(info.pe0,108)?[0,0,60,64][(i-96)%4]:info.pe0>=114&&i>=111&&i<=113?0:v);
-  return { patch: cleanPatch({ p5, j106, cz, fm6, name, engine: dump.engine, engineName: info.engines[dump.engine], p }), dump };
+  const hyWaves=hy?await hyCollect(rq,info,[hy]):undefined;   /* (the user waves it names travel with it) */
+  return { patch: cleanPatch({ p5, j106, hy, hyWaves, cz, fm6, name, engine: dump.engine, engineName: info.engines[dump.engine], p }), dump };
 }
 
 /* Dedicated CZ user banks: eight atomic A/B objects, ids 9..16. */
@@ -1485,9 +1905,11 @@ const trackOwn = (i, pe0) => TRACK_OWN.has(i) || (pe0 >= 83 && P_CHORD.includes(
 async function auditionPatch(rq, info, pt, opt = {}) {
   if(pt.p5&&!info.prophet)throw Error("Install firmware with Prophet support first");
   if(pt.j106&&!info.juno)throw Error("Install firmware with JUNO-106 support first");
+  if(pt.hy&&!info.hydra)throw Error("Install firmware with HYDRA support first");
   if(pt.cz && !info.cz)throw new Error("Install firmware with native CZ support first");
   if(pt.p5){const r=parse[CMD.PROPHET](await rq(req.prophetPut(opt.track??(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0),pt.p5)));if(r.rc)throw Error("Prophet patch rejected");}
   else if(pt.j106){const track=opt.track??(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0),r=parse[CMD.J106](await rq(req.j106Put(track,pt.j106)));if(r.rc)throw Error("JUNO-106 tone rejected");await rq(req.j106Name(track,J106.name(pt.j106)));}
+  else if(pt.hy){const track=opt.track??(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0),[raw]=await hyInstall(rq,info,[pt.hy],pt.hyWaves),r=parse[CMD.HYDRA](await rq(req.hyPut(track,raw)));if(r.rc)throw Error("HYDRA patch rejected");}
   else if(pt.cz) { const r=parse[CMD.CZ_PUT](await rq(req.czPut(0,opt.track??(info.ntrk?parse[CMD.TRACK](await rq(req.track())).sel:0),pt.cz)));if(r.rc)throw new Error("CZ patch rejected"); }
   else await rq(req.set(1, opt.gEng ?? 20, pt.engine));
   const dump = parse[CMD.DUMP](await rq(req.dump()), info);
@@ -1837,7 +2259,7 @@ const reservedFm4 = (engines, e) => e === 1 && (engines || [])[1] === "-";   /* 
 const engineLabel = (engines, e) => (e === 1 && (engines || [])[1] === "-" ? "FM6" : (engines || [])[e] ?? String(e));
 
 const paramReserved = id => (id>=33 && id<=36) || (id>=45 && id<=48);
-const globalReserved = id => (id>=4 && id<=11) || (id>=24 && id<=26);
+const globalReserved = id => (id>=4 && id<=9) || (id>=25 && id<=26);
 /* Optional preferences: old firmware is never probed with unknown commands. */
 async function readDevicePreferences(rq, info, names, previous = null) {
   if (!info.uiCaps) return null;
@@ -1874,7 +2296,7 @@ function aliasOf(names, i) { const k = names ? names.indexOf(names[i]) : -1; ret
 /* the order the device shows its engines in (src/engines.c ENGINE_ORDER): the lists here follow it, the protocol keeps
    the engine numbers. engineOrder(names): the indices of names in that order, "-" (a reserved number) left out; a name
    the list does not know (another firmware) follows in index order */
-const ENGINE_ORDER = ["PROPHET", "ANALOG", "FM6", "DIGITAL", "PHASE", "CZ-1", "JUNO-106", "SID", "VOICE", "NOISE",
+const ENGINE_ORDER = ["PROPHET", "ANALOG", "FM6", "DIGITAL", "PHASE", "CZ-1", "JUNO-106", "HYDRA", "SID", "VOICE", "NOISE",
   "DRUM"];
 function engineOrder(names) {
   const rank = (n) => { const k = ENGINE_ORDER.indexOf(n); return k < 0 ? ENGINE_ORDER.length : k; };
@@ -1987,7 +2409,7 @@ const TEXT = {
 
     other: "English", connect: "接続", disconnect: "切断", mock: "モック（実機なし）",
     sound: "音色", engine: "エンジン", presets: "プリセット", initSound: "音色を初期化",
-    track: "トラック",
+    track: "トラック", part: "パート",
     saveFile: "ファイルに保存", loadFile: "ファイルを読み込む", projects: "プロジェクト",
     load: "読込", save: "保存", used: "使用中", empty: "空", unknown: "—",
     steps: "ステップ", reload: "再読み込み", clearSeq: "シーケンスを消去",
@@ -2081,7 +2503,7 @@ const TEXT = {
 
     other: "日本語", connect: "Connect", disconnect: "Disconnect", mock: "Mock device (no hardware)",
     sound: "Sound", engine: "Engine", presets: "Presets", initSound: "Init sound",
-    track: "Track",
+    track: "Track", part: "Part",
     saveFile: "Save to file", loadFile: "Load file", projects: "Projects",
     load: "Load", save: "Save", used: "used", empty: "empty", unknown: "—",
     steps: "Steps", reload: "Reload", clearSeq: "Clear sequence",
@@ -2263,7 +2685,7 @@ const LAYOUT = (pe0) => [
     ...(pe0 >= 84 ? [["MPC", 0, [P_MPCDEG]]] : [])] },                                                 /* DEG 83 */
   { t: "ARP", pages: [["ARP", 0, [17, 18, 19, 20]], ["ARP 2", 0, [21, 22, 23, 24]]] },
   { t: "TEMPO", pages: [["TEMPO", 1, [0, 1]]] },   /* BPM SWG: the project's (SEQ > TEMPO) */
-  { t: "GLOBAL", tab: "setgroups", pages: [["GLOBAL", 1, [21, 41, 2, 3]], ["SYSTEM", 1, [14]]] }, /* device workload budget */
+  { t: "GLOBAL", tab: "setgroups", pages: [["GLOBAL", 1, [21, 41, 2, 3]], ["PARTS", 1, [10, 11, 24]], ["SYSTEM", 1, [14]]] }, /* device workload budget */
 ];
 /* globals that are actions or placeholders on the device: buttons instead, or hidden */
 const G_SKIP = new Set(["SLOT","NAME","BOOT","LOAD","SAVE","ENG","SET","CLRSQ","INIT","CPU"]);
@@ -2367,6 +2789,7 @@ async function getDump(d = dev) {
   if(d.info.native?.[out.engine]){const r=parse[CMD.NATIVE](await sessionRequest(d,req.native(out.engine,7,d.sel||0)));if(!r.rc)out.user=r.user;}
   if(out.engine===19 && d.info.prophet){const r=parse[CMD.PROPHET](await sessionRequest(d,req.prophetGet(d.sel||0)));if(r.rc)throw Error("Cannot read Prophet program");out.p5=r.raw;}
   if(out.engine===J106.ENGINE && d.info.juno){const r=parse[CMD.J106](await sessionRequest(d,req.j106Get(d.sel||0)));if(r.rc)throw Error("Cannot read JUNO-106 tone");out.j106=r.raw;}
+  if(out.engine===HY.ENGINE && d.info.hydra){const r=parse[CMD.HYDRA](await sessionRequest(d,req.hyGet(d.sel||0)));if(r.rc)throw Error("Cannot read HYDRA patch");out.hy=r.raw;}
   return out;
 }
 
@@ -2397,10 +2820,11 @@ async function load(d) {
     d.keys = paramKeys(d.pdesc, d.info.pe0, d.info.pcount);
     await libAdopt(d);
     assertSession(d);
-    d.sel=0; // Saadet has one synth.   /* v3: the selected track */
+    d.sel=d.info.ntrk?parse[CMD.TRACK](await sessionRequest(d,req.track())).sel:0;   /* v3: the part selected */
     d.dump = await getDump(d);
     if(d.dump.p5){p5Tone=d.dump.p5.slice();p5Render();}
     if(d.dump.j106){j106Tone=d.dump.j106.slice();j106Render();}
+    if(d.dump.hy){hyTone=d.dump.hy.slice();hyRender();}
     buildUI();
     renderPanels();
     /* protocol v2: live pushes and the user bank; older firmware: DUMP polling, no bank */
@@ -2459,6 +2883,7 @@ function buildUI() {
   renderSysinfo();
   fm6List = null;
   renderFm6();
+  renderPart();
 }
 
 /* the track selector (v3): the four parts; the editor shows the selected one */
@@ -2489,7 +2914,8 @@ function updateBrowser() {
   const ps = $("preset");
   const names = dev.names[e] || [];
   const currentNative=e===19 && !dev.dump.user && dev.dump.p5 && P5.name(dev.dump.p5)!==names[dev.dump.preset] ? P5.name(dev.dump.p5) :
-    e===J106.ENGINE && !dev.dump.user && dev.dump.j106 && J106.name(dev.dump.j106)!==names[dev.dump.preset] ? J106.name(dev.dump.j106) : null;
+    e===J106.ENGINE && !dev.dump.user && dev.dump.j106 && J106.name(dev.dump.j106)!==names[dev.dump.preset] ? J106.name(dev.dump.j106) :
+    e===HY.ENGINE && !dev.dump.user && dev.dump.hy && HY.name(dev.dump.hy)!==names[dev.dump.preset] ? HY.name(dev.dump.hy) : null;
   const pool=dev.info.shared?{slots:dev.bank?.slots.filter(x=>x.engine===e)}:dev.nativePools?.[e],sig=JSON.stringify([e,pool,currentNative]);
   if(ps.dataset.engine!==sig){
     ps.replaceChildren(...names.map((n,i)=>el("option",{value:i,text:n,hidden:aliasOf(names,i)!==i})),...(pool?.slots||[]).filter(x=>x.used).map(x=>el("option",{value:`u:${x.slot}`,text:`${slotName(x.slot,e)} ${x.name}`})));
@@ -2554,6 +2980,8 @@ function buildGroups() {
   for (const [id, divs] of Object.entries(groups)) $(id).replaceChildren(...divs);
   $("p5panel").hidden=!(dev?.info.prophet&&dev?.dump.engine===19);
   $("j106panel").hidden=!(dev?.info.juno&&dev?.dump.engine===J106.ENGINE);
+  $("hypanel").hidden=!(dev?.info.hydra&&dev?.dump.engine===HY.ENGINE);
+  if($("hypanel").hidden)$("hywpanel").hidden=true;else hywRefresh().catch(e=>say(e.message));
   $("czpanel").hidden = !dev.info.cz || dev.dump.engine!==15;
   $("czbankpanel").hidden = !dev.info.czBanks;
   if(dev.info.czBanks && !$("czbank").options.length)$("czbank").replaceChildren(...Array.from({length:8},(_,i)=>el("option",{value:i},`Bank ${String.fromCharCode(65+i)}`)));
@@ -2699,6 +3127,7 @@ async function sendSet(s, id, k) {
   try {
     const d = dev;
     const r = parse[CMD.SET](await rq(req.set(s, id, v), { key: k }));
+    if (s === 1 && id === G_PMODE) { dev.dump.g[id] = r.value; dev.sel = r.value ? dev.sel : 0; renderPart(); }
     if (!s && id === 26 && d === dev) await rereadMpcDesc(d);
     if (dev && dragging !== k && st.sent === v && !dev.link.hasQueued(k)) {   /* the device's value after clamping */
       (s ? dev.dump.g : dev.dump.p)[id] = r.value;
@@ -2721,16 +3150,30 @@ async function choosePreset(e, p) {
     await afterSoundChange();
   } catch (err) { report(err); } finally { releaseBusy(); }
 }
+/* the part the Sound tab edits: the device's selected one, offered when both are in use */
+const G_PMODE = 10;
+function renderPart() {
+  const on = !!dev?.dump && dev.info.ntrk > 1 && dev.dump.g[G_PMODE] > 0;
+  $("partbox").hidden = !on;
+  if (on) $("part").value = String(dev.sel ?? 0);
+}
+$("part").addEventListener("change", () => op(async () => {
+  const r = parse[CMD.TRACK](await rq(req.track(+$("part").value)));
+  dev.sel = r.sel;
+  await afterSoundChange("reloaded");
+}));
 async function afterSoundChange(msg = "ready", d = dev) {
   assertSession(d);
   needReload = false;                               /* this re-reads everything a RELOAD asks for */
   d.dump = await getDump(d);
   if(d.dump.p5){p5Tone=d.dump.p5.slice();p5Render();}
   if(d.dump.j106){j106Tone=d.dump.j106.slice();j106Render();}
+  if(d.dump.hy){hyTone=d.dump.hy.slice();hyRender();}
   await rereadEngineDesc(d);
   await rereadMpcDesc(d);
   updateBrowser();
   refreshAll();
+  renderPart();
   sayK(msg);
 }
 $("init").addEventListener("click", async () => {
@@ -2786,8 +3229,8 @@ $("backup-file").addEventListener("change", () => {
 function onPush(f) {
   if(!dev?.dump)return;
   try{
-    if(f.cmd===CMD.CHANGED){const c=parse[CMD.CHANGED](f.a),arr=c.scope?dev.dump.g:dev.dump.p,k=key(c.scope,c.id);if(c.id<arr.length&&!touched(k)){arr[c.id]=c.value;showValue(k,c.value,false);blink(k);}}
-    else if(f.cmd===CMD.RELOAD){if(selfReload.n>0&&Date.now()<selfReload.until){selfReload.n--;return;}needReload=true;maybeReload();}
+    if(f.cmd===CMD.CHANGED){const c=parse[CMD.CHANGED](f.a),arr=c.scope?dev.dump.g:dev.dump.p,k=key(c.scope,c.id);if(c.scope&&c.id===G_PMODE){arr[c.id]=c.value;renderPart();}if(c.id<arr.length&&!touched(k)){arr[c.id]=c.value;showValue(k,c.value,false);blink(k);}}
+    else if(f.cmd===CMD.RELOAD){dev.sel=parse[CMD.RELOAD](f.a).track;renderPart();if(selfReload.n>0&&Date.now()<selfReload.until){selfReload.n--;return;}needReload=true;maybeReload();}
   }catch(error){console.warn(error);}
 }
 function blink(k) {
@@ -2980,6 +3423,134 @@ $("j106export").addEventListener("click",()=>downloadBytes(`${fileSlug(J106.name
 $("j106exportbank").addEventListener("click",()=>{if(!j106Voices.length){say("Import a library first");return;}const voices=j106Voices.map(v=>v.raw);voices[+$("j106voices").value]=j106Tone;downloadBytes(`juno106-library-${today()}.syx`,new Uint8Array(voices.flatMap(v=>Array.from(J106.sysex(v)))));});
 $("j106library").addEventListener("click",()=>libAdd([j106LibraryPatch({name:J106.name(j106Tone),raw:j106Tone},libCtx())]).then(()=>say("JUNO-106 tone added to library")).catch(e=>say(e.message)));
 j106Render();
+let hyVoices=[],hyTone=HY.init();
+function hyRender(){
+  $("hyname").value=HY.name(hyTone);const root=$("hycontrols");root.replaceChildren();
+  for(const [name,from,to] of HY.GROUPS){
+    const g=el("fieldset",{},el("legend",{},name));
+    for(const f of HY.FIELDS.filter(f=>f.id>=from&&f.id<to)){
+      const input=f.names?el("select",{},...f.names.map((name,i)=>el("option",{value:i},name))):el("input",{type:"number",min:f.min,max:f.max,step:1});
+      input.value=HY.get(hyTone,f.id);
+      input.addEventListener("change",()=>{const value=+input.value;if(!Number.isInteger(value)||value<f.min||value>f.max){input.value=HY.get(hyTone,f.id);return;}HY.set(hyTone,f.id,value);});
+      g.append(el("p",{},el("label",{},f.label+" ",input)));
+    }
+    root.append(g);
+  }
+}
+$("hyname").addEventListener("change",()=>HY.setName(hyTone,$("hyname").value));
+$("hyimport").addEventListener("click",()=>$("hyfile").click());
+/* hyToneWaves: the user waves the panel's patch names when it came from a file (the file's ids); empty once they are in the
+   unit's bank, its ids then the bank's */
+let hyToneWaves=[];
+$("hyfile").addEventListener("change",async()=>{const f=$("hyfile").files[0];if(!f)return;try{const b=new Uint8Array(await f.arrayBuffer()),hs=HYS.is(b),imported=hs?HYS.read(b):HY.read(b);
+  if(!imported.voices.length)throw Error("No HYDRA patch in this file: import user waves below");
+  hyVoices=imported.voices;
+  if(imported.waves?.length&&dev?.info.hywave){const raws=await hyInstall(rq,dev.info,hyVoices.map(v=>v.raw),imported.waves);hyVoices.forEach((v,i)=>{v.raw=raws[i];v.waves=[];});await hywRefresh(true);}
+  $("hyvoices").replaceChildren(...hyVoices.map((v,i)=>el("option",{value:i},`${i+1}. ${v.name}`)));hyTone=hyVoices[0].raw.slice();hyToneWaves=hyVoices[0].waves||[];hyRender();
+  say(hs?`Converted ${hyVoices.length} Hydrasynth patches`:`Imported ${hyVoices.length} HYDRA patches`+(imported.waves?.length?(dev?.info.hywave?` and ${imported.waves.length} user waves`:"; connect a unit with user waves to bring theirs in"):""));}catch(e){say(e.message);}finally{$("hyfile").value="";}});
+$("hyvoices").addEventListener("change",()=>{const v=hyVoices[+$("hyvoices").value];hyTone=v.raw.slice();hyToneWaves=v.waves||[];hyRender();});
+$("hyread").addEventListener("click",()=>op(async()=>{const r=parse[CMD.HYDRA](await rq(req.hyGet(dev.sel||0)));if(r.rc)throw Error("Cannot read HYDRA patch");hyTone=r.raw;hyToneWaves=[];hyRender();say("HYDRA patch read from track");}));
+$("hysend").addEventListener("click",()=>op(async()=>{const d=dev;
+  if(hyToneWaves.length){[hyTone]=await hyInstall(rq,d.info,[hyTone],hyToneWaves);const v=hyVoices[+$("hyvoices").value];if(v&&v.waves===hyToneWaves){v.raw=hyTone.slice();v.waves=[];}hyToneWaves=[];hyRender();await hywRefresh(true);}
+  const r=parse[CMD.HYDRA](await rq(req.hyPut(d.sel||0,hyTone)));if(r.rc)throw Error("HYDRA patch rejected");
+  const v=hyVoices[+$("hyvoices").value];if(v?.p&&d.keys)for(const [k,x] of Object.entries(v.p)){const i=d.keys.indexOf(k);if(i>=0)await rq(req.set(0,i,x));}   /* (a Hydrasynth's: its envelope, voice, glide) */
+  await afterSoundChange("ready",d);}));
+/* the user waves a patch names: from its file, else read from the unit (none without one) */
+const hyWavesOf=async(raw,waves)=>waves?.length?waves:dev?.info.hywave&&HY.userIds(raw).length?await hyCollect(rq,dev.info,[raw]):[];
+const hyBundleSay=items=>{if(items.some(x=>HY.userIds(x.raw).length&&!x.waves.length))say("Saved without its user waves: connect the unit to bring them along");};
+$("hyexport").addEventListener("click",async()=>{try{const items=[{raw:hyTone,waves:await hyWavesOf(hyTone,hyToneWaves)}];downloadBytes(`${fileSlug(HY.name(hyTone))}.syx`,hyBundle(items));hyBundleSay(items);}catch(e){say(e.message);}});
+$("hyexportbank").addEventListener("click",async()=>{try{if(!hyVoices.length){say("Import a library first");return;}const sel=+$("hyvoices").value,items=[];
+  for(let i=0;i<hyVoices.length;i++){const raw=i===sel?hyTone:hyVoices[i].raw;items.push({raw,waves:await hyWavesOf(raw,i===sel?hyToneWaves:hyVoices[i].waves)});}
+  downloadBytes(`hydra-library-${today()}.syx`,hyBundle(items));hyBundleSay(items);}catch(e){say(e.message);}});
+$("hylibrary").addEventListener("click",async()=>{try{const waves=await hyWavesOf(hyTone,hyToneWaves);await libAdd([hyLibraryPatch({name:HY.name(hyTone),raw:hyTone,waves},libCtx())]);say("HYDRA patch added to library");}catch(e){say(e.message);}});
+
+/* HYDRA's user waves (HYW, command 98): the unit's bank as tiles, one of them edited, drawn over or by its harmonics. A
+   finished change goes to the unit at once (heard at once; it keeps the bank once it rests) */
+let hywList=[],hywPts=[],hywSel=0,hywEdit=new Int16Array(HYW.N),hywDraft=null,hywFor=null;
+const HYW_DB=60;
+const hywInk=()=>{const cs=getComputedStyle(document.documentElement),v=n=>cs.getPropertyValue(n).trim();return {fg:v("--fg")||"#000",dim:v("--dim")||"#666",line:v("--line")||"#ccc"};};
+function hywPlot(c,pts,base){
+  const g=c.getContext("2d"),w=c.width,h=c.height,ink=hywInk(),y=v=>h/2-v/32768*(h/2-3);
+  g.clearRect(0,0,w,h);g.fillStyle=ink.line;g.fillRect(0,Math.round(h/2),w,1);
+  const line=(p,col,lw)=>{g.strokeStyle=col;g.lineWidth=lw;g.beginPath();for(let i=0;i<=p.length;i++){const x=i*w/p.length;i?g.lineTo(x,y(p[i%p.length])):g.moveTo(x,y(p[0]));}g.stroke();};
+  if(base)line(base,ink.dim,1);line(pts,ink.fg,w>200?2:1);
+}
+const hywTop=spec=>Math.max(1e-9,...Array.from({length:HYW.H},(_,k)=>Math.hypot(spec.re[k+1],spec.im[k+1])));
+function hywBars(c,spec){
+  const g=c.getContext("2d"),w=c.width,h=c.height,ink=hywInk(),bw=w/HYW.H,top=hywTop(spec);g.clearRect(0,0,w,h);
+  for(let k=1;k<=HYW.H;k++){const m=Math.hypot(spec.re[k],spec.im[k])/top,db=m>0?Math.max(-HYW_DB,20*Math.log10(m)):-HYW_DB,bh=(1+db/HYW_DB)*h;
+    g.fillStyle=k%8?ink.fg:ink.dim;g.fillRect((k-1)*bw+1,h-bh,Math.max(1,bw-2),bh);}
+}
+function hywShow(){const p=hywDraft||hywEdit;hywPlot($("hywdraw"),p,hywDraft?hywEdit:null);hywBars($("hywharm"),HYW.spectrum(p));}
+function hywGrid(){
+  $("hywgrid").replaceChildren(...hywList.map((e,k)=>{const c=el("canvas",{width:96,height:32});hywPlot(c,hywPts[k]||new Int16Array(HYW.N));
+    const b=el("button",{type:"button","aria-pressed":String(k===hywSel),class:e.used?"":"free",title:e.used?"":"Free"},c,el("span",{text:`U${k+1} ${e.name}`}));
+    b.addEventListener("click",()=>hywPick(k));return b;}));
+}
+function hywPick(k){hywSel=Math.max(0,k);hywEdit=Int16Array.from(hywPts[hywSel]||new Int16Array(HYW.N));hywDraft=null;$("hywname").value=hywList[hywSel]?.name||"";hywGrid();hywShow();}
+/* the bank as the unit has it: LIST, then GET what changed */
+async function hywRefresh(force) {
+  const d=dev,on=!!(d?.info.hydra&&d?.info.hywave);$("hywpanel").hidden=!on;if(!on||(!force&&hywFor===d))return;hywFor=d;
+  const list=await hyList(rq);
+  for(const e of list){const k=e.id-d.info.hywave.user0;if(!hywPts[k]||hywList[k]?.crc!==e.crc){const r=parse[CMD.HYWAVE](await rq(req.hywGet(e.id)));if(r.rc)throw Error("Cannot read a user wave");hywPts[k]=r.pts;}}
+  hywList=list;HY.setUser(list.map(e=>e.name));hyRender();
+  $("hywfrom").replaceChildren(...HY.WAVES.map((n,i)=>el("option",{value:i+1,text:n})),...list.map((e,k)=>el("option",{value:e.id,text:`U${k+1} ${e.name}`})));
+  hywPick(Math.min(hywSel,list.length-1));
+}
+const hywId=()=>dev.info.hywave.user0+hywSel;
+async function hywSend(pts,name=$("hywname").value) {
+  const k=hywSel,r=parse[CMD.HYWAVE](await rq(req.hywPut(hywId(),name,pts)));if(r.rc)throw Error("User wave rejected");
+  const was=hywList[k].name,now=HYW.cleanName(name)||was;
+  hywPts[k]=Int16Array.from(pts);hywList[k]={...hywList[k],used:true,name:now,crc:HYW.crc(pts)};hywEdit=Int16Array.from(pts);hywDraft=null;
+  if(now!==was){HY.setUser(hywList.map(e=>e.name));hyRender();$("hywfrom").options[HY.WAVES.length+k].text=`U${k+1} ${now}`;}
+  $("hywname").value=now;hywGrid();hywShow();
+}
+const hywCommit=pts=>op(()=>hywSend(pts));
+/* (the canvases take the theme's ink when drawn: a light / dark switch draws them again) */
+window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change",()=>{if(!$("hywpanel").hidden){hywGrid();hywShow();}});
+{ /* drawing over the wave: the stroke as drawn, the wave band-limited when it ends */
+  const c=$("hywdraw");let last=-1,lastV=0;
+  const at=e=>{const r=c.getBoundingClientRect(),h=c.height;return [Math.min(HYW.N-1,Math.max(0,Math.floor((e.clientX-r.left)/r.width*HYW.N))),
+    Math.max(-32767,Math.min(32767,Math.round((0.5-(e.clientY-r.top)/r.height)*32768*h/(h/2-3))))];};
+  c.addEventListener("pointerdown",e=>{if(!dev?.info.hywave)return;c.setPointerCapture(e.pointerId);hywDraft=Float64Array.from(hywEdit);[last,lastV]=at(e);hywDraft[last]=lastV;hywShow();});
+  c.addEventListener("pointermove",e=>{if(!hywDraft||last<0)return;const [i,v]=at(e),n=Math.abs(i-last);
+    for(let j=0;j<=n;j++){const t=n?j/n:1;hywDraft[Math.round(last+(i-last)*t)]=lastV+(v-lastV)*t;}last=i;lastV=v;hywShow();});
+  const up=()=>{if(!hywDraft||last<0)return;const pts=HYW.finish(hywDraft);last=-1;hywDraft=null;hywCommit(pts);};
+  c.addEventListener("pointerup",up);c.addEventListener("pointercancel",up);
+}
+{ /* the harmonics: a bar's height its level (60 dB under the loudest), Alt its phase */
+  const c=$("hywharm");let spec=null;
+  const set=e=>{const r=c.getBoundingClientRect(),k=1+Math.min(HYW.H-1,Math.max(0,Math.floor((e.clientX-r.left)/r.width*HYW.H))),f=Math.min(1,Math.max(0,(e.clientY-r.top)/r.height));
+    const re=spec.re[k],im=spec.im[k],mag=Math.hypot(re,im),top=hywTop(spec);
+    if(e.altKey){const ph=(f*2-1)*Math.PI,m=mag||top/10;spec.re[k]=m*Math.sin(ph);spec.im[k]=m*Math.cos(ph);}
+    else{const m=f>=0.98?0:top*10**(-f*HYW_DB/20),ph=mag?Math.atan2(re,im):0;spec.re[k]=m*Math.sin(ph);spec.im[k]=m*Math.cos(ph);}
+    hywDraft=HYW.normal(HYW.synth(spec));hywShow();};
+  c.addEventListener("pointerdown",e=>{if(!dev?.info.hywave)return;c.setPointerCapture(e.pointerId);spec=HYW.spectrum(hywEdit);set(e);});
+  c.addEventListener("pointermove",e=>{if(spec)set(e);});
+  const up=()=>{if(!spec)return;spec=null;const pts=hywDraft;hywDraft=null;if(pts)hywCommit(Int16Array.from(pts));};
+  c.addEventListener("pointerup",up);c.addEventListener("pointercancel",up);
+}
+$("hywname").addEventListener("change",()=>op(()=>hywSend(hywEdit)));
+$("hywstart").addEventListener("click",()=>op(async()=>{const r=parse[CMD.HYWAVE](await rq(req.hywGet(+$("hywfrom").value)));if(r.rc)throw Error("Cannot read that wave");
+  if(!hywList[hywSel].used||/^USER \d+$/.test($("hywname").value))$("hywname").value=r.name;await hywSend(r.pts);}));
+$("hywrevert").addEventListener("click",()=>op(async()=>{const r=parse[CMD.HYWAVE](await rq(req.hywRevert(hywId()),FLASH_OPT));if(r.rc)throw Error(r.rc===3?"Stop playback first":"Cannot revert");await hywRefresh(true);say(`U${hywSel+1} as the unit keeps it`);}));
+$("hywclear").addEventListener("click",()=>op(async()=>{if(!confirm(`Clear U${hywSel+1}? Sounds that use it will play a sine.`))return;const r=parse[CMD.HYWAVE](await rq(req.hywClear(hywId())));if(r.rc)throw Error("Cannot clear");await hywRefresh(true);}));
+$("hywstore").addEventListener("click",()=>op(async()=>{const r=parse[CMD.HYWAVE](await rq(req.hywStore(),FLASH_OPT));if(r.rc)throw Error(r.rc===3?"Stop playback first":"Flash write failed");say("User waves kept");}));
+$("hywexport").addEventListener("click",()=>{const used=hywList.filter(e=>e.used);if(!used.length){say("No user waves yet");return;}
+  downloadBytes(`hydra-waves-${today()}.syx`,new Uint8Array(used.flatMap(e=>Array.from(HYW.frame(e.id,e.name,hywPts[e.id-dev.info.hywave.user0])))));});
+$("hywimport").addEventListener("click",()=>$("hywfile").click());
+$("hywfile").addEventListener("change",()=>op(async()=>{
+  const f=$("hywfile").files[0];$("hywfile").value="";if(!f)return;const b=new Uint8Array(await f.arrayBuffer()),d=dev;
+  if(b[0]===240){const {waves}=HY.read(b);if(!waves.length)throw Error("No user waves in this file");await hyInstall(rq,d.info,[],waves);await hywRefresh(true);say(`Imported ${waves.length} user waves`);return;}
+  const scan=$("hywscan").checked,waves=HYW.fromWav(b,scan?8:1),stem=HYW.cleanName(f.name.replace(/\.[^.]*$/,"").toUpperCase())||"WAV";
+  if(waves.length===1){if(!hywList[hywSel].used||/^USER \d+$/.test($("hywname").value))$("hywname").value=stem;await hywSend(waves[0]);say("Wave imported");return;}
+  const free=hywList.filter(e=>!e.used).map(e=>e.id);if(free.length<waves.length)throw Error(`The wavetable's ${waves.length} frames need ${waves.length} free user waves; ${free.length} are free`);
+  for(let j=0;j<waves.length;j++){const r=parse[CMD.HYWAVE](await rq(req.hywPut(free[j],`${stem.slice(0,5)} ${j+1}`,waves[j])));if(r.rc)throw Error("User wave rejected");}
+  if(d.dump.engine===HY.ENGINE){const cur=parse[CMD.HYDRA](await rq(req.hyGet(d.sel||0)));if(cur.rc)throw Error("Cannot read HYDRA patch");
+    const raw=cur.raw.slice();raw[0]=1;for(let k=0;k<8;k++)raw[2+k]=k<waves.length?free[k]:0;
+    const r=parse[CMD.HYDRA](await rq(req.hyPut(d.sel||0,raw)));if(r.rc)throw Error("HYDRA patch rejected");hyTone=raw;hyToneWaves=[];}
+  await hywRefresh(true);say(`${waves.length} frames imported`+(d.dump.engine===HY.ENGINE?" as OSC 1's scan list":""));}));
+hyRender();
 let czVoices=[{name:"INIT",raw:CZ.init()}],czTone=czVoices[0].raw.slice();
 function czRender() {
   const root=$("czcontrols");root.replaceChildren();
@@ -3030,6 +3601,8 @@ $("savefile").addEventListener("click", () => op(async () => {
     engine, preset, p: dev.dump.p.slice(), g: dev.dump.g.slice() };
   if(data.engine===19){const r=parse[CMD.PROPHET](await rq(req.prophetGet(dev.sel||0)));if(r.rc)throw Error("Cannot read Prophet program");data.p5=r.raw;}
   if(data.engine===J106.ENGINE&&dev.info.juno){const r=parse[CMD.J106](await rq(req.j106Get(dev.sel||0)));if(r.rc)throw Error("Cannot read JUNO-106 tone");data.j106=r.raw;}
+  if(data.engine===HY.ENGINE&&dev.info.hydra){const r=parse[CMD.HYDRA](await rq(req.hyGet(dev.sel||0)));if(r.rc)throw Error("Cannot read HYDRA patch");data.hy=r.raw;
+    const waves=await hyCollect(rq,dev.info,[r.raw]);if(waves.length)data.hyWaves=waves.map(w=>({id:w.id,name:w.name,pts:Array.from(w.pts)}));}
   if(data.engine===15 && data.p[dev.info.pe0+7]===2) { const r=parse[CMD.CZ_GET](await rq(req.czGet(0,dev.sel||0)));if(r.rc)throw new Error("Cannot read native CZ patch");data.cz=r.raw; }
   if(data.engineName === "FM6") { const r=parse[CMD.FM6_GET](await rq(req.fm6Get(FM6.TARGET.TRACK,dev.sel||0)));if(r.rc)throw new Error("Cannot read FM6 voice");data.fm6=Array.from(r.packed); }
   download(`saadet-${fileSlug(data.engineName || "patch")}-${fileSlug(data.presetName || preset)}.json`, data);
@@ -3047,6 +3620,9 @@ $("file").addEventListener("change", async () => {
     if(data.engine===19&&!data.p5)throw Error("Prophet sound file is missing native program data");
     if(data.j106!=null&&(!J106.valid(data.j106)||data.engine!==J106.ENGINE||!session.info.juno))throw Error("Invalid JUNO-106 tone or unsupported firmware");
     if(data.engine===J106.ENGINE&&!data.j106)throw Error("JUNO-106 sound file is missing native tone data");
+    if(data.hy!=null&&(!HY.valid(data.hy)||data.engine!==HY.ENGINE||!session.info.hydra))throw Error("Invalid HYDRA patch or unsupported firmware");
+    if(data.hyWaves!=null)data.hyWaves=cleanPatch({engine:HY.ENGINE,p:[],hy:data.hy,hyWaves:data.hyWaves}).hyWaves||[];
+    if(data.engine===HY.ENGINE&&!data.hy)throw Error("HYDRA sound file is missing native patch data");
     if(data.cz != null && (!CZ.valid(data.cz)||!session.info.cz))throw new Error("Invalid CZ patch or unsupported firmware");
     if(data.fm6 != null && (!Array.isArray(data.fm6) || data.fm6.length !== FM6.PACKED || data.fm6.some(v=>!Number.isInteger(v)||v<0||v>127) || data.engine !== 12 || !session.info.fm6))throw new Error("Invalid FM6 voice or unsupported firmware");
     if (!Number.isInteger(data.engine) || !Number.isInteger(data.preset) || !Array.isArray(data.p)) throw new Error("engine / preset / p");
@@ -3057,6 +3633,7 @@ $("file").addEventListener("change", async () => {
     selfLoad();
     if(data.p5){const r=parse[CMD.PROPHET](await rq(req.prophetPut(dev.sel||0,data.p5)));if(r.rc)throw Error("Prophet program rejected");}
     else if(data.j106){const r=parse[CMD.J106](await rq(req.j106Put(dev.sel||0,data.j106)));if(r.rc)throw Error("JUNO-106 tone rejected");await rq(req.j106Name(dev.sel||0,J106.name(data.j106)));}
+    else if(data.hy){const [raw]=await hyInstall(rq,dev.info,[data.hy],data.hyWaves),r=parse[CMD.HYDRA](await rq(req.hyPut(dev.sel||0,raw)));if(r.rc)throw Error("HYDRA patch rejected");}
     else if(data.cz) { const r=parse[CMD.CZ_PUT](await rq(req.czPut(0,dev.sel||0,data.cz)));if(r.rc)throw new Error("CZ patch rejected"); }
     else await rq(req.preset(data.engine, data.preset));
     dev.dump = await getDump();
@@ -3393,9 +3970,10 @@ $("libren").addEventListener("click", () => {
   if (!p) return;
   const v = prompt(t("promptName"), p.name);
   if (v == null || !v.trim()) return;
-  p.name = v.trim().slice(0, p.p5?20:p.j106?12:32);
+  p.name = v.trim().slice(0, p.p5?20:p.j106||p.hy?12:32);
   if(p.p5)P5.setName(p.p5,p.name);
   if(p.j106)J106.setName(p.j106,p.name);
+  if(p.hy)HY.setName(p.hy,p.name);
   libUpdate(p);
 });
 $("libtags").addEventListener("click", () => {
@@ -3440,7 +4018,7 @@ $("libfile").addEventListener("change", async () => {
   for (const f of [...$("libfile").files]) {
     try {
       const ctx = libCtx();
-      if(/\.syx$/i.test(f.name)) { const patches=readSysexLibrary(new Uint8Array(await f.arrayBuffer()),f.name,ctx);await libAdd(patches);n+=patches.length;continue; }
+      if(/\.(syx|hydra|patch)$/i.test(f.name)) { const patches=readSysexLibrary(new Uint8Array(await f.arrayBuffer()),f.name,ctx);await libAdd(patches);n+=patches.length;continue; }
       const obj = JSON.parse(await f.text());
       const r = readLibraryFile(obj, ctx);
       if (!ctx.keys && r.keys) {                     /* no layout yet: the file's becomes the library's */
@@ -3490,7 +4068,8 @@ function bankGet(slot) {
   libOp(async (d, rqf) => {
     const u=engine?await nativeBank.get(rqf,d.info,engine,slot):await bank.get(rqf,d.info,slot);
     if (!u.used) { sayK("emptySlot", slotName(slot)); return; }
-    const pt = { name: u.name, engine: u.engine, engineName: dev.info.engines[u.engine], p: u.p, p5:u.p5, j106:u.j106, cz:u.cz, fm6:u.fm6, drum:u.drum, pattern: u.pattern, grid: u.grid, tags: ["device"] };
+    const pt = { name: u.name, engine: u.engine, engineName: dev.info.engines[u.engine], p: u.p, p5:u.p5, j106:u.j106, hy:u.hy, cz:u.cz, fm6:u.fm6, drum:u.drum, pattern: u.pattern, grid: u.grid, tags: ["device"] };
+    if(u.hy)pt.hyWaves=await hyCollect(rqf,d.info,[u.hy]);
     await libAdd([reservedFm4(dev.info.engines, u.engine) ? fromDigital(pt, dev.info.engines, dev.info.pe0) : pt]);
     sayK("copiedLib", u.name);
   });
@@ -3518,11 +4097,12 @@ $("bkexport").addEventListener("click", () => libOp(async (d, rqf) => {
     if (!x.used) continue;
     sayK("readingBank", ` ${slotName(x.slot)}`);
     const u=engine?await nativeBank.get(rqf,d.info,engine,x.slot):await bank.get(rqf,d.info,x.slot);
-    if (u.used) out.push({ name: u.name, engine: u.engine, p: u.p, p5:u.p5, j106:u.j106, cz:u.cz, fm6:u.fm6, drum:u.drum, pattern: u.pattern, grid: u.grid, slot: x.slot,
+    if (u.used) out.push({ name: u.name, engine: u.engine, p: u.p, p5:u.p5, j106:u.j106, hy:u.hy, cz:u.cz, fm6:u.fm6, drum:u.drum, pattern: u.pattern, grid: u.grid, slot: x.slot,
       engineName: reservedFm4(dev.info.engines, u.engine) ? "DIGITAL" : dev.info.engines[u.engine] });   /* (DIGITAL's values) */
   }
   if(engine===19)downloadBytes(`prophet-presets-${today()}.syx`,new Uint8Array(out.flatMap(x=>Array.from(P5.sysex(x.p5)))));
   else if(engine===J106.ENGINE)downloadBytes(`juno106-presets-${today()}.syx`,new Uint8Array(out.flatMap(x=>Array.from(J106.sysex(x.j106)))));
+  else if(engine===HY.ENGINE)downloadBytes(`hydra-presets-${today()}.syx`,hyBundle(out.map(x=>({raw:x.hy,waves:x.hyWaves||[]}))));
   else if(engine===12){for(let i=0;i<out.length;i+=32)downloadBytes(`fm6-presets-${i/32+1}.syx`,FM6.bankSysex(out.slice(i,i+32).map(x=>FM6.unpack(x.fm6))));}
   else if(engine===15)downloadBytes(`cz1-presets-${today()}.syx`,new Uint8Array(out.flatMap(x=>Array.from(CZ.sysex(x.cz)))));
   else download(`saadet-bank-${today()}.json`,libraryFile("bank",out,libCtx()));
@@ -3533,9 +4113,10 @@ $("bknativeimport").addEventListener("click",()=>$("bknativefile").click());
 $("bknativefile").addEventListener("change",async()=>{
   const file=$("bknativefile").files[0];let engine=poolEngine();$("bknativefile").value="";if(!file||(!engine&&!dev?.info.shared))return;
   try{
-    const bytes=new Uint8Array(await file.arrayBuffer());if(dev.info.shared)engine=bytes[1]===0x43?12:bytes[1]===0x44?15:bytes[1]===1?19:bytes[1]===0x41&&dev.info.juno?J106.ENGINE:0;if(!engine)throw Error("Unknown SysEx manufacturer");const parsed=engine===19?P5.read(bytes):engine===J106.ENGINE?J106.read(bytes):engine===15?CZ.read(bytes,file.name):FM6.parseSysex(bytes);
+    const bytes=new Uint8Array(await file.arrayBuffer()),hs=HYS.is(bytes);if(hs&&!dev.info.hydra)throw Error("Install firmware with HYDRA support first");if(dev.info.shared)engine=hs?HY.ENGINE:bytes[1]===0x43?12:bytes[1]===0x44?15:bytes[1]===1?19:bytes[1]===0x41&&dev.info.juno?J106.ENGINE:bytes[1]===0x7D&&bytes[2]===0x48&&dev.info.hydra?HY.ENGINE:0;if(!engine)throw Error("Unknown SysEx manufacturer");const parsed=engine===19?P5.read(bytes):engine===J106.ENGINE?J106.read(bytes):engine===HY.ENGINE?(hs?HYS:HY).read(bytes):engine===15?CZ.read(bytes,file.name):FM6.parseSysex(bytes);
     if(!parsed.voices.length || parsed.badSum)throw Error("Invalid SysEx file");
-    const tones=parsed.voices.map(v=>({engine,name:v.name,...(engine===19?{p5:v.raw}:engine===J106.ENGINE?{j106:v.raw}:engine===15?{cz:v.raw}:{fm6:Array.from(FM6.pack(v.v))})}));
+    const tones=parsed.voices.map(v=>({engine,name:v.name,...(engine===19?{p5:v.raw}:engine===J106.ENGINE?{j106:v.raw}:engine===HY.ENGINE?{hy:v.raw,hyWaves:v.waves}:engine===15?{cz:v.raw}:{fm6:Array.from(FM6.pack(v.v))}),
+      ...(v.p&&dev.keys?{p:fullParams({engine,p:HYS.params(v.p,dev.keys)})}:{})}));   /* (a Hydrasynth's: its envelope, voice, glide) */
     const {targets,overwrite}=nativeImportTargets(bankView().slots,tones.length,bankSel??0);
     if(overwrite && !confirm(overwrite.from===overwrite.to?t("confirmOverwrite").replace("{n}",slotName(overwrite.from)).replace("{name}",targets[0].name||"")
       :t("confirmOverwriteRange").replace("{n}",tones.length).replace("{from}",slotName(overwrite.from)).replace("{to}",slotName(overwrite.to)).replace("{used}",overwrite.used)))return;

@@ -114,6 +114,28 @@ that connect the engine to the existing instrument (engine table, library, state
 editor) are now MPL-2.0, like the rest of the fm1-base build. The web editor's hooks stay
 GPL-3.0-only with the web editor.
 
+## HYDRA engine (MPL-2.0)
+
+HYDRA is Kerem Kilic's (Ellic Studio) engine from Melodee, licensed under the Mozilla Public License 2.0 file by file here. Melodee
+cancelled it before release; its copies there read GPL-3.0-only, and their author licenses them here under MPL-2.0.
+
+| File | What |
+| --- | --- |
+| `firmware/src/hydra_patch.h` | The native patch, its limits and its message |
+| `firmware/src/eng_hydra.c` | The voice, its budget and the presets. It grew from Melodee's WT engine, by john (@johnskiller), who licensed that file under MPL-2.0 (Melodee `e2b7ff53`); his and Leo Kuroshita's notices stay on it |
+| `firmware/src/hydra_edit.h`, `firmware/src/hydra_factory.h` | Panel field descriptors; our own 16 factory sounds |
+| `firmware/src/editor_hydra.c` | Editor command 97 and the native message |
+| `tests/hydra_test.c` | Host tests |
+| `tools/gen_hy_waves.py` | The 56 waves, computed from our own recipes (a build tool: GPL-3.0-only, as the others; it is not in the firmware's sources) |
+
+It follows the published design of the ASM Hydrasynth. No ASM code, wavetable or sound data is used.
+
+The web editor's Hydrasynth import (`HYS` in `web/editor.html`, GPL-3.0-only as the editor) is our own code. It reads the
+Hydrasynth's SysEx framing and patch layout as Sean Luke's Edisyn documents them from its reverse engineering
+(`edisyn/synth/asmhydrasynth`, Apache-2.0): the facts of the format (offsets, ranges, list indices, the checksum) were
+taken from those notes and that source, no Edisyn code. The patches it reads are the user's; none are included here, and
+the tests build their own.
+
 ## Retained Hügelton Instruments material
 
 The following original material is by Hügelton Instruments (Leo Kuroshita).
@@ -141,6 +163,8 @@ Melodee's additions and modifications are credited separately in the source file
 | Casio CZ-1 preset tones A-1..H-8 (Casio Computer Co., Ltd., 1986): the 64 factory sounds as native tone data, combined from the "64 original CZ-1 patches" SysEx (GeoCities CZ-101 page, archived 2009) and Oli Larkin's VirtualCZ conversions of the same presets (LCD names, line levels, velocity). Included as sound data for CZ-1 compatibility; the rights stay with Casio. See `assets/cz1-factory/README.md` | Casio's (no licence granted) | `assets/cz1-factory/cz1-factory.syx`, `tools/make_cz1_factory.py`, `tools/gen_cz1_factory.py` |
 | Sequential Prophet-5/10 factory programs v1.03 (Sequential, 2025; <https://sequential.com/support/download/prophet-5-10-sounds/>): the 200 programs of `P5_Factory_Programs_USER_v1.03.syx`, unchanged native data, as PROPHET's factory presets and its default native user collection. Included as sound data for Prophet-5 compatibility; the rights stay with Sequential. See `assets/prophet5-factory/README.md` | Sequential's (no licence granted) | `assets/prophet5-factory/prophet5-v1.03.syx`, `tools/gen_prophet_factory.py` |
 | Roland Juno-106 factory patches A11..B88 (Roland Corporation, 1984): the 128 factory patches as patch messages, decoded from two recordings of Roland's factory data cassette (sunshine-jones.com, hinzen.de) and checked against hinzen.de's patch file, as JUNO-106's presets; names from the factory list (synthmania.com). Included as sound data for Juno-106 compatibility; the rights stay with Roland. See `assets/j106-factory/README.md` | Roland's (no licence granted) | `assets/j106-factory/j106-factory.syx`, `tools/make_j106_factory.py`, `tools/gen_j106_factory.py` |
+| PPG Wave 2.2 (PPG, Wolfgang Palm): its wavetable EPROM, the envelope tables of its V5 operating system and its 100 factory programs, compiled into the firmware as PPG's waves, envelopes and presets from local copies that are never committed (`private/ppg`, read at build time). Included for PPG Wave 2.2 compatibility; the rights stay with their owners. The source archive does not contain them: without them the build stops, unless `SAADET_PPG` is set to 0 in `firmware/src/build_options.h`, which leaves PPG out | The owners' (no licence granted) | the firmware package only; read by `tools/gen_ppg_waves.py` and `tools/gen_ppg_factory.py` |
+| Sora (The Sora Project Authors) and Manrope (The Manrope Project Authors): outlined into the brand graphics by `tools/gen_brand.py`; the graphics carry no font and the repository no font file of either | SIL OFL 1.1 | `assets/brand/`, `assets/readme/introducing-saadet.png` |
 | klattsch by Tony Gies (<https://github.com/tgies/klattsch>): design reference for the VOICE engine; no code copied. Formant data from Klatt (1980) / Hillenbrand et al. (1995) | MIT (klattsch) | credit only |
 | JieLi AC79 SDK by JieLi Technology: three external files go into every `.fwsc` package; the optional RAM recovery helper is in `assets/recovery/` | Apache-2.0 | `LICENSES/Apache-2.0.txt` |
 
@@ -202,7 +226,8 @@ Contributions are welcome under the licence of the file they change. New firmwar
 
 "M-VAVE" and "FM-1" are trademarks of their respective owners. "Juno-106" and
 "Roland" are trademarks of Roland Corporation; JUNO-106 names the instrument this
-engine's tones are compatible with, and Saadet is not affiliated with Roland. Melodee is independent
+engine's tones are compatible with, and Saadet is not affiliated with Roland. "Hydrasynth" and "ASM" belong to Ashun Sound
+Machines; Saadet's HYDRA follows that instrument's design and is not affiliated with it. Melodee is independent
 firmware that runs on FM-1 hardware. It is not affiliated with, endorsed by or supported
 by those owners, nor by Hügelton Instruments.
 
@@ -231,8 +256,12 @@ the MIDI clock credit was corrected from source history. The compiler-dependency
 97 repository source files MPL/permissive, with no GPL exceptions. The app manifest declares MPL-2.0.
 See the clean-room records under `docs/cleanroom/` for provenance and verification.
 
-JieLi's linked Bluetooth libraries retain their own terms and notices, recorded in the pinned fm1-base
-dependency's `LICENSING.md`. The vendors' factory sound data remains separate from the source-code licence;
+Bluetooth is the own stack in `platform/ble`, by Henri David, from Optimist, offered under `GPL-3.0-only OR MPL-2.0`
+([w0ts/optimist#55](https://github.com/w0ts/optimist/issues/55)) and taken here under MPL-2.0, its files keeping that dual
+header. Melodee's changes to it are Kerem Kilic's own, and he took them here under MPL-2.0; `docs/BLE_MIGRATION.md` lists what
+comes from where. No JieLi library is linked. The radio's start-up tables and calibration in
+felucca-bsp come from JieLi's SDK and M-VAVE's stock firmware under Apache-2.0 (`LICENSES/Apache-2.0.txt`, and that
+dependency's `LICENSING.md` and `bsp/NOTICE`). The vendors' factory sound data remains separate from the source-code licence;
 this project does not grant rights to that data. Completing source relicensing does not establish hardware
 release qualification; the preparation tools supply the release-site licence/source bundle described above.
 

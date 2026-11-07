@@ -12,13 +12,58 @@ package header. No vendor code is intended to be included.
 Switching the divide-by-zero trap off in chip/fm1_irq.h follows a fix proposed by Steve Pinkham
 (spinkham) for Felucca (pull request 111). The code and the comment here are written independently.
 
-chip/usb.c comes from Felucca, where it is GPL-3.0-only; only the include path of one header was changed. Here it
-is MPL-2.0: its MIDI clock and transport sync is keremimo's (Felucca commit 019e2ad), licensed under MPL-2.0 by
+chip/usb.c comes from Felucca, where it is GPL-3.0-only. The device driver retains Leo Kuroshita's
+copyright; Kerem Kilic adapted the include path and added the BSP host integration. Here it is
+MPL-2.0: its MIDI clock and transport sync is keremimo's (Felucca commit 019e2ad), licensed under MPL-2.0 by
 agreement: https://github.com/hugelton/felucca-bsp/pull/3
+
+The second core (chip/fm1_cpu1.h, chip/fm1_cpu1.S, chip/fm1_cpu1_stop.h, its fault path in chip/fm1_irq.h and
+chip/fm1_vec.S) comes from Melodee (https://github.com/keremimo/melodee, GPL-3.0-only there) by Kerem Kilic
+(keremimo), licensed under MPL-2.0 by agreement: https://github.com/hugelton/felucca-bsp/issues/5. Its safe hold
+adapts Felucca 1.6.1's fm1_cpu1_halt (https://github.com/hugelton/Felucca/pull/247). The units whose second core
+misreads shared RAM were measured by Jangada's maintainer (zednaked, https://github.com/zednaked/jangada,
+charlesvestal/fm1-x0x#10); those measurements are credited, no code of Jangada's is included.
 
 The history of these files comes from Felucca (https://github.com/hugelton/Felucca), where
 they were first published under GPL-3.0-only by the same copyright holder. Each commit
 message names the Felucca commit it was taken from. Releases of Felucca that already
 contain these files stay under GPL-3.0-only.
 
+The cache RAM (chip/fm1_cache_ram.h): Copyright (C) 2026 Henri David, from Optimist (https://github.com/w0ts/optimist,
+firmware/hal/fm1_cache.h, f16f6683 and 9a1360ab), offered there under GPL-3.0-only OR MPL-2.0 (Optimist LICENSING.md
+"The cache RAM", 3815869f) and taken here under MPL-2.0; its register addresses and sequence are the AC79 SDK's
+(Apache-2.0). tests/cache_ram_test.c: Copyright (C) 2026 Henri David, MPL-2.0.
+
 Unofficial. Not affiliated with or endorsed by M-VAVE or JieLi.
+
+USB MIDI host (chip/usb_host.c, chip/usb_host_desc.h, the host additions in chip/fm1_usb.h,
+and tests/usb_host_test.c): Copyright (C) 2026 Adrien Tibi (Recursive Field Instruments,
+recursivefieldinstruments) and Kerem Kilic (Ellic Studio, keremimo). Ported from
+https://github.com/keremimo/melodee at e9eab97a5bd93c7e2f38bca7aae5006e59f21148, specifically:
+- 0d705bf43a74dd53f244cfacf3eea2bd0b978289: Adrien's enumeration, hub handling, input,
+  PHY setup, descriptor parser and SIE/bus tests.
+- 198c8fd4383a19fa8d53f8db988babfffe366b2e: Adrien's input-toggle and retry fixes.
+- b4380f9474e18d1437f33ad84459c86a8458e815: Kerem's MIDI output, endpoint validation, ACK ownership and recovery tests.
+- eb57309540ee5a9f92e9b5188ac3ace478fa34db: Kerem's disconnect debounce.
+- 44a311a57b957ca088027d4045f289665ba26b20: Kerem's idle probe/hub connection-change fixes
+  and regression tests, backported after the initial source snapshot.
+Adrien agreed to MPL licensing for his contributions in response to the MPL request:
+https://github.com/keremimo/melodee/pull/75#issuecomment-6384184014
+Kerem licenses his contributions to this port under MPL-2.0 as well. The original
+Melodee copies remain GPL-3.0-only. chip/usb.c retains Felucca's device code, with new
+MPL-2.0 integration by Kerem Kilic. The host's register sequences follow the public
+AC79 SDK; no SDK implementation source is copied into this port.
+
+The Bluetooth radio drivers (chip/fm1_ble.h, chip/fm1_ble_rf.h, chip/fm1_bredr.h) come from Optimist
+(https://github.com/w0ts/optimist) by Henri David (hdavid), offered under GPL-3.0-only OR MPL-2.0
+(https://github.com/w0ts/optimist/issues/55) and taken here under MPL-2.0. chip/ble_rf_tables_v15.h is
+Apache-2.0: the radio start-up writes of M-VAVE's stock FM-1 V15 firmware (Copyright (c) 2026 Zhuhai Shengke /
+M-VAVE, Apache-2.0 in https://github.com/m-vave/fm1_open), which are JieLi's rf_init (wl_rf_common.a,
+btctrler.a; Copyright (c) 2024-2026 Zhuhai Jieli Technology Co., Ltd., Apache-2.0 in its AC79 AIoT SDK,
+https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK), recorded in an emulator and packed by Optimist; its header
+states the changes (Apache-2.0 section 4(b)). A firmware built with it ships LICENSES/Apache-2.0.txt.
+
+chip/fm1_rf_cal.h is Apache-2.0: the 2.4 GHz radio's calibration (the VCO bank scan, the RX filter, TX LO and RX DC
+trims) rewritten in C from JieLi's wl_rf_common.a (Copyright (c) 2024-2026 Zhuhai Jieli Technology Co., Ltd.,
+Apache-2.0 in its AC79 AIoT SDK, https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK); its header states the changes
+(Apache-2.0 section 4(b)).
