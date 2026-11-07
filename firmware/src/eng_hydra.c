@@ -491,16 +491,36 @@ static hy_cost_t hy_cost_most(const uint8_t *r)
  * 1538 alone, 3059 for two). Few heavy voices are bound by that, not by the budget: the cap, and a voice that cannot pair takes its
  * whole time from the budget, so a second part cannot lay another beside it */
 #define HY_ALONE(c1) ((c1) * 8u / 5u)
+/* Without CPU1 (retired, barred until power-off after a crash, or a build without it) nothing pairs: every voice runs on CPU0 at
+ * its time alone, and its share of the budget is that time. Counted in shares, an Elite whose CPU1 was barred let SUPERSTACK's
+ * fifth voice in: five voices alone, every block late */
+#if !MELODEE_DUAL_CORE && !defined(FM1_IRQ_TARGET)
+static int hy_host_cpu1 = 1;                           /* (the host has no worker: it counts as the Elite with CPU1, as measured;
+                                                        * tests/hydra_test.c takes it away) */
+#endif
+static int hy_paired(void)
+{
+#if MELODEE_DUAL_CORE
+    return audio_worker_online;
+#elif defined(FM1_IRQ_TARGET)
+    return 0;                                          /* (a build without CPU1) */
+#else
+    return hy_host_cpu1;
+#endif
+}
+/* n voices of a part one after another, in voices alone: W(n) on the two cores, n on CPU0 alone */
+static uint32_t hy_serial(uint32_t n) { return hy_paired() ? n - (n - 1u) / 2u : n; }
 static uint32_t hy_cap_of(uint32_t c1)
 {
     uint32_t n;
-    for (n = HY_POLY; n > 1u && (n - (n - 1u) / 2u) * HY_ALONE(c1) > HY_BLOCK_US; n--)
+    for (n = HY_POLY; n > 1u && hy_serial(n) * HY_ALONE(c1) > HY_BLOCK_US; n--)
         ;
     return n;
 }
 static uint32_t hy_units_of(const uint8_t *r, hy_cost_t c)
 {
-    uint32_t cap = hy_cap_of(c.c1), us = cap < 3u ? HY_ALONE(c.c1) : c.c1, u = (us * HY_STEPS + HY_BLOCK_US - 1u) / HY_BLOCK_US;
+    uint32_t cap = hy_cap_of(c.c1), us = cap < 3u || !hy_paired() ? HY_ALONE(c.c1) : c.c1;
+    uint32_t u = (us * HY_STEPS + HY_BLOCK_US - 1u) / HY_BLOCK_US;
     (void)r;
     if (cap < HY_POLY && HY_STEPS / u > cap)           /* the cores bind before the budget: the cap's voices take all of it,
                                                         * so a stolen voice's fade is not a voice more beside them (HIT C2 !
@@ -528,7 +548,7 @@ static int hy_os_room(const track_t *t)
     uint32_t n = hy_most(raw), used, p, i;
     if ((t->p[P_VOICE] == V_MONO || t->p[P_VOICE] == V_LEGATO) && n > 2u)
         n = 2u;
-    used = (n - (n - 1u) / 2u) * HY_ALONE(c.c1) + HY_ALONE(c.os);
+    used = hy_serial(n) * HY_ALONE(c.c1) + HY_ALONE(c.os);
     for (p = 0; p < NPART && used <= HY_BLOCK_US; p++) {
         const track_t *o = &trk[p];
         hy_part_t *P = o->engine == ENGI_HYDRA ? hy_part(p) : 0;

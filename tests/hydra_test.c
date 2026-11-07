@@ -1118,12 +1118,62 @@ static void the_lab(void)
     hy_quiet(t);
 }
 
+/* CPU1 retired, or barred until power-off after a crash: nothing pairs, every voice runs on CPU0 at its time alone. Counted in
+ * the cores' pairs an Elite with CPU1 barred ran SUPERSTACK late from its fifth voice. In every block, what sounds (fades and
+ * twice the rate included) fits the block one voice after another; with CPU1 back the part plays more again (hy_host_cpu1:
+ * the host has no worker of its own) */
+static void the_one_core(void)
+{
+    static const uint8_t LOW[8] = {36, 40, 43, 47, 50, 53, 57, 60}, HIGH[8] = {72, 76, 79, 83, 86, 89, 93, 96};
+    int32_t out[CTL];
+    uint32_t pi, k, b, ok = 1, most[2] = {0, 0}, worst = 0;
+    track_t *t;
+    for (uint32_t cpu1 = 0; cpu1 < 2u; cpu1++) {
+        hy_host_cpu1 = (int)cpu1;
+        for (pi = 0; pi < ENG_HYDRA.npresets; pi++)
+            for (uint32_t high = 0; high < 2u; high++) {
+                const uint8_t *keys = high ? HIGH : LOW;
+                uint32_t peak = 0;
+                hy_cost_t c;
+                t = hy_fresh(pi);
+                t->p[P_VOICE] = V_POLY;
+                c = hy_cost_most(hy_raw(t));
+                for (b = 0; b < 160u; b++) {           /* the chord one key a block, then re-struck from the top */
+                    uint32_t us = 0, n = 0;
+                    if (b < 8u) trk_note_on(t, keys[b], 100);
+                    if (b >= 40u && b % 12u == 0u) { trk_note_off(t, keys[7]); trk_note_on(t, keys[7], 60u + b % 60u); }
+                    track_render(t, out, CTL);
+                    for (k = 0; k < NVOICE; k++)
+                        if (t->v[k].active) {
+                            n++;
+                            us += HY_ALONE(c.c1) + (hy_voice(hy_part(0), t, &t->v[k])->os ? HY_ALONE(c.os) : 0u);
+                        }
+                    if (!cpu1 && us > HY_BLOCK_US) {
+                        printf("  one core: preset %u %s, block %u: %u voices, %u us alone\n", pi, high ? "high" : "low", b, n, us);
+                        ok = 0;
+                        b = 160u;
+                    }
+                    if (!cpu1 && us > worst) worst = us;
+                    if (n > peak) peak = n;
+                }
+                for (k = 0; k < 8u; k++) trk_note_off(t, keys[k]);
+                hy_quiet(t);
+                if (pi == 4u && !high) most[cpu1] = peak;
+            }
+    }
+    printf("  one core: the longest block %u us alone; SUPERSTACK %u voices, %u with CPU1\n", worst, most[0], most[1]);
+    check("CPU1 off: every factory sound's voices fit the block one after another, low and high, struck", ok && worst > 0u);
+    check(".. SUPERSTACK plays fewer than with CPU1, and more again with CPU1 back", most[0] >= 1u && most[0] < most[1]);
+    hy_host_cpu1 = 1;
+}
+
 int main(void)
 {
     power_on();
     the_lab();
     the_state();
     the_sound();
+    the_one_core();
     the_panel();
     the_stores();
     the_editor();
