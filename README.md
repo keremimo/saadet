@@ -1,22 +1,22 @@
 # Saadet
 
-A two-part synthesizer fork of Melodee for the **M-VAVE FM-1**, with Bluetooth MIDI.
+A six-engine, two-part synthesizer for the **M-VAVE FM-1**, with Bluetooth MIDI and Saadet Studio, its editor in the
+browser. It also builds for the **M-VAVE SMK-37**, in beta. Saadet began as a fork of Melodee.
 
 [Install Saadet](https://keremimo.github.io/saadet/install/) ·
-[Web editor](https://keremimo.github.io/saadet/editor.html) ·
+[Saadet Studio](https://saadet.ellicstudio.com) ·
 [Quick start](QUICKSTART.md) ·
 [Releases](https://github.com/keremimo/saadet/releases)
 
-![Saadet: four selectable engines, one polyphonic instrument, 384 shared user sound slots, native 24-bit audio and Bluetooth MIDI.](assets/readme/introducing-saadet.png)
+![Saadet 1.0: six engines (Prophet, FM6, CZ-1, JUNO-106, HYDRA and PPG), two parts, 100 PPG Wave 2.2 programs, eight named macros on every sound and 384 shared user sound slots.](assets/readme/introducing-saadet.png)
 
-> **Experimental firmware.** Final audio, control, timing and Bluetooth acceptance
-> of the exact release package remains pending. Back up sounds and settings before
-> switching firmware; read the [release notes](RELEASE_NOTES.md) for current limits.
+> **Back up first.** Back up sounds and settings before switching firmware, and read the
+> [release notes](RELEASE_NOTES.md) for what has and has not been measured on a unit.
 
 ## Play and shape sounds
 
-Choose **Prophet, FM6, CZ-1, JUNO-106 or HYDRA**, one engine at a time. Edit sounds on the
-panel or in the browser, with factory libraries and native SysEx import/export.
+Choose **Prophet, FM6, CZ-1, JUNO-106, HYDRA or PPG** on each of two parts. Edit sounds on the
+panel or in [Saadet Studio](https://saadet.ellicstudio.com), with factory libraries and native SysEx import/export.
 
 - **Perform:** arpeggiator, HOLD, chords, strum, scales and microtonal tuning.
 - **Keep your sounds:** favourites, 384 shared user slots and automatic last-sound recall.
@@ -58,7 +58,8 @@ Flash layouts, backup formats and legacy sound compatibility are covered in the
 
 - [Panel guide](docs/UI.md): editing, performance controls, Bluetooth and SysEx.
 - [Build, test and recovery](BUILDING.md): firmware targets, installer and optional m-bootloader.
-- [Release notes](RELEASE_NOTES.md): included features and outstanding hardware checks.
+- [Release notes](RELEASE_NOTES.md) and [changelog](CHANGELOG.md): what is in each release.
+- [Brand](assets/brand/README.md): the wordmark, colours, type and voice.
 - [Technical overview](docs/TECHNICAL_OVERVIEW.md): architecture, compatibility and project history.
 
 ## Validation and provenance

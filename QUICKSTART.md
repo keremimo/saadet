@@ -58,9 +58,9 @@ half each, and lend what they aren't using.
 
 ## 5. The editor and backups
 
-Open **<https://keremimo.github.io/saadet/editor.html>** in Chrome or Edge and press **Connect**. Sound, FM6,
-Library and Settings mirror the panel on a big screen. **Back up** under Settings before every update: a backup
-holds all your sounds, favourites and settings.
+Open **Saadet Studio** at **<https://saadet.ellicstudio.com>** in Chrome or Edge, connect the unit by USB and press
+**Connect**. It edits every engine on a big screen, keeps your library and sets up parts and performances. **Back up**
+under Device before every update: a backup holds all your sounds, favourites and settings.
 
 ## 6. Bluetooth MIDI
 

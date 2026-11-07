@@ -13,6 +13,10 @@ npm ci --prefix web
 PATH="$PWD/build/venv/bin:$PATH" tests/run_tests.sh
 ```
 
+Every build includes PPG, which needs local copies of the PPG Wave 2.2's wave EPROM, V5 operating system and factory
+bank in `private/ppg` (`SAADET_PPG_ROM` points elsewhere). They are never committed and the source archive has none:
+without them the build stops. Set `SAADET_PPG` to 0 in `firmware/src/build_options.h` to build without PPG.
+
 `./build.sh` builds the fm1-base port with Bluetooth MIDI (below):
 `platform/build/saadet.fwsc`, development identity `FM-1_900`. `--no-ble`
 builds the USB-only `platform/build/saadet-usb.fwsc` instead, `--host` the
@@ -124,7 +128,7 @@ bootloader replacement itself can still require the RP2040 USB_KEY recovery
 route. Use the app updater for subsequent Saadet updates; do not raw-flash the
 package's synthetic flash head over the device's preserved boot area.
 
-The 0.2.0 package is prepared locally for public release, with final hardware acceptance
+The 1.0.0 package is prepared locally for public release, with what remains to be measured on hardware
 tracked in RELEASE_NOTES.md. BLE is a MIDI peripheral advertised as
 **Saadet** in its GAP name and startup diagnostics, with
 keyboard output and channel-message input. The default also enables BLE central
@@ -146,8 +150,8 @@ records the source file hashes and pinned dependency revisions; changed firmware
 source archive is refused. The source ZIP includes the exact fm1-base and felucca-bsp source copies as well.
 
 ```sh
-build/venv/bin/python tools/prepare_public_release.py 0.2.0
-python3 -m http.server 8846 --bind 127.0.0.1 --directory build/releases/0.2.0/site
+build/venv/bin/python tools/prepare_public_release.py 1.0.0
+python3 -m http.server 8846 --bind 127.0.0.1 --directory build/releases/1.0.0/site
 ```
 
 The output directory contains the firmware, source ZIP, uploadable site ZIP, release notes, licences,
@@ -160,7 +164,7 @@ hardware acceptance steps for the exact package. Extract the site ZIP as the web
 install/ page links to firmware, source and licence downloads. An unmodified source ZIP can be rebuilt without
 Git history; its SOURCE_INFO.json supplies provenance, while the wrapper fetches the pinned dependencies.
 
-The release identity must be `FM-1_9` and XXYYZZ for the given version (0.2.0: `FM-1_9000200`); the
+The release identity must be `FM-1_9` and XXYYZZ for the given version (1.0.0: `FM-1_9010000`); the
 installer checks the downloaded package's SHA-256 and identity, and the FM-1's
 report after the install. `--dev` accepts the development package for local
 testing. The site's installer page is one file: its modules (`web/install/`)
