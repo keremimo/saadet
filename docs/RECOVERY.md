@@ -49,6 +49,12 @@ On Windows PowerShell:
 .\fm1-recover.exe C:\path\to\working.fwsc --write
 ```
 
+An FM-1 package recovers both 1 MiB flash parts the FM-1 ships with: the stock Puya
+P25Q80 (JEDEC `856014`) and the UC25HQ80 (`B36014`) on units sold since autumn 2026.
+Any other part is refused before flash is read. Melodee's recovery tool, which works
+the same way, made a verified read-only backup of a UC25HQ80 unit
+(keremimo/melodee#110). `--write` has not been tried on that chip.
+
 `--info` identifies the ROM device without changing RAM or flash. `--check` validates
 the package and bundled RAM helper without accessing USB. With a package and no
 `--write`, the tool loads a temporary RAM helper and saves a full flash backup; it

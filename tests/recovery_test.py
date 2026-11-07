@@ -215,6 +215,26 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(self.link.nor[R.APP_HI:], self.before[R.APP_HI:])
         self.assertEqual(self.link.nor[R.APP_LO:R.APP_HI], self.package.flash[R.APP_LO:])
 
+    def test_ucun_flash_restores_like_puya(self):
+        self.link.flash_id_reported = 0xB36014
+        result = R.recover(self.link, self.package, bytes(512), self.output, True)
+        self.assertEqual(self.link.erases, [R.APP_LO + R.SECTOR])
+        self.assertTrue(result["full_flash_verified"])
+        self.assertEqual(result["flash_id"], "b36014")
+
+    def test_unknown_flash_refused_before_flash_access(self):
+        # One field off an accepted ID: capacity, memory type, manufacturer, unused top byte; and the SMK-37 Pro's part.
+        for flash_id in (0xB36015, 0xB36114, 0xB46014, 0x856015, 0x01B36014, 0xEB6014):
+            with self.subTest(flash_id=hex(flash_id)):
+                self.link.flash_id_reported = flash_id
+                output = self.folder / hex(flash_id)
+                output.mkdir()
+                with self.assertRaisesRegex(R.RecoveryError, "refusing recovery"):
+                    R.recover(self.link, self.package, bytes(512), output, True)
+                self.assertFalse((output / "full-flash-before.bin").exists())
+        self.assertNotIn(0xFD05, self.link.calls)
+        self.assertEqual(self.link.erases, [])
+
     def test_chip_key_mismatch_precedes_flash_access(self):
         self.link.key = 0x1234
         with self.assertRaisesRegex(R.RecoveryError, "Chip-key mismatch"):

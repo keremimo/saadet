@@ -2,6 +2,15 @@
 
 Each release in short. The full notes for the current release are in [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
+## Unreleased
+
+### Fixed
+
+- **FM-1s with the UC25HQ80 flash** (JEDEC B36014): USB recovery (`tools/fm1_recover.py`) takes them as it takes the
+  stock Puya part.
+- **Installer**: `tools/fm1_install.py` finds an FM-1 whose firmware reports its flash after its identity (Melodee
+  on fm1-base); it said none was connected. `--info` names the flash part when the firmware reports it.
+
 ## 1.0.0 (7 November 2026)
 
 Six engines, two parts and a new editor. 0.2.0 was never released; its changes are here.

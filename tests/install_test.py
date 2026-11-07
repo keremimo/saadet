@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import fm1_install as I  # noqa: E402
 
-I.DELAY.update(open=0, start=0.01, reply=0, loader=0.01, reboot=0.01, retry=0.02, poll=0.05, hs=0.1,
+I.DELAY.update(open=0, start=0.01, reply=0, loader=0.01, reboot=0.01, retry=0.02, poll=0.05, hs=0.1, hs_full=0.05,
                idle_check=0.4, idle_write=0.4, wait_loader=2, wait_reboot=2)
 failed = 0
 
@@ -64,15 +64,25 @@ class FakeLink:
         self.closed = True
 
 
+def ident_frame(text, flash=0):
+    """a handshake answer as the firmware sends it (00 59 11, 27 bytes, checksum): the text, zeros and, from a
+    firmware on felucca-bsp#29's chip/ota.c, the flash's JEDEC ID in bytes 24..26"""
+    body = text.encode("latin-1").ljust(24, b"\0")[:24] + flash.to_bytes(3, "big")
+    return b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, len(body), 0, 0]) + body + bytes([~sum(body) & 0xFF])) + b"\xF7"
+
+
 class FakeFM1:
-    """a MIDI backend with one FM-1 on it"""
+    """a MIDI backend with one FM-1 on it. base: it runs firmware on felucca-bsp#29's chip/ota.c (Melodee on fm1-base):
+    HS_QUERY gets the name, '_' and three digits, HS_FULL the whole identity (not from the loader), both with the
+    flash's JEDEC ID; otherwise HS_FULL goes unanswered (classic Melodee, M-VAVE's firmware, Saadet 1.0)"""
 
     def __init__(self, image, identity="FM-1_015", name="FM-1", unplug_after=None, after_write="FM-1_900",
-                 stall_after=None, bad_addr=None, loader=I.MELODEE_LOADER):
+                 stall_after=None, bad_addr=None, loader=I.MELODEE_LOADER, base=False, flash=0x856014):
         self.image, self.unplug_after, self.after_write = image, unplug_after, after_write
         self.loader = loader        # the loader step 1 starts (the package's own)
         self.stall_after, self.bad_addr = stall_after, bad_addr
-        self.served = self.bad = self.upgrades = 0
+        self.base, self.flash = base, flash
+        self.served = self.bad = self.upgrades = self.full_asked = 0
         self.sent, self.links, self.gen, self.lock = [], [], 0, threading.Lock()
         self.boot(identity, name)
 
@@ -99,10 +109,22 @@ class FakeFM1:
             if link.gen == self.gen and not link.closed:
                 link.q.put(bytes(pkt))
 
+    def answer(self, full):
+        t, ota = self.identity, self.identity.startswith("ota-")
+        if not self.base:
+            return ident_frame(t)
+        i = t.find("_")
+        if not full and not ota and 0 <= i and i + 4 < len(t):
+            t = t[:i + 4]               # "FM-1_9010000" -> "FM-1_901"; "FM-1_900" stays
+        return ident_frame(t, self.flash)
+
     def rx(self, d):
         if d == I.HS_QUERY:
-            t = self.identity.encode()
-            self.tx(b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, 0, 0, 0]) + t + bytes(28 - len(t))) + b"\xF7")
+            self.tx(self.answer(False))
+        elif d == I.HS_FULL:
+            self.full_asked += 1
+            if self.base and not self.identity.startswith("ota-"):
+                self.tx(self.answer(True))
         elif d == I.UPGRADE:
             self.upgrades += 1
             first = self.bad_addr if self.bad_addr is not None else 0
@@ -207,6 +229,58 @@ def installs():
     dev = FakeFM1(image, identity="ota-FM-1_900", name="Melodee Update")
     rc, out, err = cli(["--info"], dev)
     ok(rc == 0 and "update loader" in out, "--info: device in update mode")
+
+
+def base():
+    """a firmware on felucca-bsp#29 (Melodee on fm1-base): the flash's JEDEC ID after the identity's zeros, read
+    without spoiling the text; --info names the part; installs and resumes on the UC25HQ80 as on the Puya"""
+    # Melodee's FM-1_900 on fm1-base answering HS_FULL on a real FM-1 (2026-11-06, Melodee tests/install_test.py)
+    reply = bytes.fromhex("f000324558010000234d5a447915070c180000000000000000000000000000000000001404462207f7")
+    ident = I.parse_identity(reply)
+    ok(ident and ident.text == "FM-1_900" and ident.model == "FM-1" and ident.version == 900 and not ident.loader
+       and ident.flash == 0x856014, "fm1-base FM-1's real reply: FM-1_900, flash 856014")
+    ok(ident_frame("FM-1_900", 0x856014) == reply, "... the simulated fm1-base FM-1 answers those very bytes")
+    ok(I.unpack7(I.HS_FULL[1:-1]) == bytes([0, 0x59, 0x11, 1, 0, 0, 1, 0xFE]), "HS_FULL: the handshake with the body 01")
+    loader = I.parse_identity(ident_frame(I.MELODEE_LOADER, 0xB36014))
+    ok(loader and loader.loader and loader.text == I.MELODEE_LOADER and loader.flash == 0xB36014,
+       "fm1-base loader's reply with a flash ID: ota-FM-1_900, B36014")
+    plain = I.parse_identity(ident_frame("FM-1_015"))
+    ok(plain and plain.text == "FM-1_015" and plain.flash == 0, "stock reply: no flash ID")
+    body = b"ABCDEFGHIJKLMNOPQRSTUVW_12\0"           # a text into bytes 24..26: no ID there
+    long = I.parse_identity(b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, 27, 0, 0]) + body + bytes([~sum(body) & 0xFF]))
+                            + b"\xF7")
+    ok(long and long.text == "ABCDEFGHIJKLMNOPQRSTUVW_12" and long.flash == 0,
+       "a text over 23 bytes: its tail is not read as a flash ID")
+
+    raw = package()
+    image = I.logical_image(raw)
+    p = pkgfile("ok.fwsc", raw)
+    for flash, shown in ((0x856014, "flash: Puya P25Q80 (856014)"), (0xB36014, "flash: UC25HQ80 (B36014)"),
+                         (0xEB6014, "flash: EB6014")):
+        dev = FakeFM1(image, identity="FM-1_900", name="Melodee", base=True, flash=flash)
+        rc, out, err = cli(["--info"], dev)
+        ok(rc == 0 and out.startswith("FM-1_900  [running]") and shown in out and dev.full_asked == 1,
+           f"--info on an fm1-base FM-1: {shown}")
+    dev = FakeFM1(image, identity="FM-1_7001608", name="Melodee", base=True, flash=0xB36014)
+    rc, out, err = cli(["--info"], dev)
+    ok(rc == 0 and out.startswith("FM-1_7001608  [running]") and "UC25HQ80" in out,
+       "--info: HS_FULL gives the whole FM-1_7001608 and its flash")
+
+    dev = FakeFM1(image, identity="FM-1_7001608", name="Melodee", base=True, flash=0xB36014)
+    rc, out, err = cli([p, "--yes"], dev)
+    ok(rc == 0 and dev.bad == 0 and dev.upgrades == 2 and "done: the FM-1 runs FM-1_900" in out,
+       "install over Melodee on fm1-base, UC25HQ80: loader, back as FM-1_900")
+    dev = FakeFM1(image, identity=I.MELODEE_LOADER, name="Melodee Update", base=True, flash=0xB36014)
+    rc, out, err = cli([p, "--yes"], dev)
+    ok(rc == 0 and dev.bad == 0 and dev.upgrades == 1 and "update mode" in out and dev.full_asked == 1,
+       "fm1-base loader with a flash ID: write finished, HS_FULL only after")
+
+    for identity, name, what in (("FM-1_900", "Melodee", "classic FM-1_900: HS_FULL unanswered, no flash"),
+                                 ("FM-1_015", "FM-1", "stock FM-1_015: no flash"),
+                                 (I.MELODEE_LOADER, "Melodee Update", "update loader: no flash")):
+        dev = FakeFM1(image, identity=identity, name=name)
+        rc, out, err = cli(["--info"], dev)
+        ok(rc == 0 and out.startswith(identity + "  [") and "flash:" not in out, what)
 
 
 def errors():
@@ -328,6 +402,7 @@ def official():
 
 wire()
 installs()
+base()
 errors()
 loaders()
 against_js()

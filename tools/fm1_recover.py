@@ -35,7 +35,7 @@ from fm1pkg_make import chipkey_decode, crc16, enc, sfc
 
 APP_LO, APP_HI, FLASH_SIZE, SECTOR = 0x4000, 0x93000, 0x100000, 4096
 SMK_APP_HI = 0x9D000
-FM1_FLASH_IDS = (0x856014,)
+FM1_FLASH_IDS = (0x856014, 0xB36014)                   # 1 MiB parts fm1-base's boot accepts: Puya, UCUN UC25HQ80
 SMK_FLASH_IDS = (0xEB6014, 0x856014, 0xB36014)         # units differ; each is 1 MiB
 SMK_PRODUCT = r"(?:SMK-37 (?:Pro|Elite)|MKE-P37)_\d+"
 TRIM_MARK, TRIM_MARK_OFF = b"trimdat\0", 0xC1224       # the SMK-37's factory record (USRTRIM); never written here

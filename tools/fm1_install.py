@@ -115,12 +115,18 @@ def parse_request(pkt):
 
 
 class Identity:
-    def __init__(self, text, model, version):
+    def __init__(self, text, model, version, flash=0):
         self.text, self.model, self.version = text, model, version
+        self.flash = flash          # the flash's JEDEC ID (identity bytes 24..26, felucca-bsp#29), 0: not sent
 
     @property
     def loader(self):
         return self.model.lower().startswith("ota-")
+
+
+# the FM-1's 1 MiB parts, both accepted by fm1-base's boot (device/fm1_flash_ok.h): the stock Puya, and the UCUN part
+# on units sold since autumn 2026
+FLASH_PARTS = {0x856014: "Puya P25Q80", 0xB36014: "UC25HQ80"}
 
 
 def parse_identity(pkt):
@@ -129,9 +135,12 @@ def parse_identity(pkt):
     d = unpack7(pkt[1:-1])
     if len(d) != 34 or d[:3] != b"\x00\x59\x11":
         return None
-    txt = d[6:33].rstrip(b"\0").decode("latin-1")
+    # the text up to its first zero: after the zeros, a firmware on felucca-bsp#29's chip/ota.c (Melodee on fm1-base,
+    # fm1-base's own apps) sends the flash's JEDEC ID in bytes 24..26
+    txt = d[6:33].split(b"\0", 1)[0].decode("latin-1")
+    flash = int.from_bytes(d[30:33], "big") if len(txt) < 24 else 0
     m = re.fullmatch(r"([^_]+)_(\d+)", txt)
-    return Identity(txt, m[1], int(m[2])) if m else None
+    return Identity(txt, m[1], int(m[2]), flash) if m else None
 
 
 # --------------------------------------------------------------- package ---
@@ -469,7 +478,11 @@ def run(a, backend, out, ask):
             raise not_found(up)
         dev.link.close()
         mode = "update loader (update not finished)" if dev.id.loader else "running"
-        print(f"{dev.id.text}  [{mode}]  port: {dev.name}", file=out)
+        flash = ""
+        if dev.id.flash:            # an unnamed part (the SMK-37 Pro's EB6014) by its ID alone
+            part = FLASH_PARTS.get(dev.id.flash)
+            flash = f"  flash: {part} ({dev.id.flash:06X})" if part else f"  flash: {dev.id.flash:06X}"
+        print(f"{dev.id.text}  [{mode}]  port: {dev.name}{flash}", file=out)
         return 0
     product, image, loader = load_package(a.package, a.force)
     print(f"package: {product}  ({a.package})", file=out)
