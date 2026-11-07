@@ -2,10 +2,13 @@
 
 Each release in short. The full notes for the current release are in [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
-## Unreleased
+## 1.0.1 (7 November 2026)
 
 ### Fixed
 
+- **SMK-37 MASTER**: turning K5 over a held note could break the sound. Its level's flash write now waits until nothing
+  is sounding; the level changes at once.
+- **Web installer**: installs the SMK-37 packages, by the model the device names (already on the 1.0.0 site).
 - **FM-1s with the UC25HQ80 flash** (JEDEC B36014): USB recovery (`tools/fm1_recover.py`) takes them as it takes the
   stock Puya part.
 - **Installer**: `tools/fm1_install.py` finds an FM-1 whose firmware reports its flash after its identity (Melodee

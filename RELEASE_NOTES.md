@@ -1,10 +1,24 @@
-# Saadet 1.0.0
+# Saadet 1.0.1
+
+A fix release on Saadet 1.0.0 for the M-VAVE FM-1 and, in beta, the M-VAVE SMK-37. The FM-1 firmware's code is 1.0.0's;
+only its version changes. The SMK-37 packages keep their identities (`SMK-37 Elite_910` and so on).
+
+## Fixed in 1.0.1
+
+- SMK-37: turning MASTER (K5) while a note was held could break the sound. The level is kept in flash two seconds after
+  the last turn, and that write stopped the audio while the note was sounding. The write now waits until nothing is
+  sounding, as Saadet's settings writes already did; the level itself still changes at once. Checked on an SMK-37 Elite.
+- The installer on the release site installs the SMK-37 packages, chosen by the model the connected device names (never
+  its port name). This reached the 1.0.0 site after its release.
+- `tools/fm1_install.py` finds an FM-1 whose firmware reports its flash after its identity (Melodee on fm1-base), where
+  it said none was connected; `--info` names the flash part. USB recovery (`tools/fm1_recover.py`) takes FM-1s with the
+  UC25HQ80 flash (JEDEC B36014), found in units sold since autumn 2026, as it takes the stock Puya part.
+
+## New in 1.0
 
 Six engines, two parts and a new editor for the M-VAVE FM-1, based on Saadet 0.1.1. Saadet 0.2.0 was never released;
 everything its notes listed is part of 1.0. The audio rate remains 44.1 kHz. Saadet also builds for the M-VAVE SMK-37,
 in beta.
-
-## New in 1.0
 
 ### Engines
 
