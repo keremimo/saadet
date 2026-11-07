@@ -47,8 +47,8 @@
   .site { max-width: 640px; margin: 0 auto; padding: 18px 16px 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
   .site .brand { font-weight: 650; font-size: 17px; letter-spacing: -.01em; text-decoration: none; }
   .site nav { display: flex; gap: 18px; font-size: 14px; }
-  .site nav a, .site button.lang { color: var(--dim); text-decoration: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
-  .site nav a:hover, .site button.lang:hover { color: var(--ink); }
+  .site nav a { color: var(--dim); text-decoration: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+  .site nav a:hover { color: var(--ink); }
   .site nav a[aria-current="page"] { color: var(--ink); }
 
   main { max-width: 640px; margin: 0 auto; padding: 0 16px 32px; }
@@ -217,12 +217,11 @@
 <div class="demo" id="demo" hidden><span data-t="demo">Demo: a simulated FM-1. Nothing is written.</span> <a href="./" data-t="demoleave">Leave the demo</a></div>
 
 <header class="site">
-  <a class="brand" href="../editor.html">Saadet</a>
+  <a class="brand" href="https://saadet.ellicstudio.com">Saadet</a>
   <nav>
-    <a href="../editor.html" data-t="navEditor">Editor</a>
+    <a href="https://saadet.ellicstudio.com" data-t="navEditor">Editor</a>
     <a href="./" aria-current="page" data-t="navInstall">Install</a>
     <a href="../manual/index.html" data-t="navManual">Manual</a>
-    <button type="button" class="lang" id="lang" lang="ja">日本語</button>
   </nav>
 </header>
 
@@ -230,7 +229,7 @@
   <section class="hero">
     <p class="kicker" data-t="kicker">Firmware for the M-VAVE FM-1</p>
     <h1><span data-t="title">Install Saadet</span> <span class="v" id="hver"></span></h1>
-    <p class="lede" data-t="lede">One polyphonic synthesizer: Prophet, FM6, CZ-1 and JUNO-106, installed over USB from this page.</p>
+    <p class="lede" data-t="lede">Six engines on two parts: Prophet, FM6, CZ-1, JUNO-106, HYDRA and PPG, installed over USB from this page.</p>
     <ul class="facts">
       <li data-t="factBrowser">Chrome or Edge</li>
       <li data-t="factCable">A USB data cable</li>
@@ -279,7 +278,7 @@
     <li class="step" id="st-install" data-state="todo">
       <div>
         <h2 data-t="s3h">Install</h2>
-        <p id="plantext" data-t="s3p">Back up your sounds first: Settings, then Backup, in the editor.</p>
+        <p id="plantext" data-t="s3p">Back up your sounds first: Device, then Back up now, in Saadet Studio.</p>
         <button type="button" class="btn primary big" id="go" disabled></button>
         <p class="small" id="gohint" data-t="gohint">Find your FM-1 first.</p>
       </div>

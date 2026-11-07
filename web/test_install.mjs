@@ -113,15 +113,14 @@ const PRODUCT = 'FM-1_9010000';
   assert.equal(remaining(500, 1000, 60000), 60);
 }
 
-{ /* the page and its words: every element the script names exists, every text key is in both languages */
+{ /* the page and its words: every element the script names exists, every text key exists, English only */
   const page = readFileSync('web/install/index.html', 'utf8'), js = readFileSync('web/install/installer.js', 'utf8');
   const ids = new Set([...page.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
   for (const m of js.matchAll(/\$\("([^"]+)"\)/g)) assert(ids.has(m[1]), `index.html has no #${m[1]}`);
-  const en = js.split('\n  en: {')[1].split('\n  ja: {')[0], ja = js.split('\n  ja: {')[1].split('\n};')[0];
+  const en = js.split('\n  en: {')[1].split('\n};')[0];
   const keys = (block) => new Set([...block.matchAll(/(?:^\s+|",\s+)(\w+):\s*"/gm)].map((m) => m[1]));
-  const ke = keys(en), kj = keys(ja);
-  assert.deepEqual([...ke].filter((k) => !kj.has(k)), [], 'English keys missing in Japanese');
-  assert.deepEqual([...kj].filter((k) => !ke.has(k)), [], 'Japanese keys missing in English');
+  const ke = keys(en);
+  assert(!/[\u3040-\u30ff\u4e00-\u9fff]/.test(page + js), 'the installer is English only');
   const used = [...page.matchAll(/data-t="(\w+)"/g), ...js.matchAll(/\bt\("(\w+)"[,)]/g)].map((m) => m[1]);
   for (const k of used) assert(ke.has(k), `no text for ${k}`);
 }

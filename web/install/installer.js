@@ -19,17 +19,16 @@ const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const DEMO = params.has("demo") ? (params.get("demo") || "stock") : null;
 const MARK = "saadet-install-pending";               // an install that has not reported Done (localStorage)
-const LANG = "saadet-lang";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const IS_STOCK = (p) => /^FM-1_0\d\d$/.test(p) && p !== "FM-1_099";
 const fail = (code, msg, detail = "") => Object.assign(new Error(msg), { code, detail });
 
 const TEXT = {
   en: {
-    navEditor: "Editor", navInstall: "Install", navManual: "Manual", other: "日本語",
+    navEditor: "Editor", navInstall: "Install", navManual: "Manual",
     demo: "Demo: a simulated FM-1. Nothing is written.", demoleave: "Leave the demo",
     kicker: "Firmware for the M-VAVE FM-1", title: "Install Saadet",
-    lede: "One polyphonic synthesizer: Prophet, FM6, CZ-1 and JUNO-106, installed over USB from this page.",
+    lede: "Six engines on two parts: Prophet, FM6, CZ-1, JUNO-106, HYDRA and PPG, installed over USB from this page.",
     factBrowser: "Chrome or Edge", factCable: "A USB data cable", factTime: "About 3 minutes",
     resumeBannerH: "An installation didn't finish.",
     resumeBanner: "Your FM-1 is waiting in update mode. Connect it and press Find FM-1 to finish.",
@@ -41,12 +40,12 @@ const TEXT = {
     mbootwhy: "A recovery menu (hold PLAY while switching on) and USB download mode (hold REC) that work even when a firmware won't start. It replaces M-VAVE's bootloader and stays through firmware updates.",
     mbootrisk: "It writes the FM-1's boot area, the one step where a power cut can need hardware recovery. Leave it off if you're unsure: you can add it later from this page.",
     mbootby: "By Julius Vitkauskas, MIT licence.", newtab: " (opens in a new tab)",
-    s3h: "Install", s3p: "Back up your sounds first: Settings, then Backup, in the editor.",
+    s3h: "Install", s3p: "Back up your sounds first: Device, then Back up now, in Saadet Studio.",
     gohint: "Find your FM-1 first.",
     goInstall: "Install Saadet {v}", goUpdate: "Update to Saadet {v}", goReinstall: "Reinstall Saadet {v}",
     goResume: "Resume installation", goBoot: "Install m-bootloader",
-    planInstall: "Saadet {v} replaces this FM-1's firmware. Back up your sounds first: Settings, then Backup, in the editor.",
-    planUpdate: "Updates keep your saved sounds, but back them up first: Settings, then Backup, in the editor.",
+    planInstall: "Saadet {v} replaces this FM-1's firmware. Back up your sounds first: Device, then Back up now, in Saadet Studio.",
+    planUpdate: "Updates keep your saved sounds, but back them up first: Device, then Back up now, in Saadet Studio.",
     planResume: "The FM-1 is waiting in update mode. Resuming writes Saadet {v} again from the start of the write.",
     planThis: "Saadet {v} is already on this FM-1. Reinstalling is safe and keeps your sounds.",
     planBoot: "Saadet {v} is already on this FM-1, so only m-bootloader is written.",
@@ -86,7 +85,7 @@ const TEXT = {
     endDone: "The FM-1 has restarted with Saadet {v}. You can unplug it now.",
     endBootH: "m-bootloader is installed", endBoot: "The FM-1 has restarted with Saadet {v}.",
     endStockH: "M-VAVE's firmware is back", endStock: "The FM-1 has restarted with its original firmware.",
-    tipEditor: "Open the editor to browse sounds and make backups.",
+    tipEditor: "Open Saadet Studio to edit sounds and make backups.",
     tipBoot: "To check m-bootloader: switch the FM-1 off, hold PLAY and switch it on. Its recovery menu appears.",
     endPausedH: "Installation paused",
     endPaused: "The FM-1 is safe. It waits in update mode until the installation finishes, even if it's switched off.",
@@ -99,7 +98,7 @@ const TEXT = {
     tipBrick: "If it doesn't start at all, see “If the FM-1 won't start” on this page.",
     endPartialH: "Saadet is installed, m-bootloader isn't",
     endPartial: "Saadet {v} is installed. m-bootloader could not be written and nothing else was changed. You can try again later from this page.",
-    btnEditor: "Open the editor", btnManual: "Read the manual", btnClose: "Close", btnResume: "Resume installation",
+    btnEditor: "Open Saadet Studio", btnManual: "Read the manual", btnClose: "Close", btnResume: "Resume installation",
     btnRetry: "Try again",
     e_notfound: "The FM-1 stopped answering before anything was written.",
     e_model: "The connected device is not an FM-1.",
@@ -130,118 +129,9 @@ const TEXT = {
     legal: "Firmware: MPL-2.0. Editor: GPL-3.0-only. Third-party terms apply. Without warranty. M-VAVE and FM-1 are trademarks of their respective owners.",
     details: "Details", sec: "{n} s", min: "{n} min",
   },
-  ja: {
-    navEditor: "エディター", navInstall: "インストール", navManual: "マニュアル", other: "English",
-    demo: "デモ：FM-1 をシミュレートしています。何も書き込まれません。", demoleave: "デモを終了",
-    kicker: "M-VAVE FM-1 用ファームウェア", title: "Saadet をインストール",
-    lede: "Prophet、FM6、CZ-1、JUNO-106 を備えたポリフォニック・シンセサイザー。このページから USB でインストールできます。",
-    factBrowser: "Chrome または Edge", factCable: "USB データケーブル", factTime: "約 3 分",
-    resumeBannerH: "前回のインストールが完了していません。",
-    resumeBanner: "FM-1 はアップデートモードで待機しています。接続して「FM-1 を探す」を押すと、続きから完了できます。",
-    s1h: "FM-1 を接続する",
-    s1p: "ハブを使わずにこのパソコンへ直接つなぎ、電源を入れてください。ほかの音楽アプリやエディターのタブは閉じてください。ブラウザが MIDI デバイスの使用許可を求めたら「許可」を選びます。",
-    find: "FM-1 を探す", findAgain: "もう一度探す", finding: "FM-1 を探しています…",
-    s2h: "リカバリー用ブートローダー", optional: "任意",
-    mboot: "m-bootloader {v} もインストールする",
-    mbootwhy: "ファームウェアが起動しないときでも使えるリカバリーメニュー（PLAY を押しながら電源オン）と USB ダウンロードモード（REC）を追加します。M-VAVE のブートローダーと置き換わり、ファームウェアを更新しても残ります。",
-    mbootrisk: "FM-1 のブート領域に書き込みます。この工程中に電源が切れると、ハードウェアでの復旧が必要になることがあります。迷ったらオフのままで構いません。あとからこのページで追加できます。",
-    mbootby: "Julius Vitkauskas 作、MIT ライセンス。", newtab: "（新しいタブで開きます）",
-    s3h: "インストール", s3p: "先にサウンドをバックアップしてください（エディターの「設定」→「バックアップ」）。",
-    gohint: "先に FM-1 を探してください。",
-    goInstall: "Saadet {v} をインストール", goUpdate: "Saadet {v} にアップデート", goReinstall: "Saadet {v} を再インストール",
-    goResume: "インストールを再開", goBoot: "m-bootloader をインストール",
-    planInstall: "この FM-1 のファームウェアを Saadet {v} に置き換えます。先にサウンドをバックアップしてください（エディターの「設定」→「バックアップ」）。",
-    planUpdate: "アップデートしても保存したサウンドは残りますが、念のため先にバックアップしてください（エディターの「設定」→「バックアップ」）。",
-    planResume: "FM-1 はアップデートモードで待機しています。再開すると、書き込みの最初から Saadet {v} を書き込み直します。",
-    planThis: "この FM-1 には Saadet {v} がすでに入っています。再インストールしても安全で、サウンドは残ります。",
-    planBoot: "この FM-1 には Saadet {v} がすでに入っているため、m-bootloader だけを書き込みます。",
-    planOpen: "この FM-1 は M-VAVE の Open ファームウェアで動いています。先に下の手順で M-VAVE のファームウェアに戻してから、Saadet をインストールしてください。",
-    planModel: "これは FM-1 ではありません（{id}）。Saadet は M-VAVE FM-1 専用です。",
-    devLoader: "アップデートモード：インストールの完了待ち", devThis: "Saadet {v}", devSaadet: "Saadet {v}",
-    devDev: "Saadet 開発版", devStock: "M-VAVE ファームウェア {v}", devOpen: "M-VAVE Open ファームウェア",
-    devOther: "別のファームウェア（{id}）", devModel: "FM-1 ではありません（{id}）",
-    chipReady: "準備完了", chipResume: "アップデートモード", chipCurrent: "最新", chipBlocked: "インストール不可",
-    nomidi: "このブラウザは USB MIDI デバイスを使えません。パソコンの Chrome か Edge で開いてください。",
-    denied: "MIDI の使用が許可されませんでした。アドレスバーのアイコンからサイトの設定で MIDI デバイスを許可し、もう一度「FM-1 を探す」を押してください。",
-    notfound: "FM-1 が応答しません。電源が入っていて、データ通信用のケーブル（充電専用ではないもの）でつながっているか確かめ、MIDI を使うほかのアプリやタブを閉じてから、もう一度探してください。",
-    busy: "別のタブでインストールが進行中です。先にそちらを完了させてください。",
-    loadfail: "ファームウェアを読み込めませんでした：{m}", badpkg: "ファームウェアのファイルが壊れています。ページを再読み込みしてください。",
-    nopkg: "このページの隣にファームウェアがありません。代わりにデモを試せます：",
-    pfh: "始める前に",
-    pf1h: "このタブを開いたまま、前面に", pf1: "「完了」と表示されるまで、タブの切り替え、ウィンドウの最小化、ページを閉じることはしないでください。",
-    pf2h: "FM-1 は接続したまま、電源も入れたまま", pf2: "ケーブルを抜いたり、FM-1 の電源を切ったりしないでください。ノートパソコンは電源につないでください。",
-    pf3h: "約 3 分かかります", pf3: "FM-1 の画面には UPDATING と表示されるか、暗いままになります。どちらも正常です。",
-    pfboot: "m-bootloader は最後に、もう一度再起動してから書き込みます。「完了」と表示されるまで電源を切らないでください。",
-    pfbootonly: "ブート領域の書き込みは数秒で終わります。「完了」と表示されるまで電源を切らないでください。",
-    pfok: "サウンドをバックアップした（または残したいものはない）", cancel: "キャンセル", start: "インストールを開始",
-    runwarn: "このタブを開いたまま前面に。FM-1 のケーブルを抜かないでください。",
-    runInstall: "Saadet {v} をインストール中", runResume: "インストールを完了しています", runBoot: "m-bootloader をインストール中",
-    runStock: "M-VAVE のファームウェアをインストール中",
-    phPrepare: "準備", phWrite: "書き込み", phRestart: "再起動", phBoot: "m-bootloader",
-    stStart: "開始しています", stVerify: "ファイルを確認しています", stLoader: "FM-1 をアップデートモードに切り替えています",
-    stWrite: "ファームウェアを書き込んでいます", stReboot: "FM-1 を再起動しています", stBootWait: "Saadet の起動を待っています",
-    stBoot: "m-bootloader を書き込んでいます。FM-1 は自動で再起動します", stFind: "アップデートモードの FM-1 を探しています",
-    etaMin: "残り約 {n} 分", etaSec: "残り 1 分未満",
-    stall: "FM-1 を待っています… ケーブルは接続したままにしてください。",
-    backKept: "このタブを {s} 離れていました。インストールは続いていましたが、完了までこのタブにいてください。",
-    backSlow: "このタブを {s} 離れていたため、ブラウザがページを遅くしていました。今は再開しています。このタブにいてください。",
-    titleRun: "{p}% · Saadet をインストール中", titleHidden: "⚠ 戻ってください：インストール中 {p}%", titleDone: "完了 · Saadet",
-    leave: "インストール中です。今ページを離れると中断することがあります。",
-    endDoneH: "Saadet {v} をインストールしました", endDoneBootH: "Saadet {v} と m-bootloader をインストールしました",
-    endDone: "FM-1 は Saadet {v} で再起動しました。ケーブルを抜いて構いません。",
-    endBootH: "m-bootloader をインストールしました", endBoot: "FM-1 は Saadet {v} で再起動しました。",
-    endStockH: "M-VAVE のファームウェアに戻しました", endStock: "FM-1 は純正ファームウェアで再起動しました。",
-    tipEditor: "エディターでサウンドの閲覧やバックアップができます。",
-    tipBoot: "m-bootloader の確認：FM-1 の電源を切り、PLAY を押しながら電源を入れると、リカバリーメニューが表示されます。",
-    endPausedH: "インストールが中断しました",
-    endPaused: "FM-1 は安全です。インストールが完了するまで、電源を切ってもアップデートモードで待機します。",
-    tipCable: "ケーブルを確かめるか、挿し直してください。画面には UPDATING と表示されるか、暗いままです。",
-    tipApps: "ほかの音楽アプリやエディターのタブを閉じてください。", tipResume: "それから「再開」を押します。書き込みを最初からやり直します。",
-    endSafeH: "何も変更されていません", endSafe: "FM-1 は以前のファームウェアのままです。",
-    endRestartH: "FM-1 が戻ってきません",
-    endRestart: "書き込みは終わりましたが、FM-1 から応答がありません。電源を入れ直してください。",
-    tipStill: "UPDATING と表示されるか暗いままなら、まだアップデートモードです。「FM-1 を探す」を押して再開してください。",
-    tipBrick: "まったく起動しない場合は、このページの「FM-1 が起動しないとき」を見てください。",
-    endPartialH: "Saadet はインストールされ、m-bootloader はされていません",
-    endPartial: "Saadet {v} はインストールされました。m-bootloader は書き込めず、ほかには何も変更されていません。あとでこのページからもう一度試せます。",
-    btnEditor: "エディターを開く", btnManual: "マニュアルを読む", btnClose: "閉じる", btnResume: "インストールを再開",
-    btnRetry: "もう一度",
-    e_notfound: "何も書き込まれる前に FM-1 が応答しなくなりました。",
-    e_model: "接続されている機器は FM-1 ではありません。",
-    e_lost: "USB の接続が切れました。", e_stopped: "FM-1 がデータを要求しなくなりました。",
-    e_noloader: "アップデートモードの FM-1 が見つかりません。", e_noreturn: "再起動のあと、FM-1 が戻ってきませんでした。",
-    e_mismatch: "書き込みましたが、FM-1 は別のバージョンを報告しています：{d}。", e_badreq: "FM-1 がファイルの範囲外を要求しました。",
-    e_open: "この FM-1 は M-VAVE の Open ファームウェアで動いています。先に M-VAVE のファームウェアに戻してください。",
-    e_bootrefused: "ファームウェアが m-bootloader を受け付けませんでした。", e_other: "エラー：{m}",
-    mResumeH: "インストールが途中で止まったら",
-    mResume1: "何も失われていません。インストールが完了するまで、FM-1 はアップデートモードで起動します（画面に UPDATING、または暗いまま）。電源を切っても同じです。",
-    mResume2: "FM-1 を接続してこのページを開き、「FM-1 を探す」を押してください。再開を案内し、書き込みの最初から続けます。",
-    mStockH: "M-VAVE のファームウェアに戻す",
-    mStock1: "M-VAVE 純正の FM-1 ファームウェアを同じケーブルで書き込みます。M-VAVE のブートローダーも元に戻り、Saadet で保存したものは消えることがあります。",
-    mStock2: "M-VAVE のファームウェアをダウンロード：", mStock3: "ダウンロードしたファイルを選ぶ：",
-    mStock4: "FM-1 を接続し、上の「FM-1 を探す」を押してから、下のボタンを押します。", mStockGo: "M-VAVE のファームウェアを書き込む",
-    stockok: "M-VAVE の FM-1 ファームウェアです（{p}）。", stockbad: "M-VAVE の FM-1 ファームウェアではありません。上のリンクのファイルを選んでください。",
-    stockfind: "先に上で FM-1 を探してください。",
-    mReportH: "不具合を報告する",
-    mReport1: "FM-1 がクラッシュしたら、電源を切らないでください。クラッシュの記録は再起動では残りますが、電源を切ると消えます。接続して記録を読み、何をしていたかと一緒に送ってください。",
-    mReportGo: "クラッシュの記録を読む", mReportCopy: "コピー", mReportLabel: "クラッシュの記録",
-    reportwait: "読み込み中…", reportnone: "応答がありません。FM-1 が Saadet を実行しているか確かめてください。",
-    reportok: "読み込みました。コピーして送ってください。", reportcopied: "コピーしました。",
-    mBrickH: "FM-1 が起動しないとき",
-    mBrick1: "m-bootloader がある場合：電源を切り、PLAY を押しながら電源を入れるとリカバリーメニュー、REC なら USB ダウンロードモードになります。",
-    mBrick2: "ない場合は、FM-1 の USB リカバリー手順でパソコンからファームウェアを書き戻せます：",
-    mBrickLink: "felucca-bsp のリカバリーツール（英語）",
-    credits: "Saadet：Kerem Kilic（Ellic Studio）。Charles Vestal の fm1-base と felucca-bsp を基盤に、Leo Kuroshita（@kurogedelic）、Hügelton Instruments の Felucca から。m-bootloader：Julius Vitkauskas。",
-    legal: "ファームウェア：MPL-2.0。エディター：GPL-3.0-only。第三者の利用条件も適用されます。無保証。M-VAVE および FM-1 は各所有者の商標です。",
-    details: "詳細", sec: "{n} 秒", min: "{n} 分",
-  },
 };
 
-let lang = (() => {
-  try { const s = localStorage.getItem(LANG); if (s === "en" || s === "ja") return s; } catch (_) { /* none kept */ }
-  return (navigator.language || "en").toLowerCase().startsWith("ja") ? "ja" : "en";
-})();
-const t = (k, vars = {}) => (TEXT[lang][k] ?? TEXT.en[k] ?? k).replace(/\{(\w+)\}/g, (_, n) => vars[n] ?? "");
+const t = (k, vars = {}) => (TEXT.en[k] ?? k).replace(/\{(\w+)\}/g, (_, n) => vars[n] ?? "");
 
 const st = {
   meta: null, image: null, boot: null, stock: null,  // the release, its images, a chosen stock package
@@ -254,17 +144,9 @@ const mark = (on) => { try { if (on) localStorage.setItem(MARK, st.meta.product)
 
 /* ---- language ---- */
 function applyLang() {
-  document.documentElement.lang = lang;
   document.querySelectorAll("[data-t]").forEach((e) => { e.textContent = t(e.dataset.t, { v: st.meta?.boot?.version ?? "" }); });
-  $("lang").textContent = t("other");
-  $("lang").lang = lang === "ja" ? "en" : "ja";
   render();
 }
-$("lang").addEventListener("click", () => {
-  lang = lang === "ja" ? "en" : "ja";
-  try { localStorage.setItem(LANG, lang); } catch (_) { /* not kept */ }
-  applyLang();
-});
 
 /* ---- the release: release.json, its package and m-bootloader, each checked ---- */
 const sha256 = async (raw) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", raw))].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -591,7 +473,7 @@ function endRun(state, err) {
       tips.push(t("tipEditor"));
       if (plan.boot) tips.push(t("tipBoot"));
     }
-    if (!r.isStock) { link("btnEditor", "../editor.html", true); link("btnManual", "../manual/index.html"); }
+    if (!r.isStock) { link("btnEditor", "https://saadet.ellicstudio.com", true); link("btnManual", "../manual/index.html"); }
     button("btnClose", r.isStock, closeRun);
     setPct(100);
     document.title = t("titleDone");
