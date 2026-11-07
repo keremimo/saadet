@@ -13,12 +13,12 @@
     "licence": "MIT",
     "source": "https://github.com/jvitkauskas/m-bootloader"
   },
-  "commit": "34872ec710e61db04b471d9008c45665d8cd1d67",
+  "commit": "c83b05f5377703c30d649e7f2b39181c371a2a11",
   "base": "3c4a57eea659",
-  "built": "2026-11-07T12:01:51+00:00",
+  "built": "2026-11-07T12:34:04+00:00",
   "source": {
-    "sha256": "2bd131c2a93b0650d39bc8ed4873a45f8a6560e9d240302b410e6635f7459282",
-    "commit": "34872ec710e61db04b471d9008c45665d8cd1d67",
+    "sha256": "80e24b512b10092863c58abee58071a839551de13c3f9a2e9c239094f16a3638",
+    "commit": "c83b05f5377703c30d649e7f2b39181c371a2a11",
     "licence": "MPL-2.0",
     "dependencies": {
       "fm1-base": "3c4a57eea659f942b0c80a99949dddafc094a57b",
