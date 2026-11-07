@@ -11,9 +11,10 @@
 #define MELODEE_CORE1_FALLBACK 1 /* 0: diagnose CPU1 failures by halting for the watchdog, never render alone */
 #endif
 #ifndef SAADET_PPG
-#define SAADET_PPG 0            /* PPG, the PPG Wave 2.2 engine (eng_ppg.c). It needs the local wave image
-                                 * (private/ppg/ppg22-waves.bin, tools/gen_ppg_waves.py), which is never committed. Here
-                                 * too: the panel's colours (gfx.c) are built before core.h is read */
+#define SAADET_PPG 1            /* PPG, the PPG Wave 2.2 engine (eng_ppg.c): in every build, as it ships. It needs the local
+                                 * images (private/ppg, tools/gen_ppg_waves.py; SAADET_PPG_ROM elsewhere), which are never
+                                 * committed: without them the build stops (eng_ppg.c). Here too: the panel's colours
+                                 * (gfx.c) are built before core.h is read */
 #endif
 #if MELODEE_CORE1_FALLBACK != 0 && MELODEE_CORE1_FALLBACK != 1
 #error "MELODEE_CORE1_FALLBACK must be 0 or 1"
