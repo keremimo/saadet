@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #define SAADET_FM1_BASE 1
+static void sd_reset_intended(void){}   /* (the base's boot guard: platform/app.c) */
 static int radio_available=1,radio_on=1,radio_state=2,radio_link,radio_midi,retries;
 static int sd_ble_available(void){return radio_available;}
 static int sd_ble_enabled(void){return radio_on;}

@@ -258,7 +258,10 @@ void saadet_init(void)
     ui.force=1;sd_poll();
 #ifndef PLAT_HOST
     uint32_t mult=fm1_clock_mult();vbudget_cpu1=VBUDGET*(mult?fm1_clock_mhz_of(mult):360u)/360u;
-    if(sd_worker_allowed()&&!fm1_core1_barred())fm1_multicore_start();
+    /* Melodee's (main.c): one core after a failed supply setup, a failed boot or a retained CPU1 bar; no-fallback
+     * diagnostics bypass the last two. The base enables the PC guard after this returns (CPU1 has left mask-ROM) */
+    if(fm1_core1_boot_allowed((uint32_t)sd_power_ready(),(uint32_t)sd_boot_failed()))
+        fm1_multicore_start();              /* bounded handshake; the selected policy handles failure */
 #endif
 }
 void saadet_render(int32_t *out,uint32_t n,uint32_t gain)

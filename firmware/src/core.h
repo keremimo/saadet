@@ -410,6 +410,9 @@ struct { uint32_t magic, failed, pending; } bootguard __attribute__((section(".n
 static inline void reset_intended(void)         /* a reset on purpose (UBOOT, an update): not a failed boot */
 {
     bootguard.pending = 0;
+#ifdef SAADET_FM1_BASE
+    sd_reset_intended();                        /* (fm1-base: its guard is the real one, platform/app.c; this one is a copy) */
+#endif
 }
 
 /* GLO solo belongs to the mixer, independently of quick-layer effects. */

@@ -240,16 +240,18 @@ uint32_t sd_battery(void){
 #define FM1_POWER_EXTERNAL_HAL 1
 #include "../firmware/hal/fm1_power.h"
 int sd_power_init(void){fm1_power_ready=(uint8_t)fm1_power_init();return fm1_power_ready;}
+int sd_power_ready(void){return fm1_power_ready;}
 void app_cstart(void){sd_worker_stop();}
 void app_fault(const void *crash){(void)crash;sd_worker_crash();}
-int sd_worker_allowed(void){return fm1_power_ready&&!bootguard.failed;}
 #endif
-#ifdef SAADET_SMK37
+/* The base's boot guard (main_fm1.c) is the real one, as Melodee's own is in Melodee: a boot that dies in its first 30 s
+ * counts as failed, and the next one starts no CPU1. The app's resets on purpose (reset_intended) are not failed boots */
 #ifdef PLAT_HOST
 int sd_boot_failed(void){return 0;}
+void sd_reset_intended(void){}
 #else
 int sd_boot_failed(void){return bootguard.failed!=0u;}
-#endif
+void sd_reset_intended(void){bootguard.pending=0;}
 #endif
 
 void sd_panel_set(const uint8_t *buttons,const uint8_t *enc,const int8_t *direction){

@@ -47,11 +47,10 @@ void saadet_sysex_byte(uint8_t byte);
 int sd_fault_frame(const uint32_t *frame);
 void sd_worker_stop(void);
 void sd_worker_crash(void);
-int sd_worker_allowed(void);
-#ifdef SAADET_SMK37
 int sd_boot_failed(void);
-#endif
+void sd_reset_intended(void);
 int sd_power_init(void);
+int sd_power_ready(void);
 
 int32_t saadet_sys_h(int face);
 int32_t saadet_sys_w(int face,const char *s);

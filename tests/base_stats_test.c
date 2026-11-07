@@ -13,6 +13,7 @@
 #define MELODEE_USB_AUDIO 0
 #define MELODEE_CACHE_RAM 0
 #define SAADET_FM1_BASE 1
+static void sd_reset_intended(void) {}   /* (the base's boot guard: platform/app.c) */
 /* the base target is dual-core; no worker thread runs here (tests/dual_core_test.c runs one) */
 #define MELODEE_DUAL_CORE 1
 static uint32_t worker_clock(void)

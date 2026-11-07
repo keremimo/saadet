@@ -62,7 +62,15 @@ int sd_fault_frame(const uint32_t *f)   /* 1: handled, CPU0 resumes */
 
 #include "../../firmware/hal/fm1_multicore.h"
 void sd_worker_stop(void){fm1_core1_stop();}
-void sd_worker_crash(void){fm1_core1_bar_set();fm1_core1_stop();}
+void sd_worker_crash(void)
+{
+#if MELODEE_CORE1_FALLBACK
+    if(audio_worker_online)
+        fm1_core1_bar_set();                /* Melodee's (main.c fm1_fault): one core on every boot until power-off, once CPU1
+                                             * was working when CPU0 crashed */
+#endif
+    fm1_core1_stop();
+}
 
 #define FM1_CLOCK_HOST_TEST 1
 #define FCLK_READ(a) (*(volatile uint32_t *)(uintptr_t)(a))

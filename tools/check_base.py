@@ -42,7 +42,10 @@ power=main.index('        sd_power_init();')
 assert power<main.index('    lcd_init();',power)<app_init,'stock power setup must precede peripherals and CPU1'
 app=(ROOT/'platform/app.c').read_text()
 assert '#include "../firmware/hal/fm1_power.h"' in app,'base must reuse Melodee stock power initializer'
-assert 'return fm1_power_ready&&!bootguard.failed;' in app,'CPU1 must require the full verified supply setup'
+assert 'int sd_power_ready(void){return fm1_power_ready;}' in app and 'int sd_boot_failed(void){return bootguard.failed!=0u;}' in app \
+    and 'fm1_core1_boot_allowed((uint32_t)sd_power_ready(),(uint32_t)sd_boot_failed())' in instrument,\
+    'CPU1 must require the full verified supply setup and a boot that did not fail, by Melodee\'s gate (main.c)'
+assert 'void sd_reset_intended(void){bootguard.pending=0;}' in app,'a reset on purpose must clear the base\'s own boot guard'
 assert sym('sd_worker_stop')>=0x02000120,'early CPU1 stop must execute from flash before SRAM initialization'
 lo,hi=sym('_sd_audio_start'),sym('_sd_audio_end')
 assert 0x1c20000<=lo<hi<=sym('_pool_end')<=sym('_resource_end')==0x1c74000
