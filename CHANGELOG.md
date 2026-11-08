@@ -2,6 +2,16 @@
 
 Each release in short. The full notes for the current release are in [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
+## 1.0.4 (8 November 2026)
+
+### Fixed
+
+- **JUNO-106 muffled**: the cutoff ran one to two octaves below the instrument (FREQ 64 at 390 Hz, now 795 Hz). The
+  filter now follows the Juno-106's own control law, 1143 DAC counts an octave, calibrated to the service manual's
+  248 Hz at FREQ 49 on C4; VCF ENV and VCF LFO take the firmware's ranges (14.2 and 3.6 octaves).
+- **JUNO-106 resonance**: full resonance whistles as loud as a pulse through the open filter, as the instrument does
+  (was about 10 dB under), and a resonant PWM patch's sub no longer wobbles.
+
 ## 1.0.3 (8 November 2026)
 
 ### Added

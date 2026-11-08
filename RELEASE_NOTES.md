@@ -1,8 +1,21 @@
-# Saadet 1.0.3
+# Saadet 1.0.4
 
-A fix release on Saadet 1.0.2 for the M-VAVE FM-1 and, in beta, the M-VAVE SMK-37: cleaner chords at high levels and a
-way to recover the Bluetooth radio's calibration. The SMK-37 packages keep their identities (`SMK-37 Elite_910` and so
-on), so an SMK-37 on 1.0.0 or 1.0.2 shows as up to date in the installer: press **Reinstall** to get the changes below.
+A fix release on Saadet 1.0.3 for the M-VAVE FM-1 and, in beta, the M-VAVE SMK-37: the JUNO-106 engine's filter opens
+as the instrument's does. The SMK-37 packages keep their identities (`SMK-37 Elite_910` and so on), so an SMK-37 on
+1.0.0 to 1.0.3 shows as up to date in the installer: press **Reinstall** to get the changes below.
+
+## Fixed in 1.0.4
+
+- JUNO-106: every patch sounded muffled. The cutoff followed a curve of Saadet's own, 8 Hz to 17.5 kHz over the FREQ
+  slider, which put FREQ 64 at 390 Hz and 100 at 3.4 kHz, one to two octaves below the instrument. It now follows the
+  Juno-106's own control law: its CPU sums the slider, the envelope, the LFO and the keys into one 14-bit word for the
+  filter, 1143 counts an octave, and the service manual calibrates FREQ 49 on C4 to whistle at 248 Hz (992 Hz on C6).
+  FREQ 64 is now 795 Hz and 100 is 13 kHz. VCF ENV at full sweeps 14.2 octaves (was 10) and VCF LFO 3.6 (was 4), as
+  the firmware scales them; KYBD is unchanged. Roland's factory patches now sound as they were voiced.
+- JUNO-106: full resonance whistled about 10 dB under a single wave. It now whistles as loud as a pulse through the
+  open filter, as recordings of the instrument show. With the cutoff where Roland put it, the old limit also made the
+  sub of a resonant PWM patch (B56 ETHEREAL) wobble with the PWM; it is steady again. Patches at high resonance come
+  out louder.
 
 ## New in 1.0.3
 
@@ -212,7 +225,9 @@ an FM-1 or an SMK-37. m-bootloader's author reports it little tested on FM-1s wi
 volume fix is tested against the shipping USB code and descriptors on the host, not yet on a unit. 1.0.3's output
 curve is tested on the host, at both sample precisions, for exactness under the threshold and the intermodulation of a
 held chord; the build runs on an SMK-37 Elite, but its sound has not been compared by ear there. The calibration
-restore is tested against the firmware's own checks on the host; it has not yet restored a unit.
+restore is tested against the firmware's own checks on the host; it has not yet restored a unit. 1.0.4's JUNO-106
+filter is tested on the host against the service manual's calibration and the whistle's level against a pulse; it has
+not been heard on a unit or compared with an instrument.
 
 The preparation tools do not install or publish anything. BUILD_INFO.json and SHA256SUMS identify the exact
 package and corresponding source; VERIFICATION.json records the completed automated preparation checks.
