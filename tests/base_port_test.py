@@ -30,13 +30,16 @@ prefix='''#include <stdint.h>
 #define FELUCCA_UAC 1
 #define FELUCCA_UAC_OUT 1
 #define FELUCCA_UAC_48K 0
+#ifndef FELUCCA_UAC_MIDI_LAST
 #define FELUCCA_UAC_MIDI_LAST 1
+#endif
 #define FELUCCA_UAC_AS_FIRST 0
 #define FELUCCA_UAC_IAD 0
 #define FELUCCA_CDC 0
 #define FELUCCA_USB_LAYOUT 0
 #define FELUCCA_USB_PID 1
-#define UAC_AS_IF 2u
+#define AUD_IF 0u
+''' + re.search(r'^#define UAC_AS_IF .*$', s, re.M)[0] + '''
 #define HALF_FRAMES 128u
 #define RING_PUBLISH() ((void)0)
 '''
@@ -101,12 +104,26 @@ int main(void){
     for(uint32_t i=0;i<uo_w;i++)uo_ring[i]=(sd_pcm_frame){65537,-65537};
     memset(samples,0,sizeof samples);uac_play(samples,32,4096);
     assert(samples[0]==65537&&samples[1]==-65537);
-    uint8_t setup[8]={0x21,1,0,2,0,5,2,0},db[2]={0,250}; /* -6 dB */
+    /* The volume requests as a host sends them: to the audio control interface the descriptors give, in either
+     * interface order (FELUCCA_UAC_MIDI_LAST), not to an interface number assumed here */
+    uint8_t ac=0xFF,as=0xFF;
+    for(uint32_t i=0;i<sizeof CFG_DESC_PLAIN;i+=CFG_DESC_PLAIN[i]){
+        const uint8_t *p=CFG_DESC_PLAIN+i;
+        if(p[1]==4&&p[5]==1&&p[6]==1)ac=p[2];
+        if(p[1]==4&&p[5]==1&&p[6]==2&&as==0xFF)as=p[2];
+    }
+    assert(ac!=0xFF&&as!=0xFF&&as==UAC_AS_IF);
+    uint8_t setup[8]={0x21,1,0,2,ac,5,2,0},db[2]={0,250}; /* -6 dB */
     assert(sd_volume_setup(setup)&&sd_volume_pending==2);
     assert(sd_volume_data(db,2)&&ua_host_volume_q8==-1536&&ua_host_target_q15==16423);
     setup[0]=0xA1;setup[1]=0x81;assert(sd_volume_setup(setup));
     assert(volume_reply[0]==0&&volume_reply[1]==250);
-    uint8_t mute[8]={0x21,1,0,1,0,5,1,0},on=1;
+    setup[1]=0x82;assert(sd_volume_setup(setup)&&volume_reply[0]==0x00&&volume_reply[1]==0xC0);   /* MIN -64 dB */
+    setup[1]=0x83;assert(sd_volume_setup(setup)&&volume_reply[0]==0&&volume_reply[1]==0);         /* MAX 0 dB */
+    setup[1]=0x84;assert(sd_volume_setup(setup)&&volume_reply[0]==0&&volume_reply[1]==1);         /* RES 1 dB */
+    setup[1]=0x81;setup[4]=as;assert(!sd_volume_setup(setup));   /* another interface's: not ours */
+    setup[4]=ac;setup[5]=4;assert(!sd_volume_setup(setup));      /* another entity: not ours */
+    uint8_t mute[8]={0x21,1,0,1,ac,5,1,0},on=1;
     assert(sd_volume_setup(mute)&&sd_volume_data(&on,1)&&ua_host_mute);
     ua_host_gain_q15=0;uo_r=0;uo_w=UO_TGT+2;uo.go=0;
     memset(samples,0,sizeof samples);uac_play(samples,32,4096);assert(samples[0]==0&&samples[1]==0);
@@ -127,8 +144,10 @@ code=prefix+ring+desc+helper+mock+volume+'\n'.join(function(x) for x in (
     'uint32_t uac_packet(', 'void uo_service(', 'void uac_play('))+main
 with tempfile.TemporaryDirectory() as d:
     path=Path(d);(path/'test.c').write_text(code)
-    for deep in (0,1):   # both rings: the shipping one, and the one that shows what the test can catch
-        subprocess.run([os.getenv('CC','cc'),f'-DFELUCCA_UAC_DEEP={deep}','-O1','-g','-fsanitize=address,undefined','-fno-sanitize=shift','-o',str(path/'test'),str(path/'test.c')],check=True)
+    # both rings (the shipping one, and the one that shows what the test can catch); both interface orders (MIDI
+    # last, the base's default since 2026-10-31, and MIDI as interface 1 before it)
+    for deep,midi_last in ((0,1),(1,1),(1,0)):
+        subprocess.run([os.getenv('CC','cc'),f'-DFELUCCA_UAC_DEEP={deep}',f'-DFELUCCA_UAC_MIDI_LAST={midi_last}','-O1','-g','-fsanitize=address,undefined','-fno-sanitize=shift','-o',str(path/'test'),str(path/'test.c')],check=True)
         subprocess.run([str(path/'test')],check=True)
 # Evaluate the actual object enum/map, excluding retired object identities.
 st=(ROOT/'firmware/src/storage.c').read_text()

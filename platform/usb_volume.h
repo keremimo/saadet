@@ -40,7 +40,9 @@ static void ua_host_volume_set(int16_t volume)
 static uint8_t sd_volume_pending,sd_volume_reply[2];
 static int sd_volume_setup(const uint8_t *s){
     uint32_t selector=s[3],n=selector==1u?1u:2u;int16_t v;
-    if(!usb.config||s[4]!=UAC_AS_IF-2u||s[5]!=5u||s[2]||s[7]||s[6]!=n||(selector!=1u&&selector!=2u))return 0;
+    /* wIndex: the audio control interface (the audio function's first, AUD_IF, in any interface order: the base's
+     * MIDI-last default makes UAC_AS_IF 1, not 2) and feature unit 5 */
+    if(!usb.config||s[4]!=AUD_IF||s[5]!=5u||s[2]||s[7]||s[6]!=n||(selector!=1u&&selector!=2u))return 0;
     if(s[0]==0x21u&&s[1]==1u){sd_volume_pending=(uint8_t)selector;sie_wr(S_INDEX,0);sie_wr(S_CSR0,0x40);return 1;}
     if(s[0]!=0xA1u)return 0;
     if(selector==1u){if(s[1]!=0x81u)return 0;v=ua_host_mute;}
