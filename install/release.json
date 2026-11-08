@@ -40,18 +40,18 @@
     }
   ],
   "boot": {
-    "version": "2.2",
-    "pkg": "../firmware/m-bootloader-2.2.fwsc",
-    "sha256": "cb6128ee753a1661e6399002317464959231854024f259520755621954438981",
+    "version": "2.3",
+    "pkg": "../firmware/m-bootloader-2.3.fwsc",
+    "sha256": "0299c41368f6d5d8f39776b3cad597a1c95677c27f3ca855c29368daf3d1d4e0",
     "licence": "MIT",
     "source": "https://github.com/jvitkauskas/m-bootloader"
   },
-  "commit": "13bc320b6a7beaeda15167aaa45ad5d92d2210cd",
+  "commit": "f277aadd1fa22703f577e6303d547115d7521d83",
   "base": "3c4a57eea659",
-  "built": "2026-11-08T17:12:47+00:00",
+  "built": "2026-11-08T17:35:40+00:00",
   "source": {
-    "sha256": "f9c62f95b579bcf21633e43fa3a8213ab225afcca414b3fd2cebcf73189869b9",
-    "commit": "13bc320b6a7beaeda15167aaa45ad5d92d2210cd",
+    "sha256": "bd0107fed02680b54848a705a7feeda17db8dbc7d141897bace061b38ce9e9a6",
+    "commit": "f277aadd1fa22703f577e6303d547115d7521d83",
     "licence": "MPL-2.0",
     "dependencies": {
       "fm1-base": "3c4a57eea659f942b0c80a99949dddafc094a57b",

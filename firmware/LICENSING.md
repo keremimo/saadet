@@ -265,9 +265,9 @@ dependency's `LICENSING.md` and `bsp/NOTICE`). The vendors' factory sound data r
 this project does not grant rights to that data. Completing source relicensing does not establish hardware
 release qualification; the preparation tools supply the release-site licence/source bundle described above.
 
-The optional recovery bootloader is **m-bootloader 2.2** by Julius Vitkauskas
-(<https://github.com/jvitkauskas/m-bootloader>, release v2.2, commit
-`64f7c9cad1580bea870fc4a9e9bd61583fee3aef`), under MIT. Its unmodified FM-1
+The optional recovery bootloader is **m-bootloader 2.3** by Julius Vitkauskas
+(<https://github.com/jvitkauskas/m-bootloader>, release v2.3, commit
+`6bc8f459b94f75cf8c0a94e4fb018b09b2cc7689`), under MIT. Its unmodified FM-1
 installer and boot image are kept in `platform/m-bootloader/` with its full MIT
 licence. Base builds check them against the release's SHA-256 sums and copy them
 into `platform/build/bootloader/` with that licence and a source/checksum manifest.

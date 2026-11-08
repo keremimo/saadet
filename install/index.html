@@ -328,7 +328,7 @@
       <summary data-t="mBrickH">If the FM-1 won't start</summary>
       <div class="in">
         <p data-t="mBrick1">With m-bootloader: switch off, hold PLAY and switch on for its recovery menu, or hold REC for USB download mode.</p>
-        <p data-t="mBrickMidi">From m-bootloader 2.2, choose MIDI MODE in that menu (it opens there by itself when the firmware won't start), then press Find device above: this page installs Saadet through it.</p>
+        <p data-t="mBrickMidi">From m-bootloader 2.2, choose MIDI MODE in that menu (from 2.3 it opens there by itself when the firmware won't start), then press Find device above: this page installs Saadet through it.</p>
         <p><span data-t="mBrick2">Without it, the FM-1's USB recovery route can put a firmware back from a computer:</span>
           <a href="https://github.com/hugelton/felucca-bsp/tree/main/tools" target="_blank" rel="noopener" data-t="mBrickLink">felucca-bsp recovery tools</a></p>
       </div>
@@ -1656,7 +1656,7 @@ const TEXT = {
     reportok: "Read. Copy it and send it.", reportcopied: "Copied.",
     mBrickH: "If the FM-1 won't start",
     mBrick1: "With m-bootloader: switch off, hold PLAY and switch on for its recovery menu, or hold REC for USB download mode.",
-    mBrickMidi: "From m-bootloader 2.2, choose MIDI MODE in that menu (it opens there by itself when the firmware won't start), then press Find device above: this page installs Saadet through it.",
+    mBrickMidi: "From m-bootloader 2.2, choose MIDI MODE in that menu (from 2.3 it opens there by itself when the firmware won't start), then press Find device above: this page installs Saadet through it.",
     mBrick2: "Without it, the FM-1's USB recovery route can put a firmware back from a computer:",
     mBrickLink: "felucca-bsp recovery tools",
     credits: "Saadet by Kerem Kilic (Ellic Studio). Built on fm1-base by Charles Vestal and felucca-bsp, from Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments. m-bootloader by Julius Vitkauskas.",
@@ -1742,7 +1742,7 @@ const DEMO_MODELS = [["FM-1", false], ["SMK-37 Pro", true], ["SMK-37 Elite", tru
 function demoRelease(meta) {
   const version = meta?.version || "1.0";
   const digits = (meta?.product || "FM-1_9010000").split("_")[1];
-  st.meta = { name: "Saadet", version, product: "FM-1_" + digits, boot: { version: meta?.boot?.version || "2.2" } };
+  st.meta = { name: "Saadet", version, product: "FM-1_" + digits, boot: { version: meta?.boot?.version || "2.3" } };
   /* an SMK-37's identity: _9, then the major and minor one digit each ("SMK-37 Elite_910"); dev builds' _900 */
   const short = digits === "900" ? "900" : `9${+digits.slice(1, 3)}${+digits.slice(3, 5)}`;
   DEMO_MODELS.forEach(([model, beta], i) => {
