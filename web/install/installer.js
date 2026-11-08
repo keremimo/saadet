@@ -9,11 +9,13 @@
 // awake, asks before leaving) and the screen says so again whenever the tab comes back. An install that stops after
 // the FM-1 entered update mode can be resumed, now or on a later visit (a mark in localStorage and the device
 // itself say so). fm1-base's installer.html is the origin of the m-bootloader option, the stock firmware path and
-// the crash report.
+// the crash report. A device in m-bootloader's MIDI mode (mboot.js: M-Flasher's command 0x12 tells it from fm1-base's
+// update loader, whose identity it shares) is installed through it: it writes the package itself.
 
 import { productOf, logicalImage } from "./fm1pkg.js";
 import { SteadyUpdater } from "./transfer.js";
 import { hold, busyElsewhere } from "./keepalive.js";
+import { askInfo, isMbootId, olderBoot, flashChip } from "./mboot.js";
 import { IS_OTA, PORTS, describeDevice, planFor, progressModel, remaining, afterFailure } from "./flow.js";
 
 const $ = (id) => document.getElementById(id);
@@ -54,11 +56,16 @@ const TEXT = {
     planModel: "Saadet has no package for this device ({id}). It runs on the M-VAVE FM-1, SMK-37 Pro, SMK-37 Elite and MKE-P37.",
     planVendor: "This {dev} is waiting in M-VAVE's update mode. Finish that update with M-VAVE's updater for your model first, then install Saadet.",
     planBeta: "Saadet on the SMK-37 is in beta: so far only an SMK-37 Elite has run it. Keep M-VAVE's firmware and updater for your model at hand: they are the way back.",
+    planMboot: "The {dev} is in m-bootloader's MIDI mode, which writes Saadet {v} itself. It checks the whole package before it erases anything and writes only the firmware area, so the boot area and the sounds saved above it stay.",
+    planMbootPick: "m-bootloader calls every SMK-37 a Pro, so choose the model above: each gets its own package.",
+    pickModel: "Which SMK-37 is this?", pickNone: "Choose the model",
     devLoader: "In update mode: an installation is waiting to finish", devThis: "Saadet {v}", devSaadet: "Saadet {v}",
     devDev: "Saadet development build", devStock: "M-VAVE firmware {v}", devOpen: "M-VAVE Open firmware",
     devOther: "Another firmware ({id})", devModel: "No package for it ({id})",
     devVendor: "In M-VAVE's update mode ({id})", beta: "beta",
+    devMboot: "m-bootloader {v}, MIDI mode · flash {f}", devStage: "m-bootloader {v} tools, running from RAM · flash {f}",
     chipReady: "Ready", chipResume: "Update mode", chipCurrent: "Up to date", chipBlocked: "Can't install",
+    chipMboot: "MIDI mode",
     nomidi: "This browser can't reach USB MIDI devices. Open this page in Chrome or Edge on a computer.",
     denied: "MIDI access was not allowed. Allow MIDI devices in the site settings (the icon in the address bar), then press Find device again.",
     notfound: "No FM-1 or SMK-37 answered. Check that it is on and connected with a data cable (not a charging-only one), close other apps and tabs that use MIDI, then look again.",
@@ -69,16 +76,19 @@ const TEXT = {
     pf1h: "Keep this tab open and in front", pf1: "Don't switch tabs, minimise the window or close it until the page says Done.",
     pf2h: "Leave the {dev} connected and on", pf2: "Don't unplug the cable or switch the {dev} off. Plug a laptop into power.",
     pf3h: "It takes about 3 minutes", pf3: "The {dev}'s screen shows UPDATING, or stays dark. Both are normal.",
+    pf3mboot: "m-bootloader shows its progress on the {dev}'s screen. It reads the package twice, to check it and then to write it, so its bar fills faster than this page's.",
     pfboot: "m-bootloader is written last, after one more restart. Keep the power on until the page says Done.",
     pfbootonly: "Writing the boot area takes a few seconds. Keep the power on until the page says Done.",
     pfok: "I've backed up my sounds, or have nothing to keep.", cancel: "Cancel", start: "Start installation",
     runwarn: "Keep this tab open and in front. Don't unplug the {dev}.",
     runInstall: "Installing Saadet {v}", runResume: "Finishing the installation", runBoot: "Installing m-bootloader",
+    runMboot: "Installing Saadet {v} through m-bootloader",
     runStock: "Installing M-VAVE's firmware",
     phPrepare: "Prepare", phWrite: "Write", phRestart: "Restart", phBoot: "m-bootloader",
     stStart: "Starting", stVerify: "Checking the package", stLoader: "Switching the {dev} to update mode",
     stWrite: "Writing the firmware", stReboot: "Restarting the {dev}", stBootWait: "Waiting for Saadet to start",
     stBoot: "Writing m-bootloader. The FM-1 restarts by itself", stFind: "Finding the {dev} in update mode",
+    stFindMboot: "Finding the {dev} in m-bootloader's MIDI mode",
     etaMin: "About {n} min left", etaSec: "Less than a minute left",
     stall: "Waiting for the {dev}… keep the cable connected.",
     backKept: "You left this tab for {s}. The installation kept going, but please stay here until it's done.",
@@ -96,6 +106,9 @@ const TEXT = {
     tipCable: "Check the cable, or plug it in again. The screen shows UPDATING, or stays dark.",
     tipApps: "Close other music apps and editor tabs.", tipResume: "Then press Resume. The write starts again from the beginning.",
     endSafeH: "Nothing was changed", endSafe: "The {dev} still runs its previous firmware.",
+    endMbootH: "Installation stopped",
+    endMboot: "The {dev} stays in m-bootloader's MIDI mode, so it can be installed again from here. If anything was written, MIDI mode opens by itself the next time it's switched on.",
+    tipMboot: "Then press Try again.",
     endRestartH: "The {dev} didn't come back",
     endRestart: "The write finished, but the {dev} didn't report back. Switch it off and on again.",
     tipStill: "If it shows UPDATING or stays dark, it is still in update mode: press Find device and resume.",
@@ -130,6 +143,7 @@ const TEXT = {
     reportok: "Read. Copy it and send it.", reportcopied: "Copied.",
     mBrickH: "If the FM-1 won't start",
     mBrick1: "With m-bootloader: switch off, hold PLAY and switch on for its recovery menu, or hold REC for USB download mode.",
+    mBrickMidi: "From m-bootloader 2.2, choose MIDI MODE in that menu (it opens there by itself when the firmware won't start), then press Find device above: this page installs Saadet through it.",
     mBrick2: "Without it, the FM-1's USB recovery route can put a firmware back from a computer:",
     mBrickLink: "felucca-bsp recovery tools",
     credits: "Saadet by Kerem Kilic (Ellic Studio). Built on fm1-base by Charles Vestal and felucca-bsp, from Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments. m-bootloader by Julius Vitkauskas.",
@@ -143,7 +157,7 @@ const t = (k, vars = {}) => (TEXT.en[k] ?? k).replace(/\{(\w+)\}/g, (_, n) => va
 const st = {
   meta: null, boot: null, stock: null,                // the release, m-bootloader's image, a chosen stock package
   pkgs: {},                                           // the release's packages by model: { model, product, pkg, sha256, beta, image }
-  access: null, dev: null,                            // the MIDI access; the device found: { id, kind, model, version, text }
+  access: null, dev: null,                            // the MIDI access; the device found: { id, info, kind, model, version, text }
   running: false, run: null,                          // the install under way (its screen's state)
   connErr: null, stockErr: null, demo: null,
 };
@@ -157,6 +171,7 @@ const mark = (on, product) => { try { if (on) localStorage.setItem(MARK, product
    is forgotten), an unfinished install's, else the FM-1 */
 function devName() {
   if (st.dev && st.pkgs[st.dev.model]) return st.dev.model;
+  if (st.dev?.choose) return "SMK-37";
   if (st.run?.model) return st.run.model;
   const m = (marked() || "").split("_")[0];
   return st.pkgs[m] ? m : "FM-1";
@@ -214,7 +229,7 @@ const DEMO_MODELS = [["FM-1", false], ["SMK-37 Pro", true], ["SMK-37 Elite", tru
 function demoRelease(meta) {
   const version = meta?.version || "1.0";
   const digits = (meta?.product || "FM-1_9010000").split("_")[1];
-  st.meta = { name: "Saadet", version, product: "FM-1_" + digits, boot: { version: meta?.boot?.version || "1.2" } };
+  st.meta = { name: "Saadet", version, product: "FM-1_" + digits, boot: { version: meta?.boot?.version || "2.2" } };
   /* an SMK-37's identity: _9, then the major and minor one digit each ("SMK-37 Elite_910"); dev builds' _900 */
   const short = digits === "900" ? "900" : `9${+digits.slice(1, 3)}${+digits.slice(3, 5)}`;
   DEMO_MODELS.forEach(([model, beta], i) => {
@@ -236,6 +251,8 @@ async function demoAccess() {
       smkupdate: { model: "SMK-37 Elite", identity: "SMK-37 Elite_016", state: "loader" },
       smkvendor: { model: "SMK-37 Elite", identity: "SMK-37 Elite_016", state: "loader", loader: "ota-SMK-37 Elite_016" },
       mke: { model: "MKE-P37", identity: "MKE-P37_016" },
+      mboot: { identity: "FM-1_016", state: "mboot" },
+      smkmboot: { model: "SMK-37 Elite", identity: "SMK-37 Elite_016", state: "mboot" },
     }[DEMO] || { identity: "FM-1_016" };
     const model = opts.model || "FM-1";
     st.demo = fakeAccess({ images: { firmware: st.pkgs[model].image, boot: st.boot.image },
@@ -275,8 +292,15 @@ async function connect() {
     if (await busyElsewhere()) throw fail("busy", "busy");
     const dev = await updater().findAny();
     if (!dev) { st.dev = null; throw fail("notfound", "not found"); }
+    /* in update mode under MIDI mode's identity: m-bootloader's MIDI mode answers 0x12, fm1-base's loader nothing */
+    const info = isMbootId(dev.id) ? await askInfo(dev.link) : null;
     dev.link.close();
-    st.dev = { id: dev.id, ...describeDevice(dev.id, products()) };
+    const picked = st.dev?.choose ? st.dev.model : null;          /* a model chosen before Try again */
+    st.dev = { id: dev.id, info, ...describeDevice(dev.id, products(), info) };
+    if (st.dev.choose) {
+      if (st.dev.choose.includes(picked)) st.dev.model = picked;
+      pickList(st.dev.choose, st.dev.model);
+    }
     const p = pkgFor(st.dev);
     if (p && !(await loadPackage(p))) st.dev = null;
   } catch (e) {
@@ -287,6 +311,22 @@ async function connect() {
 }
 $("find").addEventListener("click", connect);
 $("mboot").addEventListener("change", render);
+
+/* an SMK-37 in MIDI mode: the player says which it is (m-bootloader can't tell), then its package is fetched */
+function pickList(models, chosen) {
+  const sel = $("devmodel");
+  sel.replaceChildren(sel.options[0], ...models.map((m) => Object.assign(document.createElement("option"), { value: m, textContent: m })));
+  sel.value = chosen || "";
+}
+$("devmodel").addEventListener("change", async (e) => {
+  const dev = st.dev;
+  if (!dev?.choose || st.running) return;
+  dev.model = dev.choose.includes(e.target.value) ? e.target.value : null;
+  render();
+  const p = pkgFor(dev);
+  if (p && !(await loadPackage(p))) st.dev = null;
+  render();
+});
 
 /* ---- the page's state, drawn ---- */
 function render() {
@@ -304,24 +344,30 @@ function render() {
   $("device").hidden = !dev;
   if (dev) {
     const words = { loader: "devLoader", this: "devThis", saadet: "devSaadet", dev: "devDev", stock: "devStock",
-                    open: "devOpen", other: "devOther", model: "devModel", vendor: "devVendor" }[dev.kind];
-    $("devname").textContent = st.pkgs[dev.model] ? dev.model : "";
+                    open: "devOpen", other: "devOther", model: "devModel", vendor: "devVendor",
+                    mboot: dev.stage ? "devStage" : "devMboot" }[dev.kind];
+    $("devname").textContent = st.pkgs[dev.model] ? dev.model : dev.choose ? "SMK-37" : "";
     $("devbeta").hidden = !pkgFor(dev)?.beta;
-    $("devwhat").textContent = t(words, { v: dev.version, id: dev.text || dev.id.text });
+    $("devwhat").textContent = t(words, { v: dev.version, id: dev.text || dev.id.text,
+                                          f: dev.kind === "mboot" ? flashChip(dev.jedec) : "" });
     const chip = dev.kind === "loader" ? ["chipResume", "warn"] : dev.kind === "this" ? ["chipCurrent", "ok"]
+      : dev.kind === "mboot" ? ["chipMboot", plan ? "ok" : "warn"]
       : plan ? ["chipReady", "ok"] : ["chipBlocked", "bad"];
     $("devchip").textContent = t(chip[0]);
     $("devchip").className = "chip " + chip[1];
   }
-  /* step 2: only with m-bootloader's package, never for M-VAVE's firmware; the FM-1's alone */
-  $("st-options").hidden = !st.boot || (!!dev && dev.model !== "FM-1");
+  $("devpick").hidden = !dev?.choose;
+  $("devmodel").disabled = st.running;
+  /* step 2: only with m-bootloader's package, never for M-VAVE's firmware; the FM-1's alone; in MIDI mode only when
+     the m-bootloader there is older than this page's */
+  $("st-options").hidden = !st.boot || (!!dev && dev.model !== "FM-1") || !bootWanted(dev);
   /* step 3 */
   const go = $("go");
   if (!dev || !plan) {
     go.textContent = t(dev?.kind === "loader" ? "goResume" : "goInstall", { v: ver() });
     go.disabled = true;
     $("gohint").hidden = !!dev;
-    $("plantext").textContent = !dev ? t("s3p")
+    $("plantext").textContent = !dev ? t("s3p") : dev.choose && !dev.model ? t("planMbootPick")
       : t({ open: "planOpen", vendor: "planVendor" }[dev.kind] || "planModel", { id: dev.id.text });
   } else {
     const label = plan.resume ? "goResume" : !plan.firmware ? "goBoot" : dev.kind === "this" ? "goReinstall"
@@ -329,36 +375,39 @@ function render() {
     go.textContent = t(label, { v: ver() });
     go.disabled = st.running;
     $("gohint").hidden = true;
-    const words = plan.resume ? "planResume" : !plan.firmware ? "planBoot" : dev.kind === "this" ? "planThis"
-      : ["saadet", "dev"].includes(dev.kind) ? "planUpdate" : "planInstall";
+    const words = plan.mboot ? "planMboot" : plan.resume ? "planResume" : !plan.firmware ? "planBoot"
+      : dev.kind === "this" ? "planThis" : ["saadet", "dev"].includes(dev.kind) ? "planUpdate" : "planInstall";
     $("plantext").textContent = t(words, { v: ver() }) + (pkgFor(dev)?.beta ? " " + t("planBeta") : "");
   }
   $("st-connect").dataset.state = dev ? "done" : "active";
   $("st-options").dataset.state = dev && plan ? "active" : "todo";
   $("st-install").dataset.state = dev && plan ? "active" : "todo";
-  $("stockgo").disabled = !st.stock || st.running || (!!dev && dev.model !== "FM-1");
+  $("stockgo").disabled = !st.stock || st.running || (!!dev && (dev.model !== "FM-1" || dev.kind === "mboot"));
   $("stockmsg").textContent = st.stockErr || (st.stock ? t("stockok", { p: st.stock.product }) : "");
   $("stockmsg").classList.toggle("msg", !!st.stockErr);
   /* an unfinished install: kept from an earlier visit, or the FM-1 itself in update mode */
   let pending = !!marked();
-  if (pending && dev && dev.kind !== "loader" && !st.running) { mark(false); pending = false; }   /* it finished after all */
+  if (pending && dev && !["loader", "mboot"].includes(dev.kind) && !st.running) { mark(false); pending = false; }   /* it finished after all */
   $("resumebanner").hidden = !(pending || dev?.kind === "loader");
   $("resumebanner").querySelector('[data-t="resumeBanner"]').textContent = t("resumeBanner");
 }
 
+/* m-bootloader can follow: the FM-1's, and in MIDI mode only over an older one */
+const bootWanted = (dev) => !dev || dev.kind !== "mboot" || olderBoot(dev.version, st.boot?.version);
 function currentPlan() {
   if (!st.dev) return null;
-  if (!pkgFor(st.dev)?.image) return null;            /* no package for its model, or it did not load */
-  return planFor(st.dev.kind, !!st.boot && st.dev.model === "FM-1" && $("mboot").checked);
+  if (!pkgFor(st.dev)?.image) return null;            /* no package for its model (or none chosen), or it did not load */
+  return planFor(st.dev.kind, !!st.boot && st.dev.model === "FM-1" && bootWanted(st.dev) && $("mboot").checked);
 }
 
 /* ---- before writing: the rules, and the backup (asked every time) ---- */
 function preflight(plan) {
   const d = $("preflight");
-  for (const k of ["pf2h", "pf2", "pf3"]) d.querySelector(`[data-t="${k}"]`).textContent = t(k);
+  for (const k of ["pf2h", "pf2"]) d.querySelector(`[data-t="${k}"]`).textContent = t(k);
+  d.querySelector('[data-t="pf3"]').textContent = t(plan.mboot ? "pf3mboot" : "pf3");
   $("pfboot").hidden = !plan.boot;
   $("pfboot").lastElementChild.textContent = t(plan.firmware ? "pfboot" : "pfbootonly");
-  const askBackup = plan.firmware && !plan.resume;   /* in update mode there is no firmware running to back up */
+  const askBackup = plan.firmware && !plan.resume && !plan.mboot;   /* in update or MIDI mode no firmware runs to back up */
   $("pfcheck").hidden = !askBackup;
   $("pfok").checked = false;
   $("pfgo").disabled = askBackup;
@@ -383,7 +432,7 @@ function preflight(plan) {
 $("pfok").addEventListener("change", () => { $("pfgo").disabled = !$("pfok").checked; });
 
 /* ---- the install's screen ---- */
-const ICON = { done: "#i-check", paused: "#i-pause", safe: "#i-info", restart: "#i-alert", partial: "#i-alert" };
+const ICON = { done: "#i-check", paused: "#i-pause", mboot: "#i-pause", safe: "#i-info", restart: "#i-alert", partial: "#i-alert" };
 const FAVICON = (c) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='4' fill='${c}'/></svg>`)}`;
 const baseTitle = document.title;
 
@@ -408,10 +457,11 @@ function openRun(plan, isStock, model) {
   $("eta").textContent = "";
   $("runwarn").textContent = t("runwarn");
   $("stall").textContent = t("stall");
-  $("runtitle").textContent = t(isStock ? "runStock" : plan.resume ? "runResume" : plan.firmware ? "runInstall" : "runBoot", { v: ver() });
+  $("runtitle").textContent = t(isStock ? "runStock" : plan.mboot ? "runMboot" : plan.resume ? "runResume"
+    : plan.firmware ? "runInstall" : "runBoot", { v: ver() });
   document.querySelectorAll("#phases li").forEach((li) => { li.hidden = !r.list.includes(li.dataset.ph); li.className = ""; });
   setPct(0);
-  setStep(plan.resume ? "stFind" : "stStart", r.list[0]);
+  setStep(plan.mboot ? "stFindMboot" : plan.resume ? "stFind" : "stStart", r.list[0]);
   $("favicon").href = FAVICON("#d08a00");
   if (!d.open) d.showModal();
 }
@@ -535,6 +585,11 @@ function endRun(state, err) {
     st.dev = { id: { text: "ota-" + r.model, model: "ota-" + r.model }, kind: "loader", model: r.model };
     button("btnResume", true, () => { closeRun(); start(); });
     button("btnClose", false, closeRun);
+  } else if (state === "mboot") {
+    title = t("endMbootH"); text = t("endMboot");
+    tips.push(reason, t("tipCable"), t("tipApps"), t("tipMboot"));
+    button("btnRetry", true, () => { closeRun(); connect(); });
+    button("btnClose", false, closeRun);
   } else if (state === "restart") {
     title = t("endRestartH"); text = err?.code === "mismatch" ? reason : t("endRestart");
     tips.push(t("tipStill"), t(r.model === "FM-1" ? "tipBrick" : "tipBrickSmk"));
@@ -604,13 +659,15 @@ async function start(isStock = false) {
   const image = isStock ? st.stock.image : pkg.image;
   const product = isStock ? st.stock.product : pkg.product;
   const up = updater(log);
-  const step = stepper(progressModel(image, plan.resume));
+  const pm = progressModel(image, plan.resume, plan.mboot);
+  const step = stepper(pm);
   let phase = "start", state = "done", error = null;
   if (plan.firmware) mark(true, product);
   try {
     if (!st.access) st.access = await midi();
     if (plan.firmware) {
-      if (plan.resume) { phase = "staged"; await resumeWrite(up, image, product, step); }
+      if (plan.mboot) { phase = "mboot"; await up.mbootInstall(image, product, products(), pm, step, () => { phase = "written"; }); }
+      else if (plan.resume) { phase = "staged"; await resumeWrite(up, image, product, step); }
       else {
         await up.install(image, product, (k, a, b) => { if (k === "loader") phase = "staged"; step(k, a, b); },
                          isStock ? st.stock.sha256 : undefined);

@@ -46,7 +46,7 @@ from release_support import validate_build, validate_source_archive  # noqa: E40
 
 INSTALL = ROOT / "web/install"
 # the installer's modules, each after those it imports; fakefm1.js stays a file of its own (the demo's)
-MODULES = ("fm1pkg.js", "fm1ports.js", "fm1ota.js", "flow.js", "transfer.js", "keepalive.js", "installer.js")
+MODULES = ("fm1pkg.js", "fm1ports.js", "fm1ota.js", "mboot.js", "flow.js", "transfer.js", "keepalive.js", "installer.js")
 VENDORED = ("fm1pkg.js", "fm1ports.js", "fm1ota.js")          # fm1-base's, unchanged
 WEB = ("editor.html", "fm1backup.js", "fukiai.ttf", "FUKIAI-LICENSE.txt")
 

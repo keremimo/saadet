@@ -10,8 +10,11 @@
 // up after 2 min: the install stopped halfway. Here an answer is sent from the MIDI message's own event, with the
 // same 10 ms gap given to the browser's MIDI service as the send's timestamp; no page timer is between a request
 // and its answer. response() and parseRequest() are fm1ota.js's (module-private there), kept byte for byte.
+// mbootInstall() installs through m-bootloader's MIDI mode (mboot.js), with the same read loop.
 
 import { Updater, pack7, unpack7 } from "./fm1ota.js";
+import { askInfo, isMbootId } from "./mboot.js";
+import { IS_OTA, describeDevice } from "./flow.js";
 
 const MAXDATA = 512;
 export const GAP_MS = 10;                          // upstream's pause before each answer
@@ -43,7 +46,8 @@ function sendLater(link, bytes, delay) {
   try { link.output.send(bytes, performance.now() + delay); return true; } catch (_) { return false; }
 }
 
-function fail(code, msg) { const e = new Error(msg); e.code = code; return e; }
+function fail(code, msg, detail = "") { const e = new Error(msg); e.code = code; e.detail = detail; return e; }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export class SteadyUpdater extends Updater {
   // Updater.serve's contract: answer reads until the device asks finishAddr -> { served, finished, lost }
@@ -72,5 +76,35 @@ export class SteadyUpdater extends Updater {
       bytes += r.len;
       if (onProgress) onProgress(served, bytes);
     }
+  }
+
+  // m-bootloader's MIDI mode: found again and asked 0x12 again, so it is still what Find saw and product's model is one
+  // it may be on (products: the page's { model: product }); refused before anything is sent otherwise. One transfer:
+  // it checks the package (all of flash.bin; nothing is erased until then), writes the firmware area, asks 0xF0000000
+  // and restarts into the firmware, which has to come back as product. pm: flow.js progressModel(image, false, true),
+  // so step() hears "verify" through the check and "write" through the write; written(): the transfer finished
+  async mbootInstall(image, product, products, pm, step, written = () => {}) {
+    const model = product.split("_")[0];
+    const ota = await this.waitFor(IS_OTA, 8000);
+    if (!ota) throw fail("noloader", "m-bootloader's MIDI mode was not found");
+    const info = isMbootId(ota.id) ? await askInfo(ota.link) : null;
+    const d = describeDevice(ota.id, products, info);
+    if (d.kind !== "mboot" || !(d.model === model || d.choose?.includes(model))) {
+      ota.link.close();
+      throw fail("wrongloader", `in update mode as ${ota.id.text}, not m-bootloader's MIDI mode for ${product}: nothing was sent`, ota.id.text);
+    }
+    step("start", `${ota.id.text}, m-bootloader ${info.version}`);
+    const s = await this.write(ota, image, (k, n, b) => (k !== "write" ? step(k, n, b)
+      : b <= pm.check ? step("verify", n, b) : step("write", n, b - pm.check)));
+    if (!s.finished) throw fail(s.lost ? "lost" : "stopped", `m-bootloader stopped after ${s.served} requests`);
+    written();
+    step("reboot");
+    await sleep(3000);
+    const back = await this.waitFor((id) => !IS_OTA(id), 40000);
+    if (!back) throw fail("noreturn", "the device did not come back: power-cycle it");
+    back.link.close();
+    if (back.id.text !== product) throw fail("mismatch", `installed, but the device reports ${back.id.text}`, back.id.text);
+    step("done", back.id.text);
+    return back.id.text;
   }
 }

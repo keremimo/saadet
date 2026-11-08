@@ -74,7 +74,9 @@ Details are in [the panel guide](docs/UI.md#bluetooth-experimental-platform-buil
 
 - **Install stopped**: reopen the installer, **Find FM-1**, **Resume installation**.
 - **FM-1 won't start**: with m-bootloader, switch off, hold **PLAY** and switch on for the recovery menu (or hold
-  **REC** for USB download mode). Without it, see the installer's "If the FM-1 won't start".
+  **REC** for USB download mode). From m-bootloader 2.2, choose **MIDI MODE** there (it opens by itself when the
+  firmware won't start), then **Find FM-1** in the installer: it installs Saadet through it. Without m-bootloader,
+  see the installer's "If the FM-1 won't start".
 - **Crashes**: don't switch off. Open the installer, "Report a problem", and read the crash report.
 - **Back to M-VAVE's firmware**: the installer's "Go back to M-VAVE's firmware" section.
 

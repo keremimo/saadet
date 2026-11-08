@@ -104,6 +104,9 @@
   .chip.ok { background: var(--ok-bg); color: var(--ok); }
   .chip.warn { background: var(--warn-bg); color: var(--warn); }
   .chip.bad { background: var(--bad-bg); color: var(--bad); }
+  .pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: -4px 0 14px; font-weight: 600; }
+  .pick select { font: inherit; font-weight: 500; min-height: 44px; padding: 0 12px; border-radius: 10px;
+                 border: 1px solid var(--line); background: var(--card); color: var(--ink); max-width: 100%; }
   .msg { color: var(--bad) !important; font-weight: 500; }
   .msg:empty { display: none; }
 
@@ -257,6 +260,8 @@
           <div class="what"><b><span id="devname">FM-1</span><span class="tag" id="devbeta" hidden data-t="beta">beta</span></b><span id="devwhat"></span></div>
           <span class="chip" id="devchip"></span>
         </div>
+        <label class="pick" id="devpick" for="devmodel" hidden><span data-t="pickModel">Which SMK-37 is this?</span>
+          <select id="devmodel"><option value="" data-t="pickNone">Choose the model</option></select></label>
         <p class="msg" id="connmsg" role="alert"></p>
         <button type="button" class="btn" id="find"><span data-t="find">Find device</span></button>
       </div>
@@ -323,6 +328,7 @@
       <summary data-t="mBrickH">If the FM-1 won't start</summary>
       <div class="in">
         <p data-t="mBrick1">With m-bootloader: switch off, hold PLAY and switch on for its recovery menu, or hold REC for USB download mode.</p>
+        <p data-t="mBrickMidi">From m-bootloader 2.2, choose MIDI MODE in that menu (it opens there by itself when the firmware won't start), then press Find device above: this page installs Saadet through it.</p>
         <p><span data-t="mBrick2">Without it, the FM-1's USB recovery route can put a firmware back from a computer:</span>
           <a href="https://github.com/hugelton/felucca-bsp/tree/main/tools" target="_blank" rel="noopener" data-t="mBrickLink">felucca-bsp recovery tools</a></p>
       </div>

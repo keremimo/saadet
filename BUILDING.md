@@ -96,10 +96,14 @@ Neither these build commands nor the tests install firmware.
 
 ### Recovery bootloader and installation order
 
-This pin supports **m-bootloader 1.2**. Every base build prepares its unmodified
-FM-1 installer, plain boot image, MIT licence and source/checksum manifest in
-`platform/build/bootloader/`. The checksums match Julius Vitkauskas's v1.2
-release. The Saadet app package remains separate: a normal app update preserves
+Saadet serves **m-bootloader 2.2** (build `2.2-64f7c9c`). Its unmodified FM-1
+installer, plain boot image and MIT licence are kept in `platform/m-bootloader/`,
+with the checksums of Julius Vitkauskas's v2.2 release; fm1-base's pin still
+carries 1.2. Every FM-1 base build checks them and copies them, with a
+source/checksum manifest, into `platform/build/bootloader/`. 2.2's installer
+(`ota.bin` 19,342 B) fits the base updater's staging slot (19,968 B), and the
+base's own `tests/ota_test.c` stages and commits it in `tests/run_base_tests.sh`.
+The Saadet app package remains separate: a normal app update preserves
 the device's bootloader, including m-bootloader once installed.
 
 For the one-time migration, install the newly built Saadet app first. Its newer
@@ -199,9 +203,24 @@ make an install hard to break from the browser:
   the update-mode identity, and a mark in local storage recalls it on the next
   visit.
 
+A unit in m-bootloader's **MIDI mode** (2.2 and later: its recovery menu, or by
+itself when the firmware won't start) answers with the update loader's identity,
+`ota-FM-1_900`, and every SMK-37 with `ota-SMK-37 Pro_900`. Find asks such an
+identity M-Flasher's command `0x12` (`web/install/mboot.js`): MIDI mode answers
+`MBOOT`, its version and its flash chip; fm1-base's loader stays silent and is
+resumed as before. The page then installs through MIDI mode in one transfer
+(`SteadyUpdater.mbootInstall`): it checks the whole `flash.bin` before erasing
+anything, writes `[0x4000, end of flash.bin)`, never the boot or key area nor an
+SMK-37's calibration and Bluetooth sectors, and restarts into Saadet. As MIDI
+mode can't tell an SMK-37 Pro from an Elite, the page asks which it is and
+sends that model's package. Only `0x12` is sent, and only to MIDI mode's
+identities: the same framing reaches M-VAVE's update service, whose `0x21`
+erases flash unchecked. m-bootloader is offered there only over an older one.
+
 `node web/test_install.mjs` runs the transfer against a simulated FM-1
 (`web/install/fakefm1.js`) with the page's timers throttled, interrupts and
-resumes an install, and installs m-bootloader after it; `tests/site_test.py`
+resumes an install, installs m-bootloader after it, and installs through MIDI
+mode on an FM-1 and an SMK-37 Elite; `tests/site_test.py`
 checks the site. Both are in `tests/run_base_tests.sh`. They do not replace an
 install on an FM-1 in Chrome and Edge, including with the tab in the background.
 `web/install/fm1ota.js` and `fm1pkg.js` are fm1-base's, byte for byte; the test and site builder compare them

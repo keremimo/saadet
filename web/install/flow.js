@@ -6,6 +6,7 @@
 // far it has got, and what a failure leaves behind. progressModel() follows fm1-base's installer.html.
 
 import { ufwEntries } from "./fm1pkg.js";
+import { MBOOT_SMK } from "./mboot.js";
 
 export const IS_OTA = (id) => /^ota-/i.test(id.model);
 // port names asked besides fm1-base's usual ones (fm1ota.js setNames): Saadet's own on the SMK-37 ("Saadet Elite
@@ -26,7 +27,11 @@ export function releaseVersion(product, prefix = "FM-1_9", short = false) {
   return z ? `${x}.${y}.${z}` : `${x}.${y}`;
 }
 
-// a connected device, from its identity and the packages this page has ({ model: product }): { kind, model, version }
+// a connected device, from its identity, the packages this page has ({ model: product }) and, for one in update
+// mode, its answer to m-bootloader's command 0x12 (mboot.js askInfo; null for none): { kind, model, version }
+//   mboot    m-bootloader's MIDI mode, or its RAM stage (stage: true), which installs the package itself; version is
+//            m-bootloader's ("2.2-64f7c9c"), jedec its flash's ID. It names every SMK-37 a Pro, so an SMK-37's model
+//            is the player's to say: choose lists the SMK-37 models this page has a package for, and model is null
 //   loader   in update mode: an install waits to be finished (an FM-1's whatever its loader; an SMK-37's only in
 //            fm1-base's own loader, "ota-SMK-37 Elite_900": its layout check is what keeps the package on its model)
 //   vendor   an SMK-37 in M-VAVE's update mode: M-VAVE's updater finishes it, never this page
@@ -34,9 +39,15 @@ export function releaseVersion(product, prefix = "FM-1_9", short = false) {
 //   saadet   another Saadet release; dev: a development build (MODEL_900)
 //   stock    M-VAVE's own firmware (version: "V16"); open: M-VAVE's Open firmware (must go back to stock first)
 //   other    another firmware for that model; model: a model this page has no package for
-export function describeDevice(id, products) {
+export function describeDevice(id, products, info = null) {
   if (!id) return { kind: "none" };
   const model = modelOf(id);
+  if (IS_OTA(id) && info) {
+    const mb = { kind: "mboot", version: info.version, stage: info.kind === "stage", jedec: info.jedec };
+    if (model === "FM-1") return products["FM-1"] ? { ...mb, model } : { kind: "model", model, text: id.text };
+    const choose = MBOOT_SMK.filter((m) => products[m]);
+    return choose.length ? { ...mb, model: null, choose } : { kind: "model", model, text: id.text };
+  }
   if (IS_OTA(id)) {
     if (model === "FM-1" || !products[model]) return { kind: "loader", model: "FM-1" };
     return id.text === `ota-${model}_900` ? { kind: "loader", model } : { kind: "vendor", model, text: id.text };
@@ -54,8 +65,10 @@ export function describeDevice(id, products) {
   return { kind: "other", model, text: id.text };
 }
 
-// what pressing Install does for a device: { firmware, resume, boot } or null (nothing to do)
+// what pressing Install does for a device: { firmware, resume, mboot, boot } or null (nothing to do). mboot: m-bootloader's
+// MIDI mode writes the firmware itself (no step 1); m-bootloader follows through the firmware it restarts into
 export function planFor(kind, wantBoot) {
+  if (kind === "mboot") return { firmware: true, resume: false, mboot: true, boot: wantBoot };
   if (kind === "loader") return { firmware: true, resume: true, boot: wantBoot };
   if (kind === "this") return wantBoot ? { firmware: false, resume: false, boot: true } : { firmware: true, resume: false, boot: false };
   if (kind === "open" || kind === "model" || kind === "vendor" || kind === "none") return null;
@@ -65,14 +78,16 @@ export function planFor(kind, wantBoot) {
 // the bytes the device reads, for the bar. Step 1 (the running firmware): the UFW header, the loader's head twice,
 // its body. Step 2 (the loader): the header, the chip-key check, the whole flash.bin (checked before anything is
 // erased), then the app area again as it writes it. A resume has step 2 only. Without a readable flash.bin entry
-// the whole image stands for it.
-export function progressModel(image, resume = false) {
+// the whole image stands for it. m-bootloader's MIDI mode (mboot) reads as step 2 does in one transfer: its check is
+// the header, the chip key and all of flash.bin (nothing is erased until then), its write the app area again
+export function progressModel(image, resume = false, mboot = false) {
   let ent = {};
   try { ent = ufwEntries(image); } catch (_) { /* not a UFW image */ }
   const fl = ent[0], ldr = ent[100];
   const flen = fl && fl.len > 0x4000 && fl.len <= 0x100000 ? fl.len : image.length;
-  const check = resume ? 0 : 0x400 + 0x400 + (ldr && ldr.len > 0x20 && ldr.len < image.length ? ldr.len - 0x20 : 0);
-  const write = 0x400 + 0x20 + flen + Math.max(0, flen - 0x4000);
+  const check = mboot ? 0x400 + 0x20 + flen
+    : resume ? 0 : 0x400 + 0x400 + (ldr && ldr.len > 0x20 && ldr.len < image.length ? ldr.len - 0x20 : 0);
+  const write = mboot ? Math.max(0, flen - 0x4000) : 0x400 + 0x20 + flen + Math.max(0, flen - 0x4000);
   const total = check + write;
   return {
     check, write, total,
@@ -88,8 +103,13 @@ export function remaining(done, total, ms) {
 }
 
 // what a failure leaves: "safe" (nothing written), "paused" (in update mode: resume), "restart" (written; the FM-1
-// did not come back as expected), "partial" (the firmware installed, m-bootloader not)
+// did not come back as expected), "partial" (the firmware installed, m-bootloader not), "mboot" (stopped in
+// m-bootloader's MIDI mode: it answers again, and opens again by itself at power-on if anything was written).
+// The phases: "start", "staged" (step 1 done), "mboot" (MIDI mode's transfer), "written" (MIDI mode finished and
+// restarted), "done", "boot"
 export function afterFailure(code, phase) {
+  if (phase === "mboot") return "mboot";
+  if (phase === "written") return "restart";
   if (phase === "boot") return code === "noreturn" ? "restart" : "partial";
   if (phase === "done") return "restart";
   if (phase === "staged") return code === "noreturn" || code === "mismatch" ? "restart" : "paused";

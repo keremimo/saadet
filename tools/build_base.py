@@ -73,7 +73,7 @@ else:
     shutil.copyfile(ROOT/"platform/app.ld",work/"device/app.ld")
     apply(work)
     from base_bootloader import prepare  # m-bootloader is the FM-1's: nothing of it on the SMK-37
-    prepare(work, ROOT/"platform/build/bootloader")
+    prepare(ROOT/"platform/build/bootloader")  # platform/m-bootloader/, pinned there
 # Asset generation is independent of the retired firmware compiler and packager.
 from generate_assets import generate
 generate()

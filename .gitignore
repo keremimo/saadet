@@ -3,6 +3,8 @@ build/
 __pycache__/
 fm1-recovery-backups/
 *.fwsc
+# m-bootloader's release files (MIT), pinned by tools/base_bootloader.py
+!/platform/m-bootloader/*.fwsc
 
 .nightly-deps/
 .nightly-pages/

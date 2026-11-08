@@ -5,7 +5,8 @@
 
 Uses fm1-base's MIDI transport and the bootloader-only staging sequence
 documented by its Updater.installBoot. The bootloader itself is unmodified
-MIT code by Julius Vitkauskas, https://github.com/jvitkauskas/m-bootloader.
+MIT code by Julius Vitkauskas, https://github.com/jvitkauskas/m-bootloader:
+its release files are kept in platform/m-bootloader/ (fm1-base's pin carries 1.2).
 """
 import argparse
 import hashlib
@@ -18,17 +19,19 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+SOURCE = ROOT / "platform/m-bootloader"
 ARTIFACTS = ROOT / "platform/build/bootloader"
 BASE = ROOT / "build/fm1-base-platform"
-VERSION = "1.2"
-PACKAGE = "fm1-uboot-1.2.fwsc"
-BOOT = "fm1-uboot-1.2.boot"
+VERSION = "2.2"
+COMMIT = "64f7c9cad1580bea870fc4a9e9bd61583fee3aef"
+PACKAGE = f"fm1-uboot-{VERSION}.fwsc"
+BOOT = f"fm1-uboot-{VERSION}.boot"
 # Saadet's identities: the development build and releases (fm1-base: id_prefix FM-1_9, then XXYYZZ).
 SAADET = re.compile(r"FM-1_9(00|\d{6})")
-# Match both fm1-base's vendored files and jvitkauskas/m-bootloader v1.2.
+# The v2.2 release's own SHA256SUMS (fm1-uboot.fwsc, fm1-uboot.boot).
 HASHES = {
-    PACKAGE: "0e89141f52d1f2d62198d4f69147a2c15c8360806e64d48002990a6fdab6d6dd",
-    BOOT: "9e5ec0e39dc55c167f8e289cfdac612d7d340b5f46100e1be2540ef4d6ec2f13",
+    PACKAGE: "cb6128ee753a1661e6399002317464959231854024f259520755621954438981",
+    BOOT: "cedc9c17648bdeecda5c8d0ffffe2211849f8a36ab615fe49d6cc46d249baf44",
 }
 
 
@@ -46,15 +49,17 @@ def checked_files(directory):
     return result
 
 
-def prepare(base, destination):
-    source = base / "web/m-bootloader"
+def prepare(destination, source=SOURCE):
     checked_files(source)
     destination.mkdir(parents=True, exist_ok=True)
+    for stale in destination.glob("fm1-uboot-*"):   # an earlier pin's files
+        if stale.name not in HASHES:
+            stale.unlink()
     for name in (*HASHES, "LICENSE"):
         shutil.copyfile(source / name, destination / name)
     (destination / "manifest.json").write_text(json.dumps({
         "version": VERSION,
-        "source": "https://github.com/jvitkauskas/m-bootloader/releases/tag/v1.2",
+        "source": f"https://github.com/jvitkauskas/m-bootloader/releases/tag/v{VERSION}", "commit": COMMIT,
         "licence": "MIT", "copyright": "2026 Julius Vitkauskas",
         "sha256": HASHES,
     }, indent=2) + "\n")
@@ -80,7 +85,7 @@ def install_bootloader(api, up, dev, image, say=print):
         dev.link.close()
         raise ValueError(f"Bootloader installation requires running Saadet (FM-1_900 or a release), not {product}; "
                          "update Saadet first")
-    say("Staging m-bootloader 1.2. Keep the FM-1 powered and connected.")
+    say(f"Staging m-bootloader {VERSION}. Keep the FM-1 powered and connected.")
     try:
         if not dev.link.send(api.UPGRADE):
             raise ValueError("Could not start bootloader staging")
