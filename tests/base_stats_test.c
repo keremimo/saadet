@@ -56,6 +56,15 @@ static void sd_ble_drop_host(void) {}
 static void sd_ble_forget_arm(int on) { (void)on; }
 static int sd_ble_forget_state(void) { return 0; }
 static void sd_ble_forget_confirm(void) {}
+/* the radio calibration's restore (editor 83): what the editor hands the bridge */
+static uint8_t cal_got[100], cal_calls, cal_copies;
+static int sd_ble_cal(const uint8_t *copy, uint8_t *st)
+{
+    cal_calls++;
+    st[0] = 2; st[1] = copy != 0; st[2] = 0x34; st[3] = 0x12;
+    if (copy) { for (unsigned i = 0; i < sizeof cal_got; i++) cal_got[i] = copy[i]; cal_copies++; }
+    return 0;
+}
 #include "synth_harness.c"
 #define SXQ 1024u
 static uint32_t so_w, so_r, wire_n;
@@ -76,6 +85,22 @@ static uint32_t stats(uint8_t flags)
     wire_n = 0; ed_handle(f, sizeof f);
     return wire_n > 6u && wire[0] == 0xF0 && wire[4] == ED_AUDIO_STATS && wire[wire_n - 1u] == 0xF7 ? wire[5] : 0u;
 }
+/* command 83: [0] the state, [1, 115 packed] a copy; the reply's result, or 0xFF */
+static uint32_t cal(const uint8_t *copy, uint32_t n)
+{
+    uint8_t f[4 + 1 + 115] = {0x7D, 0x46, 0x4C, 83}, *q = f + 5;
+    uint32_t len = 5;
+    f[4] = copy ? 1u : 0u;
+    for (uint32_t i = 0; copy && i < n; i += 7) {   /* (tools/ble_calibration.py pack) */
+        uint32_t k = n - i < 7u ? n - i : 7u, m = 0;
+        for (uint32_t j = 0; j < k; j++) m |= (uint32_t)(copy[i + j] >> 7) << j;
+        *q++ = (uint8_t)m;
+        for (uint32_t j = 0; j < k; j++) *q++ = copy[i + j] & 127u;
+        len = (uint32_t)(q - f);
+    }
+    wire_n = 0; ed_handle(f, len);
+    return wire_n == 15u && wire[4] == 83u && wire[6] == 1u ? wire[5] : 0xFFu;
+}
 static uint32_t field(uint32_t i)
 {
     uint32_t v = 0;
@@ -87,7 +112,22 @@ int main(void)
 {
     power_on(); memset(nor, 255, sizeof nor); persist_boot(); settings_init();
     host_preset(TSEL, ENGI_J106, 1);
-    trk_note_on(TSEL, 60, 100); trk_note_on(TSEL, 64, 100);
+    {   /* the radio calibration (command 83): the state, a copy taken when nothing sounds, refused when one does */
+        uint8_t copy[100];
+        for (uint32_t i = 0; i < sizeof copy; i++) copy[i] = (uint8_t)(i * 37u + 200u);
+        ok("calibration: the state, version 1, its fields", !cal(0, 0) && !cal_copies && wire[7] == 2u && !wire[10] &&
+           (wire[11] | wire[12] << 7 | wire[13] << 14) == 0x1234u);
+        ok("calibration: a copy, unpacked whole", !cal(copy, sizeof copy) && cal_copies == 1u && !memcmp(cal_got, copy, sizeof copy) &&
+           wire[10] == 1u);
+        ok("calibration: a short copy is no copy", cal(copy, 99) == 1u && cal_copies == 1u);
+        trk_note_on(TSEL, 60, 100); trk_note_on(TSEL, 64, 100);
+        ok("calibration: refused while a note sounds (a flash write)", cal(copy, sizeof copy) == 4u && cal_copies == 1u);
+        uint8_t f[] = {0x7D, 0x46, 0x4C, ED_INFO};
+        int found = 0;
+        wire_n = 0; ed_handle(f, sizeof f);
+        for (uint32_t i = 5; i + 3u < wire_n; i++) found |= wire[i] == 0x45 && wire[i + 1u] == 1u && wire[i + 2u] == 127u && wire[i + 3u] == ED_PERF;
+        ok("calibration: INFO's editor features say so (64)", found);
+    }
     int32_t out[CTL];
     for (uint32_t b = 0; b < 8u; b++) track_render(TSEL, out, CTL);
     /* a sustained overload is measured, never answered: a stored SAFETY ON (Melodee's) changes nothing */

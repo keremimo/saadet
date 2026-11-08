@@ -2,6 +2,14 @@
 
 Each release in short. The full notes for the current release are in [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
+## Unreleased
+
+### Added
+
+- **Bluetooth radio calibration recovery**: a unit whose stock calibration sector is gone gets its own trims back from
+  its full-flash backup over USB (`tools/ble_calibration.py`, editor command 83), as Melodee does. Without them the
+  radio still measures its own at every start.
+
 ## 1.0.2 (8 November 2026)
 
 1.0.1 was never published; its changes are here.

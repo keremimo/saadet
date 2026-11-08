@@ -73,7 +73,18 @@ they are the same in Melodee.
 **`platform/ble_own.h` is the bridge,** on the base's glue (`device/bt_own.c`), with Melodee's rules (`firmware/src/midi_ble.c`):
 
 - **Calibration.** The stock firmware's stored trims when they are still there, a copy kept in `OBJ_BLE` so they outlive that
-  sector, else measured at every start, as Melodee does.
+  sector, else measured at every start, as Melodee does. A unit whose sector is gone gets its own trims back from a full
+  1 MiB backup taken before, over USB (editor command 83, Melodee's 81):
+
+  ```sh
+  build/venv/bin/python tools/ble_calibration.py /path/to/full-flash-before.bin
+  build/venv/bin/python tools/ble_calibration.py /path/to/full-flash-before.bin --restore --port FM-1
+  ```
+
+  The first only reads the backup: every VM record's checksum, the RF record's inner one and the copy's. The second
+  sends that 100-byte copy, waits until it reads back from flash, and stops if the unit keeps a different one. Stop
+  playback and let notes end first; then power the unit off and on, as the radio takes it at its next start. It never
+  writes a VM, preset or firmware sector.
 - **One link at a time,** a computer's or a device's; JieLi's kept both. A scan or a connection out stops advertising. The pages
   say so (DEVICE LINK IN USE, COMPUTER CONNECTED).
 - **The last device is looked for, not called blind:** 10 s of scanning every 30 s, and a link once it is heard, behind a private

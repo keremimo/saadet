@@ -75,6 +75,7 @@ void sd_ble_drop_host(void);
 void sd_ble_forget_arm(int on);
 int sd_ble_forget_state(void);
 void sd_ble_forget_confirm(void);
+int sd_ble_cal(const uint8_t *copy,uint8_t *st);   /* editor 83: the radio calibration's state, or a copy restored */
 
 void sd_panel_set(const uint8_t *buttons,const uint8_t *enc,const int8_t *direction);
 void saadet_panel_calibrated(const uint8_t *buttons,const uint8_t *enc,const int8_t *direction);

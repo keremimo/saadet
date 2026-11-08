@@ -60,6 +60,12 @@ void sd_ble_forget_arm(int on){
     sd_forget=(uint8_t)(on&&plat_ble_state()==BLE_READY);sd_forget_at=plat_ms();
 }
 int sd_ble_forget_state(void){return sd_forget;}
+#if FM1B_BLE_CENTRAL && !defined(PLAT_HOST)
+extern int saadet_ble_cal(const uint8_t *copy,uint8_t *st);
+int sd_ble_cal(const uint8_t *copy,uint8_t *st){return saadet_ble_cal(copy,st);}
+#else
+int sd_ble_cal(const uint8_t *copy,uint8_t *st){st[0]=st[1]=st[2]=st[3]=0;return copy?5:0;}   /* (no radio of ours) */
+#endif
 void sd_ble_forget_confirm(void){
     if(sd_forget!=1||plat_ms()-sd_forget_at>=15000u)return;
     sd_forget=2;sd_forget_at=plat_ms();sd_forget_resume=sd_radio_on;

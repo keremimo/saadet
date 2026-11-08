@@ -23,8 +23,9 @@ and part B's MIDI channel. With the mode at ONE, only part zero can be selected.
 
 After HYDRA's user-wave marker, `45 01 features 63 64 65 52 0C` (hex) announces the editor features: a mask (1 PUSH, 2
 performances, 4 the voice budget, 8 a CZ-1 tone into a playing part without a cut, 16 FM6's function settings, 32 global
-BUDGET is the instrument's voice budget), then the commands for performances (99), PUSH (100), VOICES (101) and FM6's
-function settings (82), and the number of performances (12). Firmware without the marker has none of these.
+BUDGET is the instrument's voice budget, 64 the radio calibration's state and restore through command 83), then the
+commands for performances (99), PUSH (100), VOICES (101) and FM6's function settings (82), and the number of
+performances (12). Firmware without the marker has none of these. 64 is the mask byte's last bit.
 
 Builds with PPG (`SAADET_PPG`) add `50 01 1D 1E 66 73 00` after it: PPG, engine 29, favourites namespace 30, command 102
 and a program of 115 bytes (two digits, low first). Engines 26..28 and 30 are reserved (HYDRA's user namespace, GR's two,
@@ -50,6 +51,7 @@ PPG's user namespace).
 | 98 | HYDRA user waves |
 | 102 | Native PPG transfers (PPG builds) |
 | 82 | A part's FM6 function settings and operator switches |
+| 83 | Bluetooth radio calibration: its state, or this unit's own trims restored (USB maintenance) |
 | 99 | Performances: list, load, store, rename, delete |
 | 100 | PUSH: the parts' native patches and sounds, HYDRA's user waves |
 | 101 | VOICES: the shared voice budget as it plays |
@@ -76,6 +78,19 @@ and 4 means the settings write is queued. These values have no 8192 offset.
 The full reference alone does not establish a battery percentage or an empty
 reference. `tools/battery_calibrate.py --capture-full` samples the current
 battery and saves the median, so use it only when the battery is fully charged.
+
+## Radio calibration
+
+Command 83 is Melodee's calibration recovery (its command 81, which is the battery's here), for a unit whose
+stock calibration sector is gone. `0` reads the state; `1` and 115 bytes (a 100-byte copy in seven-bit groups,
+each group's top bits first) import a checked copy of the unit's own stored trims. The firmware never addresses
+flash for the caller: it checks the copy, keeps it in `OBJ_BLE` beside the radio's address, and takes it at the
+radio's next start. A different valid copy already kept is never replaced. The reply is `result, 1, radio,
+radio_on, linked, saved, crc0, crc1, crc2`: the 1 is the version; radio 0 not started, 1 stored trims, 2
+measured; saved 1 once the copy kept reads back from flash; the copy's CRC in three seven-bit bytes, low first.
+Result 0 accepts, 1 rejects the copy, 2 means another copy is kept, 4 busy (playing or a note sounding: the save is
+a flash write), 5 the radio has not started (the USB-only build, or a failed start). `tools/ble_calibration.py`
+takes the copy from the unit's own full 1 MiB backup and imports it; power the unit off and on afterwards.
 
 ## Shared sounds
 

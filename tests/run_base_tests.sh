@@ -11,6 +11,7 @@ PYTHON=${PYTHON:-build/venv/bin/python}
 "${CC:-cc}" -O1 -g -fsanitize=address,undefined tests/power_test.c -o build/base-power-test
 build/base-power-test
 "$PYTHON" tests/base_ble_own_test.py
+"$PYTHON" tests/ble_calibration_test.py
 "$PYTHON" tests/base_bootloader_test.py
 "$PYTHON" tests/licence_check_test.py
 "$PYTHON" tests/build_targets_test.py

@@ -31,8 +31,13 @@ static void core1_test_stall(void *unused) { (void)unused; for (;;) ; }
 
 /* INFO's editor features (tag 0x45): 1 PUSH (WATCH bit 2, command 100), 2 performances (99), 4 the voice budget (101),
  * 8 a CZ-1 tone into a playing part without a cut (76, target 3), 16 FM6's function settings and operator switches
- * (82), 32 the voice budget is a setting (global BUDGET) */
+ * (82), 32 the voice budget is a setting (global BUDGET), 64 the radio calibration's state and restore (83, the
+ * fm1-base build: editor_ble.c). 64 is the byte's last bit: a further feature needs a second byte. */
+#ifdef SAADET_FM1_BASE
+#define ED_FEATURES 127u
+#else
 #define ED_FEATURES 63u
+#endif
 static uint8_t ed_out[1024];                        /* the longest: a NAMES page (PROPHET pages its 201) */
 static uint32_t ed_n;
 
@@ -321,6 +326,11 @@ static int ed_flash_stop(void) { return transport_busy(); }
 #include "editor_hydra.c"
 #include "editor_ppg.c"
 #include "editor_parts.c"
+#ifdef SAADET_FM1_BASE
+#include "editor_ble.c"
+#else
+static int ed_ble_handle(uint32_t cmd, const uint8_t *a, uint32_t n) { (void)cmd, (void)a, (void)n; return 0; }
+#endif
 
 /* after the editor's own request for a part's native patch (read or written): it knows the patch, so no PUSH for it */
 static void ed_seen_after(uint32_t cmd, const uint8_t *a, uint32_t na)
@@ -385,6 +395,7 @@ static __attribute__((minsize)) void ed_handle(const uint8_t *f, uint32_t n)   /
     if (ed_library_handle(cmd,a,na)) { ed_send(); return; }
     if (ed_backup_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_native_handle(cmd, a, na)) { ed_send(); return; }
+    if (ed_ble_handle(cmd, a, na)) { ed_send(); return; }
     switch (cmd) {
 #if MELODEE_USB_AUDIO || defined(SAADET_FM1_BASE)
     case ED_AUDIO_STATS: {                         /* flags: 1 resets maxima, 2 voices, 4 cores, 8 memory, 16 part victims */

@@ -4,7 +4,8 @@
  * (tools/base_overlay.py). The rules are Melodee's (firmware/src/midi_ble.c), on the base's glue. One radio link, the
  * computer's or a device's:
  *   - the calibration: the stock firmware's stored trims when they are still there, kept in OBJ_BLE so they outlive
- *     that sector, else measured at every start (fm1_rf_cal.h);
+ *     that sector, else measured at every start (fm1_rf_cal.h); a unit whose sector is gone gets its own trims back
+ *     from its full-flash backup (saadet_ble_cal, editor command 83, tools/ble_calibration.py);
  *   - the last device is looked for, not called blind: a round of SD_RELINK_SCAN_MS every SD_RELINK_MS, and a link only
  *     once it is heard, behind a private address too (its IRK). Between the rounds a computer can find Saadet, and with
  *     GLOBAL > BLE open there are no rounds;
@@ -50,6 +51,36 @@ static void sd_own_trims(struct ble_rf_trims *use)
     }
     *use = OWN_TRIMS;                             /* 106, 107, 108: the SDK board's; 187 measured */
     fm1_rf_cal_on = 1;
+}
+/* USB maintenance only (editor command 83, Melodee's 81): a checked copy of this unit's stored trims, from its own
+ * full-flash backup, kept in OBJ_BLE (ble_poll saves it) and taken at the radio's next start when the stock sector is
+ * gone. Never over a different valid copy. copy 0: the state only. -> 0; 1 not a valid copy; 2 another copy is kept;
+ * 5 the radio has not started (OBJ_BLE not read yet). st: [0] the radio's calibration, 0 not started, 1 stored, 2
+ * measured; [1] the copy kept is the one in flash; [2], [3] its CRC (low first). */
+int saadet_ble_cal(const uint8_t *copy, uint8_t st[4])
+{
+    int rc = 0;
+    st[0] = st[1] = st[2] = st[3] = 0;
+    if (ble_state != BLE_READY)
+        return copy ? 5 : 0;
+    if (copy && !ble_rf_copy_ok(copy))
+        rc = 1;
+    else if (copy && ble_rf_copy_ok(own.sd_rf))
+        rc = ble_eq(own.sd_rf, copy, BLE_RF_COPY_SIZE) ? 0 : 2;
+    else if (copy) {
+        ble_cpy(own.sd_rf, copy, BLE_RF_COPY_SIZE);
+        own_dirty = 1;
+    }
+    st[0] = fm1_rf_cal_on ? 2u : 1u;
+    if (ble_rf_copy_ok(own.sd_rf)) {
+        __typeof__(own) kept;
+        int n = (int)(own.sd_rf - (uint8_t *)&own) + BLE_RF_COPY_SIZE;   /* (read back: a failed save is not saved) */
+        st[1] = (uint8_t)(!own_dirty && plat_store_head(OBJ_BLE, &kept, (uint32_t)n) == n &&
+                          ble_eq(kept.sd_rf, own.sd_rf, BLE_RF_COPY_SIZE));
+        st[2] = own.sd_rf[BLE_RF_COPY_SIZE - 2];
+        st[3] = own.sd_rf[BLE_RF_COPY_SIZE - 1];
+    }
+    return rc;
 }
 
 /* ---- the last device */

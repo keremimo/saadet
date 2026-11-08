@@ -3,10 +3,12 @@
 # Copyright (C) 2026 Kerem Kilic (Ellic Studio)
 """Run Saadet's Bluetooth rules (platform/ble_own.h) against a fake link layer, on the stack's real headers, device
 store, scan table and calibration reader: stored or measured calibration, the last device looked for and found, never a
-new pairing loop, bounded attempts, and the calls the pages use. Then the stack in platform/ble against its sources."""
+new pairing loop, bounded attempts, and the calls the pages use; a unit's own trims restored over USB (editor 83), the
+copy the same as tools/ble_calibration.py takes from the backup. Then the stack in platform/ble against its sources."""
 from pathlib import Path
 import os
 import subprocess
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,8 +64,8 @@ static struct { uint8_t valid,rand[8],ltk[16]; uint16_t ediv; } bhs_key;
 static struct { uint8_t have_bond,bond_rand[8],bond_ltk[16],sd_rf[BLE_RF_COPY_SIZE]; uint16_t bond_ediv; } own;
 static const struct ble_rf_trims OWN_TRIMS={{0x0B,0x0B},{1,7,4,7,11,1,7},{0},{0}};
 static struct ble_scan_tab own_scan;
-static uint8_t flash[0x100000],stored[80];
-static int stored_len=-1;
+static uint8_t flash[0x100000],stored[80],stored_ble[sizeof own];
+static int stored_len=-1,stored_ble_len=-1;
 static const uint8_t *resolves;                    /* the address the fake IRK resolves */
 static uint32_t shim_ms(void){return now;}
 static void shim_log(const char *s){(void)s;}
@@ -93,8 +95,15 @@ static int plat_store_load(uint32_t o,void *p,uint32_t n){
     if((uint32_t)stored_len<n)n=(uint32_t)stored_len;
     memcpy(p,stored,n);return stored_len;
 }
+static int plat_store_head(uint32_t o,void *p,uint32_t n){
+    assert(o==OBJ_BLE);if(stored_ble_len<0||(uint32_t)stored_ble_len<n)return -1;
+    memcpy(p,stored_ble,n);return (int)n;
+}
 static int plat_store_save(uint32_t o,const void *p,uint32_t n){
-    if(o==OBJ_BLE){saves_ble++;return store_fail?-1:0;}
+    if(o==OBJ_BLE){
+        saves_ble++;if(store_fail)return -1;
+        assert(n==sizeof stored_ble);memcpy(stored_ble,p,n);stored_ble_len=(int)n;return 0;
+    }
     assert(o==OBJ_BT_LAST&&n<=sizeof stored);saves++;
     if(store_fail)return -1;
     memcpy(stored,p,n);stored_len=(int)n;return 0;
@@ -114,6 +123,12 @@ static void heard(uint8_t id,const char *name){
     ble_scan_add(&own_scan,p,n,0,now);
 }
 static void at(uint32_t t){now=t;sd_own_poll();}
+static void ble_poll_save(void){                   /* bt_own.c ble_poll: OBJ_BLE kept from the main loop */
+    if(own_dirty){own_dirty=0;(void)plat_store_save(OBJ_BLE,&own,sizeof own);}
+}
+static void trims_with(struct ble_rf_trims *v,uint8_t b){   /* a set whose 187 carries its inner CRC */
+    uint32_t c;memset(v,b,sizeof *v);c=ble_crc16_xmodem(0,v->x187,64);v->x187[64]=(uint8_t)c;v->x187[65]=(uint8_t)(c>>8);
+}
 static void boot(void){                            /* a power cycle: RAM gone, the store kept */
     memset(&sd_own,0,sizeof sd_own);memset(&own_scan,0,sizeof own_scan);
     st=BLE_CS_IDLE;fail=pairing=0;scanning=0;linked=0;
@@ -132,7 +147,7 @@ static void vm_write(uint8_t mark){
     a=vm_rec(a,106,x106,2);a=vm_rec(a,107,x107,7);a=vm_rec(a,187,x187,68);a=vm_rec(a,108,x108,20);
     flash[a]=0;flash[a+1]=0;flash[a+2]=0;flash[a+3]=0;
 }
-int main(void){
+int main(int argc,char **argv){
     struct ble_rf_trims t;
     memset(flash,0xFF,sizeof flash);
 
@@ -142,6 +157,11 @@ int main(void){
     /* the stock trims still there: used, and a copy kept with the address */
     vm_write(0x21);sd_own_trims(&t);
     assert(!fm1_rf_cal_on&&t.x106[0]==0x21&&t.x187[0]==0x21&&own_dirty&&own.sd_rf[0]);
+    if(argc>1){                                    /* the backup and the copy: tools/ble_calibration.py takes the same */
+        char n[600];FILE *f;
+        snprintf(n,sizeof n,"%s/flash.bin",argv[1]);f=fopen(n,"wb");assert(f&&fwrite(flash,1,sizeof flash,f)==sizeof flash);fclose(f);
+        snprintf(n,sizeof n,"%s/copy.bin",argv[1]);f=fopen(n,"wb");assert(f&&fwrite(own.sd_rf,1,BLE_RF_COPY_SIZE,f)==BLE_RF_COPY_SIZE);fclose(f);
+    }
     /* ... which outlives them: Saadet's own presets over that sector */
     memset(flash+BLE_VM_HW,0x5A,BLE_VM_HW_SIZE);own_dirty=0;fm1_rf_cal_on=1;sd_own_trims(&t);
     assert(!fm1_rf_cal_on&&t.x106[0]==0x21&&!own_dirty);
@@ -149,6 +169,33 @@ int main(void){
     own.sd_rf[10]^=0xFF;sd_own_trims(&t);assert(fm1_rf_cal_on&&t.x106[0]==0x0B);
     memset(flash,0xFF,sizeof flash);
     puts("own stack: stored calibration first, kept past its sector, else measured");
+
+    /* ---- a unit's own trims back from its backup (editor 83): before the radio's start OBJ_BLE is not read yet */
+    { uint8_t st[4],c[BLE_RF_COPY_SIZE],d[BLE_RF_COPY_SIZE];struct ble_rf_trims v;
+      memset(&own,0,sizeof own);own_dirty=0;stored_ble_len=-1;trims_with(&v,0x33);ble_rf_copy_make(c,&v,BLE_VM_HW);
+      assert(ble_rf_copy_ok(c));
+      ble_state=0;assert(saadet_ble_cal(c,st)==5&&!st[0]&&!own_dirty);assert(!saadet_ble_cal(0,st)&&!st[0]);
+      ble_state=BLE_READY;
+      /* no stock sector, no copy: measured, nothing kept */
+      sd_own_trims(&t);assert(fm1_rf_cal_on&&!saadet_ble_cal(0,st)&&st[0]==2&&!st[1]&&!st[2]&&!st[3]);
+      /* a damaged copy is refused, a good one kept and saved by the main loop's poll, read back before it says so */
+      memcpy(d,c,sizeof d);d[5]^=1;assert(saadet_ble_cal(d,st)==1&&!own_dirty&&!ble_rf_copy_ok(own.sd_rf));
+      assert(!saadet_ble_cal(c,st)&&own_dirty&&!memcmp(own.sd_rf,c,sizeof c)&&st[0]==2&&!st[1]&&st[2]==c[98]&&st[3]==c[99]);
+      { unsigned n=saves_ble;ble_poll_save();assert(saves_ble==n+1); }
+      assert(!saadet_ble_cal(0,st)&&st[1]&&st[2]==c[98]&&st[3]==c[99]);
+      /* the same copy again: nothing written; another unit's: refused, the kept one unchanged */
+      assert(!saadet_ble_cal(c,st)&&!own_dirty&&st[1]);
+      trims_with(&v,0x44);ble_rf_copy_make(d,&v,BLE_VM_HW);
+      assert(saadet_ble_cal(d,st)==2&&!own_dirty&&!memcmp(own.sd_rf,c,sizeof c)&&st[1]);
+      /* the radio's next start: the copy, not a measurement */
+      sd_own_trims(&t);assert(!fm1_rf_cal_on&&t.x106[0]==0x33&&!own_dirty);
+      assert(!saadet_ble_cal(0,st)&&st[0]==1&&st[1]);
+      /* a save that fails is not called saved; a later one is */
+      memset(&own,0,sizeof own);stored_ble_len=-1;store_fail=1;
+      assert(!saadet_ble_cal(c,st)&&own_dirty);ble_poll_save();assert(!saadet_ble_cal(0,st)&&!st[1]);
+      store_fail=0;own_dirty=1;ble_poll_save();assert(!saadet_ble_cal(0,st)&&st[1]);
+      memset(&own,0,sizeof own);own_dirty=0;stored_ble_len=-1;fm1_rf_cal_on=0; }
+    puts("own stack: calibration restored over USB: checked, kept, saved, read back, never over another unit's");
 
     /* ---- nothing remembered: no scan, no link, no flash */
     boot();stored_len=-1;at(1000);at(100000);assert(!scans_on&&!connects&&!saves);
@@ -278,4 +325,9 @@ with tempfile.TemporaryDirectory() as d:
                     '-DBLE_CENTRAL=1', '-DBLE_LL_ENC=1', '-DBLE_SMP_LEGACY=1',
                     '-I' + str(ROOT / 'platform'), '-I' + str(BLE),
                     str(path / 'test.c'), '-o', str(path / 'test')], check=True)
-    subprocess.run([str(path / 'test')], check=True)
+    subprocess.run([str(path / 'test'), str(path)], check=True)
+    sys.path.insert(0, str(ROOT / 'tools'))
+    import ble_calibration
+    area, copy = ble_calibration.extract((path / 'flash.bin').read_bytes())
+    assert area == 0xE8000 and copy == (path / 'copy.bin').read_bytes(), "the tool's copy is not the firmware's"
+    print("own stack: tools/ble_calibration.py takes the firmware's copy from the same backup")
