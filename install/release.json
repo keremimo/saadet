@@ -4,21 +4,21 @@
   "product": "FM-1_9010002",
   "dev": false,
   "pkg": "../firmware/saadet-1.0.2.fwsc",
-  "sha256": "41db018b2cba832964fce4dcb83dccb3eaf62c4f0c2f06089170aad9bb562641",
+  "sha256": "2dde5f434983381e55da603dac20881ddf9abb41542b77cc8f7df43be431650a",
   "size": 611490,
   "packages": [
     {
       "model": "FM-1",
       "product": "FM-1_9010002",
       "pkg": "../firmware/saadet-1.0.2.fwsc",
-      "sha256": "41db018b2cba832964fce4dcb83dccb3eaf62c4f0c2f06089170aad9bb562641",
+      "sha256": "2dde5f434983381e55da603dac20881ddf9abb41542b77cc8f7df43be431650a",
       "size": 611490
     },
     {
       "model": "MKE-P37",
       "product": "MKE-P37_910",
       "pkg": "../firmware/saadet-mke-p37-1.0.2.fwsc",
-      "sha256": "d177c935d8936b7fff27f6a1e6f76f42d26634a11315d9ab38fe041b6a2f7cdc",
+      "sha256": "3cdf1334dcb896dbac8099459a1fc4b93f35156397575610a6d5bf2ec7b1678d",
       "size": 654350,
       "beta": true
     },
@@ -26,7 +26,7 @@
       "model": "SMK-37 Elite",
       "product": "SMK-37 Elite_910",
       "pkg": "../firmware/saadet-smk37-elite-1.0.2.fwsc",
-      "sha256": "c6863f860c1a1c629eb2592b0c8ff2c471e31057dbf9379249a7dc43a073b59b",
+      "sha256": "011f0cf42671e0e36db29fe57b62b027ae1de70740aad61cc5fa4bb035199afe",
       "size": 654354,
       "beta": true
     },
@@ -34,7 +34,7 @@
       "model": "SMK-37 Pro",
       "product": "SMK-37 Pro_910",
       "pkg": "../firmware/saadet-smk37-pro-1.0.2.fwsc",
-      "sha256": "a8bd13501c4a99399e878229f08aae9c626dfb16451164805a3279efee93cf6b",
+      "sha256": "a579024db4e165fa537d960982206c4e1bafc6c3b39296de8f9f41f367930fd3",
       "size": 654350,
       "beta": true
     }
@@ -46,12 +46,12 @@
     "licence": "MIT",
     "source": "https://github.com/jvitkauskas/m-bootloader"
   },
-  "commit": "7dca2825e1a48b9a1574855b40d66bf066ea7cfc",
+  "commit": "13bc320b6a7beaeda15167aaa45ad5d92d2210cd",
   "base": "3c4a57eea659",
-  "built": "2026-11-08T16:50:47+00:00",
+  "built": "2026-11-08T17:12:47+00:00",
   "source": {
-    "sha256": "5311fdfbc763ea093f42681812a58adb52af8d3efcad7e0f58584d2dfe877a71",
-    "commit": "7dca2825e1a48b9a1574855b40d66bf066ea7cfc",
+    "sha256": "f9c62f95b579bcf21633e43fa3a8213ab225afcca414b3fd2cebcf73189869b9",
+    "commit": "13bc320b6a7beaeda15167aaa45ad5d92d2210cd",
     "licence": "MPL-2.0",
     "dependencies": {
       "fm1-base": "3c4a57eea659f942b0c80a99949dddafc094a57b",

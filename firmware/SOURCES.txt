@@ -1,7 +1,7 @@
 Saadet 1.0.2
 Firmware source: saadet-1.0.2-source.zip
-Application commit: 7dca2825e1a48b9a1574855b40d66bf066ea7cfc
-Source SHA-256: 5311fdfbc763ea093f42681812a58adb52af8d3efcad7e0f58584d2dfe877a71
+Application commit: 13bc320b6a7beaeda15167aaa45ad5d92d2210cd
+Source SHA-256: f9c62f95b579bcf21633e43fa3a8213ab225afcca414b3fd2cebcf73189869b9
 The ZIP includes matching Saadet, fm1-base and felucca-bsp source, and the SMK-37 board layer's (dependencies/fm1-base-smk37/).
 MPL-covered files are available under MPL-2.0; other files retain their own terms.
 Read LICENSE, LICENSING.md and LICENSES/.
