@@ -1,40 +1,40 @@
 {
   "name": "Saadet",
-  "version": "1.0.3",
-  "product": "FM-1_9010003",
+  "version": "1.0.4",
+  "product": "FM-1_9010004",
   "dev": false,
-  "pkg": "../firmware/saadet-1.0.3.fwsc",
-  "sha256": "9a66e3a6e671edcabe1a46fa71d5e1c067a099b37011a5f9e6c1f85d8669d477",
+  "pkg": "../firmware/saadet-1.0.4.fwsc",
+  "sha256": "6051fde9f23c787302c17ac867f84978c49f5fcd1ad34730f98b050bd0eae90a",
   "size": 611490,
   "packages": [
     {
       "model": "FM-1",
-      "product": "FM-1_9010003",
-      "pkg": "../firmware/saadet-1.0.3.fwsc",
-      "sha256": "9a66e3a6e671edcabe1a46fa71d5e1c067a099b37011a5f9e6c1f85d8669d477",
+      "product": "FM-1_9010004",
+      "pkg": "../firmware/saadet-1.0.4.fwsc",
+      "sha256": "6051fde9f23c787302c17ac867f84978c49f5fcd1ad34730f98b050bd0eae90a",
       "size": 611490
     },
     {
       "model": "MKE-P37",
       "product": "MKE-P37_910",
-      "pkg": "../firmware/saadet-mke-p37-1.0.3.fwsc",
-      "sha256": "d81adace284fa6282c29dd42ddb1ac43a9ad1c7d7c24fb22d1afa1d39b52c451",
+      "pkg": "../firmware/saadet-mke-p37-1.0.4.fwsc",
+      "sha256": "a55ea4eb6096e928b130a8b0ded3491c7b5bac8183e3b2b9c04135978fdd6d77",
       "size": 654350,
       "beta": true
     },
     {
       "model": "SMK-37 Elite",
       "product": "SMK-37 Elite_910",
-      "pkg": "../firmware/saadet-smk37-elite-1.0.3.fwsc",
-      "sha256": "b6e73f41bc626ac0074d428eb23bc4fb353c28f5b376d7085d3d10efa442e135",
+      "pkg": "../firmware/saadet-smk37-elite-1.0.4.fwsc",
+      "sha256": "8ce7ef7962ccbcacf963ae3e9f4541e5fc6920e78628a49f2e8eac282a0bb2ae",
       "size": 654354,
       "beta": true
     },
     {
       "model": "SMK-37 Pro",
       "product": "SMK-37 Pro_910",
-      "pkg": "../firmware/saadet-smk37-pro-1.0.3.fwsc",
-      "sha256": "379143fc7e245b3af6acd6b59b2881f53188a7e30a429383f643afb050c9fb69",
+      "pkg": "../firmware/saadet-smk37-pro-1.0.4.fwsc",
+      "sha256": "c4ae5475373a33d2a7ff7e78dc5ae03baa2833e1e47350503c730ef5b82c36fd",
       "size": 654350,
       "beta": true
     }
@@ -46,12 +46,12 @@
     "licence": "MIT",
     "source": "https://github.com/jvitkauskas/m-bootloader"
   },
-  "commit": "f12f9ec64099206429f260ec00072311f07cfe00",
+  "commit": "d2e7ab5fdcf8607c052868e5434339ba011300f8",
   "base": "3c4a57eea659",
-  "built": "2026-11-08T21:19:29+00:00",
+  "built": "2026-11-08T22:02:15+00:00",
   "source": {
-    "sha256": "ad3add8b7fbefca62d1da420b3b4f71361a954ae31ab351776e8e1de57148ed2",
-    "commit": "f12f9ec64099206429f260ec00072311f07cfe00",
+    "sha256": "897476e56752bf663b36d36b1f3548af4f00c118140e739080eb8f6619e1e6db",
+    "commit": "d2e7ab5fdcf8607c052868e5434339ba011300f8",
     "licence": "MPL-2.0",
     "dependencies": {
       "fm1-base": "3c4a57eea659f942b0c80a99949dddafc094a57b",
@@ -61,7 +61,7 @@
       "fm1-base": "0868ac55e03896d0fae56f5fbeb0ba11a28174d9",
       "felucca-bsp": "33878ab51d452beacf9268edc2f6a6a7bec29a79"
     },
-    "zip": "../firmware/saadet-1.0.3-source.zip"
+    "zip": "../firmware/saadet-1.0.4-source.zip"
   },
   "licences": "../firmware/LICENSING.md"
 }
