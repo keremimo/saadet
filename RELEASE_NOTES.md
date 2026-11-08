@@ -1,11 +1,31 @@
-# Saadet 1.0.2
+# Saadet 1.0.3
 
-A fix release on Saadet 1.0.0 for the M-VAVE FM-1 and, in beta, the M-VAVE SMK-37, with a new installer. 1.0.1 was never
-published; its fixes are here. The FM-1 firmware's code is 1.0.0's but for the USB volume fix below. The SMK-37
-packages keep their identities (`SMK-37 Elite_910` and so on), so an SMK-37 on 1.0.0 shows as up to date in the
-installer: press **Reinstall** to get the MASTER and USB volume fixes below.
+A fix release on Saadet 1.0.2 for the M-VAVE FM-1 and, in beta, the M-VAVE SMK-37: cleaner chords at high levels and a
+way to recover the Bluetooth radio's calibration. The SMK-37 packages keep their identities (`SMK-37 Elite_910` and so
+on), so an SMK-37 on 1.0.0 or 1.0.2 shows as up to date in the installer: press **Reinstall** to get the changes below.
+
+## New in 1.0.3
+
+- Bluetooth radio calibration recovery, as Melodee has it. Saadet's radio uses the calibration the stock firmware
+  stored, and keeps a copy of it; with neither, it measures its own at every start. A unit whose stock calibration
+  sector is gone can now get its own back from a full 1 MiB flash backup taken before: `tools/ble_calibration.py`
+  reads the backup, and `--restore` sends only the checked 100-byte calibration over USB (editor command 83). It is
+  taken at the next power-on. Saadet never replaces a different calibration it already keeps, and refuses while
+  anything is sounding. Saadet's INFO announces the command (editor feature 64).
+
+## Fixed in 1.0.3
+
+- Chords at high levels came out rough. The output stage ran every sample through a tanh curve after the limiter, so
+  a chord at the limiter's level came out with intermodulation at about -26 dB, and still about -33 dB at -6 dBFS.
+  The curve now starts at the limiter's threshold (-2 dBFS): below it the output is exact, and only the brief overs
+  the limiter has not caught yet bend, to -0.07 dBFS at most. Loud passages come out up to 1.6 dB louder, as the
+  limiter now settles at -2 dBFS (was -3.6). USB recordings show that; the speaker and headphones keep their -6 dB
+  ceiling below it.
 
 ## New in 1.0.2
+
+1.0.1 was never published; its fixes are in 1.0.2.
+
 
 - The installer offers **m-bootloader 2.3** (was 1.2) as its optional recovery bootloader. 2.2 added MIDI mode, which
   reinstalls a firmware over USB MIDI with no firmware running, and fixed `BAD CONFIG` after the 1.2 option; from 2.3
@@ -17,7 +37,7 @@ installer: press **Reinstall** to get the MASTER and USB volume fixes below.
   boot area and saved sounds stay. On an SMK-37 the page asks whether it is a Pro or an Elite, as MIDI mode calls every
   SMK-37 a Pro.
 
-## Fixed since 1.0.0
+## Fixed in 1.0.2
 
 - The computer's volume and mute for its own audio played through the FM-1 or SMK-37 (the device's playback volume in
   the computer's sound settings) did nothing: Saadet refused every such request once the USB interfaces put MIDI last
@@ -189,7 +209,10 @@ budget with USB audio on, and PPG's voice cost, which is set from the host. PPG'
 main loop timed in an emulator of its operating system, not on a real 2.2. The installer's MIDI-mode install and
 m-bootloader 2.3 installed from Saadet are tested against simulated units and fm1-base's updater on the host, not yet on
 an FM-1 or an SMK-37. m-bootloader's author reports it little tested on FM-1s with the UC25HQ80 flash. The USB
-volume fix is tested against the shipping USB code and descriptors on the host, not yet on a unit.
+volume fix is tested against the shipping USB code and descriptors on the host, not yet on a unit. 1.0.3's output
+curve is tested on the host, at both sample precisions, for exactness under the threshold and the intermodulation of a
+held chord; the build runs on an SMK-37 Elite, but its sound has not been compared by ear there. The calibration
+restore is tested against the firmware's own checks on the host; it has not yet restored a unit.
 
 The preparation tools do not install or publish anything. BUILD_INFO.json and SHA256SUMS identify the exact
 package and corresponding source; VERIFICATION.json records the completed automated preparation checks.

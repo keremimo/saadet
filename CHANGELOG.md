@@ -2,13 +2,20 @@
 
 Each release in short. The full notes for the current release are in [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
-## Unreleased
+## 1.0.3 (8 November 2026)
 
 ### Added
 
 - **Bluetooth radio calibration recovery**: a unit whose stock calibration sector is gone gets its own trims back from
   its full-flash backup over USB (`tools/ble_calibration.py`, editor command 83), as Melodee does. Without them the
   radio still measures its own at every start.
+
+### Fixed
+
+- **Output distortion on chords**: the output stage ran every sample through a tanh curve after the limiter, which put
+  intermodulation at about -26 dB on a chord at the limiter's level (-33 dB at -6 dBFS). Below the limiter's
+  threshold the output is now exact; only the brief overs it catches bend. Loud passages come out up to 1.6 dB
+  louder.
 
 ## 1.0.2 (8 November 2026)
 
