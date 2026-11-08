@@ -7,15 +7,20 @@
 // port goes away, then comes back). Step 1 (the running firmware) reads a little and restarts into the update
 // loader ("ota-FM-1_015"; an SMK-37's: fm1-base's, "ota-SMK-37 Elite_900"); step 2 (the loader) reads the image twice and restarts into the new firmware. Served
 // m-bootloader's installer instead, step 1 restarts into the same firmware. The device tells the two packages
-// apart by their first bytes, as the real one reads their headers. Nothing is written anywhere.
+// apart by their first bytes, as the real one reads their headers. In m-bootloader's MIDI mode (state "mboot") it
+// answers as MIDI mode does (m-bootloader docs/SPEC.md §11.6): the FM-1's or the SMK-37 Pro's identity whatever its
+// model, command 0x12 with "MBOOT" and its version, any other command refused, and an install read as step 2 reads
+// it. Nothing is written anywhere.
 //
-//   fakeAccess({ images, model, identity, after, state, loader, port, interruptAt, stride, timers }) -> { access, device }
+//   fakeAccess({ images, model, identity, after, state, loader, mboot, port, interruptAt, stride, timers }) -> { access, device }
 //     images       { firmware, boot }: the logical images the page serves (boot optional)
 //     model        "FM-1" (default), "SMK-37 Pro", "SMK-37 Elite" or "MKE-P37": its port names and update loader
 //     identity     what the running firmware reports ("FM-1_016": M-VAVE's own)
 //     after        what it reports after a write (the package's identity)
-//     state        "app" (default) or "loader" (an install was interrupted: the device waits in update mode)
+//     state        "app" (default), "loader" (an install was interrupted: the device waits in update mode) or "mboot"
+//                  (m-bootloader's MIDI mode)
 //     loader       the update loader's identity (default: the model's, above; "ota-SMK-37 Elite_016": M-VAVE's)
+//     mboot        MIDI mode's answer to 0x12: { version ("2.2-64f7c9c"), kind (1 the bootloader, 2 the RAM stage), jedec }
 //     port         one port name for every state, as macOS shows a name it cached for another firmware or model
 //     interruptAt  0..1: step 2 loses the cable at that share of its reads, once (the device stays in update mode)
 //     stride       reads only every stride-th block of a pass (a quicker demo; 1 = all)
@@ -34,6 +39,8 @@ const MODELS = {
   "SMK-37 Elite": { app: "Saadet Elite SMK-37", stock: "SMK-37 Elite Midi", loader: "Felucca Update", id: "ota-SMK-37 Elite_900" },
   "MKE-P37": { app: "Saadet MKE SMK-37", stock: "MKE-P37 MIDI", loader: "Felucca Update", id: "ota-MKE-P37_900" },
 };
+// m-bootloader's MIDI mode: its identity and port, the FM-1's or (for every SMK-37) the Pro's
+const MBOOT = { "FM-1": { id: "ota-FM-1_900", port: "FM-1 Update" }, smk: { id: "ota-SMK-37 Pro_900", port: "SMK-37 Update" } };
 const BLOCK = 512, TRY_MS = 5000, TRIES = 3;
 const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 
@@ -47,6 +54,22 @@ function identityFrame(text) {
   const body = new Array(27).fill(0);
   for (let i = 0; i < text.length && i < 26; i++) body[i] = text.charCodeAt(i);
   return frame(0x11, body);
+}
+
+// a frame the page sent in the update protocol's framing -> { cmd, n } (n: its body's length), else null
+function parseFrame(bytes) {
+  if (bytes[0] !== 0xF0 || bytes[bytes.length - 1] !== 0xF7) return null;
+  const u = unpack7(bytes.slice(1, -1));
+  if (u.length < 7 || u[0] !== 0 || u[1] !== 0x59) return null;
+  return { cmd: u[2], n: u[3] | (u[4] << 8) | (u[5] << 16) };
+}
+
+function infoFrame(o) {
+  const b = [..."MBOOT"].map((c) => c.charCodeAt(0));
+  const le = (v, n) => Array.from({ length: n }, (_, i) => (v >>> (8 * i)) & 0xFF);
+  b.push(1, o.kind || 1, 1, ...le(0x980F, 2), ...le(0x100000, 4), ...le(o.jedec ?? 0x856014, 4),
+         0x5A, 0x41, 0x44, 0x45, 0x45, 0x54, 0x00, 0x01, 0, 0, ...[...(o.version || "2.2-64f7c9c")].map((c) => c.charCodeAt(0)), 0);
+  return frame(0x12, b);
 }
 
 function readFrame(addr, len) {
@@ -90,6 +113,8 @@ class Device {
     this.identity = o.identity || "FM-1_016";
     this.after = o.after || this.identity;
     this.state = o.state || "app";
+    this.mboot = o.mboot || {};
+    this.mbootAt = MBOOT[o.model && o.model !== "FM-1" ? "smk" : "FM-1"];
     this.interruptAt = o.interruptAt || 0;
     this.stride = Math.max(1, o.stride || 1);
     this.online = true;
@@ -106,11 +131,12 @@ class Device {
     if (h && this.online) h({ data: Uint8Array.from(bytes), timeStamp: performance.now() });
   }
 
-  get text() { return this.state === "loader" ? this.loaderId : this.identity; }
+  get text() { return this.state === "loader" ? this.loaderId : this.state === "mboot" ? this.mbootAt.id : this.identity; }
 
   portName() {
     if (this.port) return this.port;
     if (this.state === "loader") return this.model.loader;
+    if (this.state === "mboot") return this.mbootAt.port;
     return /_0\d\d$/.test(this.identity) ? this.model.stock : this.model.app;
   }
 
@@ -119,6 +145,11 @@ class Device {
     if (same(bytes, HS_QUERY)) { this.emit(identityFrame(ON_THE_BASE.test(this.text) ? this.text.slice(0, this.text.indexOf("_") + 4) : this.text)); return; }
     if (same(bytes, HS_FULL)) { if (ON_THE_BASE.test(this.text)) this.emit(identityFrame(this.text)); return; }
     if (same(bytes, UPGRADE)) { if (!this.busy) this.session(); return; }
+    if (this.state === "mboot" && !this.busy) {                 /* MIDI mode's host commands, outside an install */
+      const f = parseFrame(bytes);
+      if (f && f.cmd === 0x12 && f.n === 0) { this.log.push("asked 0x12"); this.emit(infoFrame(this.mboot)); return; }
+      if (f && f.cmd !== 0x30) { this.emit(frame(0, [1])); return; }
+    }
     if (this.reply && bytes[0] === 0xF0) {
       const r = parseReply(bytes);
       if (r) { const f = this.reply; this.reply = null; f(r); }
@@ -152,10 +183,10 @@ class Device {
       const n = Math.min(BLOCK, size - a);
       if (n <= 0) break;
       if (!(await this.read(a, n))) return false;
-      if (this.interruptAt && this.state === "loader" && a / to >= this.interruptAt) {
+      if (this.interruptAt && (this.state === "loader" || this.state === "mboot") && a / to >= this.interruptAt) {
         this.interruptAt = 0;
         this.log.push("cable lost");
-        await this.restart("loader", null, 2500);   // the update record stays: back in update mode
+        await this.restart(this.state, null, 2500);  // the update record stays (MIDI mode opens by itself): back in it
         return null;
       }
     }
@@ -189,7 +220,7 @@ class Device {
           await this.restart("loader", null, 2000);
         }
       } else {
-        // step 2: the whole image checked, then the app area written (each a pass of reads)
+        // step 2, or MIDI mode's install: the whole image checked, then the app area written (each a pass of reads)
         const r1 = await this.pass(0, size, size);
         if (r1 === null) return;
         if (!r1) { this.log.push("step 2 stopped"); return; }
