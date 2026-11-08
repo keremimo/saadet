@@ -6,8 +6,10 @@
  * four-pole low-pass, and one ADSR shared by the filter and the VCA. Per part:
  * the triangle LFO with its delay, then, after the voices, the high-pass and
  * the stereo chorus, which the instrument also has once for all its voices.
- * Times, ranges and the chorus are engineering estimates, not calibrated
- * against an instrument. No other implementation's code or data is used.
+ * The filter's control law is the instrument's own (j106_coeff). Envelope
+ * times, the other ranges and the chorus are engineering estimates, not
+ * calibrated against an instrument. No other implementation's code is used
+ * (the filter's figures and their sources: LICENSING.md).
  * Stored engine ID 21 (20 is the Prophet's user namespace). */
 #include "x0x/fastmath.h"
 #include "j106_patch.h"
@@ -33,7 +35,7 @@ typedef struct {
     float vib0, vib1;                    /* DCO pitch ratios from the LFO and the wheel */
     float saw, pulse, sub, noise;        /* mixer gains */
     float pwm, pwm_lfo;                  /* PWM depth 0..1; 1: by the LFO */
-    float cut, env_oct, lfo_oct, key;    /* cutoff in octaves above 8 Hz; envelope, LFO amounts; keyboard follow */
+    float cut, env_oct, lfo_oct, key;    /* cutoff in octaves above J106_F0; envelope, LFO amounts; keyboard follow */
     float k, level;
     float atk, dec, sus, rel;            /* envelope coefficients per block */
     uint32_t range;                      /* 0 16', 1 8', 2 4' */
@@ -95,10 +97,25 @@ static inline __attribute__((always_inline)) float j106_sat(float x)
     x = fm_clampf(x, -1.5f, 1.5f);
     return x - x * x * x * (4.0f / 27.0f);
 }
-/* one-pole coefficient G = g / (1 + g), g = tan(pi f / FS), for f = 8 Hz * 2^oct */
+/* The cutoff's control law. The instrument's CPU sums the slider, the
+ * envelope, the LFO and the keys into one 14-bit DAC word per voice, and the
+ * filter chip's exponential converter turns it into the cutoff: 1143 counts
+ * an octave. A slider's byte is 128 counts. The service manual calibrates
+ * the filter at FREQ 49 (6272 counts) with the keys at full follow:
+ * self-oscillation at 248 Hz on C4 and 992 Hz on C6, so 0 counts is
+ * 5.53 Hz, the published 5 Hz end. (The figures from the firmware are those
+ * of a published analysis of its ROM, the Ultramaster KR-106 project's.)
+ * Measured instruments follow this law to within a semitone up to about
+ * 9 kHz, then bend down to the published 50 kHz at the top; the cap here,
+ * below Nyquist, is reached first. */
+#define J106_OCT 1143.0f                  /* DAC counts an octave */
+#define J106_F0 5.528709f                 /* Hz at 0 counts: 248 Hz / 2^(6272 / 1143) */
+#define J106_SLIDER (128.0f / J106_OCT)   /* octaves a slider step: its byte into the DAC word */
+/* one-pole coefficient G = g / (1 + g), g = tan(pi f / FS), for f = J106_F0 * 2^oct,
+ * oct held to the DAC's 0..16383 counts */
 static float j106_coeff(float oct)
 {
-    float f = 8.0f * fm_exp2f(fm_clampf(oct, 0.0f, 11.1f));
+    float f = J106_F0 * fm_exp2f(fm_clampf(oct, 0.0f, 16383.0f / J106_OCT));
     float g = fm_tanf(FM_PI * fm_minf(f, 18000.0f) * (1.0f / FS));
     return g / (1.0f + g);
 }
@@ -183,10 +200,14 @@ static __attribute__((section(".dsp_text"))) void j106_samples(j106_voice_t *res
         /* The linear solution predicts this sample's output; only the
          * feedback taken from it is limited, so the mixer reaches the stages
          * unclipped. Limiting the whole input would clip a sub that sits on a
-         * resonant peak, and PWM's narrow pulses would make it pump. A quarter
-         * of the cubic's range sets how loud full resonance whistles. */
+         * resonant peak, and PWM's narrow pulses would make it pump. The
+         * limit sets how loud full resonance whistles: 7/8 of the cubic's
+         * range puts it at 1.07 times a pulse through the open filter, as
+         * recordings of the instrument have it (the KR-106 project's). It
+         * also keeps a resonant peak that a PWM pulse feeds out of the cubic's
+         * curve, so the curve does not pump the sub under it. */
         float u = (x - c->k * sigma) / (1.0f + c->k * G4);
-        u = x - c->k * 0.25f * j106_sat(4.0f * (G4 * u + sigma));
+        u = x - c->k * 0.875f * j106_sat((1.0f / 0.875f) * (G4 * u + sigma));
         float v;
         v = (u - z0) * G; u = v + z0; z0 = u + v;
         v = (u - z1) * G; u = v + z1; z1 = u + v;
@@ -235,7 +256,7 @@ static void j106_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     /* cutoff: the slider, the envelope, the LFO, the keys and the common
      * modulation (127 << 8 is the slider's whole range) */
     float key = r->key * ((float)m->pitch16 * (1.0f / 16.0f) - 60.0f) * (1.0f / 12.0f);
-    float common = (float)m->cutoff * (11.1f / (127.0f * 256.0f));
+    float common = (float)m->cutoff * (J106_SLIDER / 256.0f);
     float oct1 = r->cut + s->env * r->env_oct + r->lfo1 * r->lfo_oct + key + common;
     float g1 = j106_coeff(oct1);
     if (s->fresh) { s->g = g1; s->fresh = 0; }
@@ -304,10 +325,16 @@ static void j106_block(track_t *t)
     r->noise = (float)j106_value(t, J106_NOISE, 7) * (0.35f / 127.0f);
     r->pwm = (float)j106_value(t, J106_DCO_PWM, 5) * (1.0f / 127.0f);
     r->pwm_lfo = j106_switch(p, J106_PWM_MODE) ? 0.0f : 1.0f;
-    r->cut = (float)j106_value(t, J106_VCF_FREQ, 0) * (11.1f / 127.0f);
-    r->env_oct = (float)j106_value(t, J106_VCF_ENV, 3) * (10.0f / 127.0f) * (j106_switch(p, J106_ENV_POL) ? -1.0f : 1.0f);
-    r->lfo_oct = (float)j106_value(t, J106_VCF_LFO, 4) * (4.0f / 127.0f);
-    r->key = (float)(p[J106_VCF_KYBD] & 127u) * (1.0f / 127.0f);
+    /* The amounts as the firmware scales them (j106_coeff): ENV and LFO
+     * double their byte as a depth of 0..254 over 256. The full envelope
+     * (16383 counts) moves the cutoff as far as the FREQ slider's whole
+     * range, 14.2 octaves; the LFO's peak (8191 counts, over 512) up to 3.6.
+     * KYBD takes the pitch at 3/8 of a count per 1/256 semitone from C4: 9
+     * counts an octave a step, so 127 follows the keys one to one. */
+    r->cut = (float)j106_value(t, J106_VCF_FREQ, 0) * J106_SLIDER;
+    r->env_oct = (float)j106_value(t, J106_VCF_ENV, 3) * (16383.0f / 128.0f / J106_OCT) * (j106_switch(p, J106_ENV_POL) ? -1.0f : 1.0f);
+    r->lfo_oct = (float)j106_value(t, J106_VCF_LFO, 4) * (8191.0f / 256.0f / J106_OCT);
+    r->key = (float)(p[J106_VCF_KYBD] & 127u) * (9.0f / J106_OCT);
     float res = (float)j106_value(t, J106_VCF_RES, 1) * (1.0f / 127.0f);
     r->k = 4.2f * res * fm_sqrtf(res);         /* self-oscillation from about 0.95 */
     /* the panel's -5..+5 trim, not a mute (five factory patches play at 0): about -6 dB at 0, unity at 64, about

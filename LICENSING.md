@@ -97,14 +97,22 @@ implementation as publicly documented (the owner's-manual layout reproduced in
 ST-Log issue 33, Peter Cassidy's 1994 analogue-list summary in the Hyperreal
 archive, and the hinzen.de Juno-106 SysEx page) and, for the VCA LEVEL
 slider's -5..+5 scale, Analogue Renaissance's JUNO-106 test procedure. Those
-were read for facts only: message layouts and parameter meanings. No code, tables or data from KR-106,
-fm-106, TAL-U-NO, the Felucca forks' Juno engines or any other emulation were read
-or used; those are GPL-licensed and incompatible with this file-level licence.
-The DSP is generic (polynomial band-limited steps, a trapezoidal four-pole
-low-pass, one-pole filters, a modulated delay line) and uses the MPL-2.0 fm1-base
-maths already in the tree (`firmware/src/x0x/fastmath.h`, Charles Vestal). Its
-times, ranges, curves and chorus rates are engineering estimates, not measurements
-of an instrument.
+were read for facts only: message layouts and parameter meanings. The filter's
+control law (Saadet 1.0.4) is the instrument's: Roland's VCF calibration (248 Hz
+on C4, 992 Hz on C6, at full KYBD and resonance) and, from the Ultramaster
+KR-106 project's published notes on the instrument's firmware and recordings,
+these figures as facts about the instrument: the slider's byte is 128 counts of
+a 14-bit DAC word, 1143 counts an octave, that calibration at FREQ 49, the ENV,
+LFO and KYBD amounts' scaling in that word, and full resonance whistling at
+about 1.07 times a pulse's level. Those notes were read for those figures only.
+No code or tables from KR-106, fm-106, TAL-U-NO, the Felucca forks' Juno engines
+or any other emulation were used; those are GPL-licensed and incompatible with
+this file-level licence. The DSP is generic (polynomial band-limited steps, a
+trapezoidal four-pole low-pass, one-pole filters, a modulated delay line) and
+uses the MPL-2.0 fm1-base maths already in the tree
+(`firmware/src/x0x/fastmath.h`, Charles Vestal). Its envelope times, the other
+ranges and curves, and the chorus rates are engineering estimates, not
+measurements of an instrument.
 
 The presets are INIT and Roland's 128 factory patches. Those patches are Roland's
 data, kept in `assets/j106-factory/` and generated into a build header; they are

@@ -74,17 +74,18 @@ sustained buffer deadlines on an FM-1. No hardware installation is part of this 
 New Saadet/Melodee work is by Kerem Kilic (Ellic Studio). Retained Felucca work
 is by Leo Kuroshita (@kurogedelic), Hügelton Instruments, with its notices kept.
 JUNO-106 (engine 21) is a new MPL-2.0 engine written for Saadet from the
-Juno-106's published architecture and MIDI implementation, without code or data
-from other Juno emulations: one DCO per voice with saw, pulse/PWM, sub-octave
+Juno-106's published architecture and MIDI implementation, without code from
+other Juno emulations: one DCO per voice with saw, pulse/PWM, sub-octave
 square and noise, a resonant four-pole low-pass, one ADSR, the delayed triangle
 LFO, then the instrument-wide high-pass and stereo chorus I/II. Tones keep the
 instrument's 18-byte patch layout; its patch messages import over USB and its
 single-control messages edit the playing tone. Its presets are Roland's 128
 factory patches (A11–B88), decoded from recordings of the factory cassette and
 kept as Roland's data ([assets/j106-factory](../assets/j106-factory/README.md)).
-Times and ranges are engineering estimates;
-neither the sound nor its CPU cost has been measured against an instrument or
-on an FM-1. See [LICENSING.md](../LICENSING.md#juno-106-engine-mpl-20).
+The filter's cutoff law and whistle level are the instrument's (Roland's VCF
+calibration and published figures from its firmware; see LICENSING.md); envelope
+times and the other ranges are engineering estimates. Neither the sound nor its
+CPU cost has been measured against an instrument or on an FM-1. See [LICENSING.md](../LICENSING.md#juno-106-engine-mpl-20).
 HYDRA (engine 25) is a wave-scanning engine after the ASM Hydrasynth, brought from Melodee, where it was cancelled for room:
 OSC 1 and 2 play one of 56 single-cycle waves (`tools/gen_hy_waves.py`, our own) or scan a list of eight, each through two
 mutants in series; OSC 3 plays one wave; ring and noise join them in the mixer, which feeds a filter of eleven types and a morphing

@@ -169,6 +169,34 @@ static void voice(void)
     double quiet = energy(400); trk_all_off(TSEL);
     printf("  silent mixer: resonance 127 %.3g, 80 %.3g\n", whistle, quiet);
     ok("full resonance self-oscillates; moderate resonance does not", whistle > 1e9 && quiet < whistle * 1e-6);
+    /* the service manual's VCF calibration: FREQ 49, full resonance and KYBD, the mixer shut, ENV and LFO
+     * at 0: the filter whistles at 248 Hz on C4 and 992 Hz on C6 */
+    float cal[2];
+    for (uint32_t i = 0; i < 2u; i++) {
+        juno(0); j106_switch_set(tone()->raw, J106_SAW, 0); j106_switch_set(tone()->raw, J106_PULSE, 0);
+        j106_switch_set(tone()->raw, J106_HPF, 1);
+        tone()->raw[J106_SUB] = 0; tone()->raw[J106_NOISE] = 0; tone()->raw[J106_VCF_ENV] = 0; tone()->raw[J106_VCF_LFO] = 0;
+        tone()->raw[J106_VCF_RES] = 127; tone()->raw[J106_VCF_KYBD] = 127; tone()->raw[J106_VCF_FREQ] = 49;
+        tone()->raw[J106_ENV_S] = 127;
+        trk_note_on(TSEL, i ? 84 : 60, 100); energy(400);
+        cal[i] = crossings(1.0f); trk_all_off(TSEL);
+    }
+    printf("  VCF calibration: C4 %.1f Hz, C6 %.1f Hz\n", cal[0], cal[1]);
+    ok("the filter tracks the service manual's calibration", fabsf(cal[0] - 248.0f) < 248.0f * 0.02f && fabsf(cal[1] - 992.0f) < 992.0f * 0.02f);
+    /* full resonance whistles about as loud as a pulse through the open filter (1.07 times its peak) */
+    int32_t peak[2] = {0, 0};
+    for (uint32_t i = 0; i < 2u; i++) {
+        juno(0); j106_switch_set(tone()->raw, J106_HPF, 1); j106_switch_set(tone()->raw, J106_SAW, 0);
+        j106_switch_set(tone()->raw, J106_PULSE, i == 0u); j106_switch_set(tone()->raw, J106_PWM_MODE, 1);
+        tone()->raw[J106_DCO_PWM] = 0; tone()->raw[J106_SUB] = 0; tone()->raw[J106_NOISE] = 0;
+        tone()->raw[J106_VCF_ENV] = 0; tone()->raw[J106_VCF_LFO] = 0; tone()->raw[J106_ENV_S] = 127;
+        tone()->raw[J106_VCF_RES] = i ? 127 : 0; tone()->raw[J106_VCF_FREQ] = i ? 64 : 127;
+        trk_note_on(TSEL, 60, 100); energy(800);
+        for (uint32_t b = 0; b < 1400u; b++) { int32_t p = block(out); if (p > peak[i]) peak[i] = p; }
+        trk_all_off(TSEL);
+    }
+    printf("  whistle against an open pulse: %.2f\n", (double)peak[1] / peak[0]);
+    ok("full resonance whistles as loud as a wave", peak[1] > peak[0] * 0.95 && peak[1] < peak[0] * 1.2);
 
     /* every preset (INIT, the factory patches) sounds within a second (FX RISE 2 rises from 0.28 s), stays
      * finite and bounded (three voices at the VCA's +6 dB, through HPF 0's +4 dB shelf), and ends */
@@ -277,12 +305,15 @@ static void ethereal(void)
            total > 1.0 && rumble < total * (chord ? 1e-4 : 3e-5));
         /* Only the sub square plays at the lowest note's sub-octave, and PWM
          * changes the pulse, not the sub (DCO LFO is zero): sidebands there
-         * are the filter's limit pumping a sub that sits on its resonant peak. */
+         * are the filter's limit pumping the sub. On C4 FREQ 47 at full KYBD
+         * puts the cutoff at 212 Hz, between the sub (131 Hz) and the pulse
+         * (262 Hz) on the resonant peak, so the sub is a part of the sound,
+         * not most of it. */
         double sub = (double)tuned_pitch_inc((chord ? notes[0] : 60u) * 16u) * FS / 8589934592.0;
         double body = tone_power(pcm, n, sub);
         double side = tone_power(pcm, n, sub - lfo) + tone_power(pcm, n, sub + lfo);
         printf("  ETHEREAL %s sub-octave PWM sidebands %.1f dBr\n", chord ? "chord's lowest" : "C4", 10.0 * log10(side / body));
-        ok(chord ? "ETHEREAL chords keep a steady sub" : "ETHEREAL keeps a steady sub", body > total * (chord ? 0.02 : 0.5) && side < body * 1e-4);
+        ok(chord ? "ETHEREAL chords keep a steady sub" : "ETHEREAL keeps a steady sub", body > total * (chord ? 0.02 : 0.1) && side < body * 1e-4);
         trk_all_off(TSEL);
     }
     free(pcm);
