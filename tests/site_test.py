@@ -49,7 +49,7 @@ class SiteTest(unittest.TestCase):
         self.assertEqual(hashlib.sha256(fw).hexdigest(), m["sha256"])
         self.assertEqual(fw, PKG.read_bytes())
         self.assertEqual(hashlib.sha256(boot).hexdigest(), m["boot"]["sha256"])
-        self.assertEqual((m["product"], m["dev"], m["boot"]["version"]), ("FM-1_900", True, "2.2"))
+        self.assertEqual((m["product"], m["dev"], m["boot"]["version"]), ("FM-1_900", True, "2.3"))
         sums = (o / "firmware/SHA256SUMS").read_text()
         for p in (o / "firmware").rglob("*"):
             if p.is_file() and p.name != "SHA256SUMS":

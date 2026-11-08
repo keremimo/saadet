@@ -7,8 +7,9 @@ installer: press **Reinstall** to get the MASTER and USB volume fixes below.
 
 ## New in 1.0.2
 
-- The installer offers **m-bootloader 2.2** (was 1.2) as its optional recovery bootloader. 2.2 adds MIDI mode, which
-  reinstalls a firmware over USB MIDI with no firmware running, and fixes `BAD CONFIG` after the 1.2 option.
+- The installer offers **m-bootloader 2.3** (was 1.2) as its optional recovery bootloader. 2.2 added MIDI mode, which
+  reinstalls a firmware over USB MIDI with no firmware running, and fixed `BAD CONFIG` after the 1.2 option; from 2.3
+  the menu opens in MIDI mode by itself when the firmware won't start.
 - The installer installs Saadet through m-bootloader's MIDI mode. Hold PLAY (SEQ PLAY on an SMK-37) while switching on
   and choose MIDI MODE (it opens by itself when the firmware won't start), then press Find device. MIDI mode answers as
   an update loader does; the page tells it apart with M-Flasher's protocol and shows m-bootloader's version and the
@@ -154,7 +155,7 @@ in beta.
 - The last successfully connected outgoing MIDI device is remembered and retried after boot or connection
   loss, with increasing delays up to 30 seconds. Disconnect and Radio Off stop retries; Forget clears it.
 - Automatic last-sound recall, complete Saadet backups, Saadet Studio and a browser-based USB installer.
-- Optional m-bootloader 2.2 recovery, installed separately after the application, and installs through its MIDI mode.
+- Optional m-bootloader 2.3 recovery, installed separately after the application, and installs through its MIDI mode.
 
 The firmware uses MPL-2.0 with the retained third-party terms documented in LICENSING.md. The editor and
 some tools retain GPL-3.0-only. The downloadable source includes the matching application and pinned
@@ -167,7 +168,7 @@ in the source: a build from it needs your own copies, or leaves PPG out (LICENSI
 Open [the installer](https://keremimo.github.io/saadet/install/) in Chrome or Edge on a supported computer, connect the FM-1 by USB and follow
 the installer. Back up any sounds you want to keep. m-bootloader is optional and off by default. If selected,
 it is written after Saadet; keep USB and power connected until completion. See BUILDING.md for recovery. A unit in
-m-bootloader 2.2's MIDI mode is installed the same way: connect it and press Find device.
+m-bootloader's MIDI mode (2.2 and later) is installed the same way: connect it and press Find device.
 
 After installing over 0.1.x, forget Saadet on your phone or computer once and connect again: the Bluetooth radio has a
 new address and old pairings are gone. A saved state from 0.1.x loads as one part.
@@ -186,8 +187,8 @@ Device checks since 0.1.1 were made on an SMK-37 Elite running the same source. 
 HYDRA's voice costs and USB recordings under a heavy voice load. Not yet measured on any unit: two parts at the full
 budget with USB audio on, and PPG's voice cost, which is set from the host. PPG's envelope speed rests on the 2.2's
 main loop timed in an emulator of its operating system, not on a real 2.2. The installer's MIDI-mode install and
-m-bootloader 2.2 installed from Saadet are tested against simulated units and fm1-base's updater on the host, not yet on
-an FM-1 or an SMK-37. m-bootloader's author reports 2.1 and 2.2 untried on FM-1s with the UC25HQ80 flash. The USB
+m-bootloader 2.3 installed from Saadet are tested against simulated units and fm1-base's updater on the host, not yet on
+an FM-1 or an SMK-37. m-bootloader's author reports it little tested on FM-1s with the UC25HQ80 flash. The USB
 volume fix is tested against the shipping USB code and descriptors on the host, not yet on a unit.
 
 The preparation tools do not install or publish anything. BUILD_INFO.json and SHA256SUMS identify the exact

@@ -17,9 +17,9 @@ build/base-power-test
 # Exercise the actual pinned updater with Saadet and the boot-only package.
 BASE=build/fm1-base-platform
 "${CC:-cc}" -O1 -g -w -fsanitize=address -o build/base-mboot-ota-test "$BASE/tests/ota_test.c"
-build/base-mboot-ota-test platform/build/saadet.fwsc platform/build/bootloader/fm1-uboot-2.2.fwsc
+build/base-mboot-ota-test platform/build/saadet.fwsc platform/build/bootloader/fm1-uboot-2.3.fwsc
 "$PYTHON" "$BASE/tests/install_test.py"
-node "$BASE/tests/installer_boot_test.mjs" platform/build/bootloader/fm1-uboot-2.2.fwsc
+node "$BASE/tests/installer_boot_test.mjs" platform/build/bootloader/fm1-uboot-2.3.fwsc
 # Saadet's web installer against the simulated FM-1 (background-tab throttling, resume), and its release site.
 node web/test_install.mjs
 "$PYTHON" tests/site_test.py

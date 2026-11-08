@@ -22,16 +22,16 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "platform/m-bootloader"
 ARTIFACTS = ROOT / "platform/build/bootloader"
 BASE = ROOT / "build/fm1-base-platform"
-VERSION = "2.2"
-COMMIT = "64f7c9cad1580bea870fc4a9e9bd61583fee3aef"
+VERSION = "2.3"
+COMMIT = "6bc8f459b94f75cf8c0a94e4fb018b09b2cc7689"
 PACKAGE = f"fm1-uboot-{VERSION}.fwsc"
 BOOT = f"fm1-uboot-{VERSION}.boot"
 # Saadet's identities: the development build and releases (fm1-base: id_prefix FM-1_9, then XXYYZZ).
 SAADET = re.compile(r"FM-1_9(00|\d{6})")
-# The v2.2 release's own SHA256SUMS (fm1-uboot.fwsc, fm1-uboot.boot).
+# The v2.3 release's own SHA256SUMS (fm1-uboot.fwsc, fm1-uboot.boot).
 HASHES = {
-    PACKAGE: "cb6128ee753a1661e6399002317464959231854024f259520755621954438981",
-    BOOT: "cedc9c17648bdeecda5c8d0ffffe2211849f8a36ab615fe49d6cc46d249baf44",
+    PACKAGE: "0299c41368f6d5d8f39776b3cad597a1c95677c27f3ca855c29368daf3d1d4e0",
+    BOOT: "1a4ba056f98f9837720ee2353d8b541b08016a20389e32740d0c9e14d966f8a9",
 }
 
 

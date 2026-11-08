@@ -96,12 +96,12 @@ Neither these build commands nor the tests install firmware.
 
 ### Recovery bootloader and installation order
 
-Saadet serves **m-bootloader 2.2** (build `2.2-64f7c9c`). Its unmodified FM-1
+Saadet serves **m-bootloader 2.3** (build `2.3-6bc8f45`). Its unmodified FM-1
 installer, plain boot image and MIT licence are kept in `platform/m-bootloader/`,
-with the checksums of Julius Vitkauskas's v2.2 release; fm1-base's pin still
+with the checksums of Julius Vitkauskas's v2.3 release; fm1-base's pin still
 carries 1.2. Every FM-1 base build checks them and copies them, with a
-source/checksum manifest, into `platform/build/bootloader/`. 2.2's installer
-(`ota.bin` 19,342 B) fits the base updater's staging slot (19,968 B), and the
+source/checksum manifest, into `platform/build/bootloader/`. 2.3's installer
+(`ota.bin` 18,611 B) fits the base updater's staging slot (19,968 B), and the
 base's own `tests/ota_test.c` stages and commits it in `tests/run_base_tests.sh`.
 The Saadet app package remains separate: a normal app update preserves
 the device's bootloader, including m-bootloader once installed.
@@ -203,7 +203,7 @@ make an install hard to break from the browser:
   the update-mode identity, and a mark in local storage recalls it on the next
   visit.
 
-A unit in m-bootloader's **MIDI mode** (2.2 and later: its recovery menu, or by
+A unit in m-bootloader's **MIDI mode** (2.2 and later: its recovery menu, or from 2.3 by
 itself when the firmware won't start) answers with the update loader's identity,
 `ota-FM-1_900`, and every SMK-37 with `ota-SMK-37 Pro_900`. Find asks such an
 identity M-Flasher's command `0x12` (`web/install/mboot.js`): MIDI mode answers

@@ -14,8 +14,9 @@ Each release in short. The full notes for the current release are in [RELEASE_NO
 
 ### Changed
 
-- **Web installer**: the optional m-bootloader is now 2.2 (was 1.2). 2.2 adds MIDI mode, a reinstall over USB MIDI
-  with no firmware running, and fixes `BAD CONFIG` after the 1.2 option.
+- **Web installer**: the optional m-bootloader is now 2.3 (was 1.2). 2.2 added MIDI mode, a reinstall over USB MIDI
+  with no firmware running, and fixed `BAD CONFIG` after the 1.2 option; 2.3 opens the menu in MIDI mode by itself
+  when the firmware won't start.
 
 ### Fixed
 
