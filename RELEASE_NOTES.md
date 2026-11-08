@@ -1,9 +1,22 @@
-# Saadet 1.0.1
+# Saadet 1.0.2
 
-A fix release on Saadet 1.0.0 for the M-VAVE FM-1 and, in beta, the M-VAVE SMK-37. The FM-1 firmware's code is 1.0.0's;
-only its version changes. The SMK-37 packages keep their identities (`SMK-37 Elite_910` and so on).
+A fix release on Saadet 1.0.0 for the M-VAVE FM-1 and, in beta, the M-VAVE SMK-37, with a new installer. 1.0.1 was never
+published; its fixes are here. The FM-1 firmware's code is 1.0.0's; only its version changes. The SMK-37 packages keep
+their identities (`SMK-37 Elite_910` and so on), so an SMK-37 on 1.0.0 shows as up to date in the installer: press
+**Reinstall** to get the MASTER fix below.
 
-## Fixed in 1.0.1
+## New in 1.0.2
+
+- The installer offers **m-bootloader 2.2** (was 1.2) as its optional recovery bootloader. 2.2 adds MIDI mode, which
+  reinstalls a firmware over USB MIDI with no firmware running, and fixes `BAD CONFIG` after the 1.2 option.
+- The installer installs Saadet through m-bootloader's MIDI mode. Hold PLAY (SEQ PLAY on an SMK-37) while switching on
+  and choose MIDI MODE (it opens by itself when the firmware won't start), then press Find device. MIDI mode answers as
+  an update loader does; the page tells it apart with M-Flasher's protocol and shows m-bootloader's version and the
+  flash chip. MIDI mode checks the whole package before it erases anything and writes only the firmware area, so the
+  boot area and saved sounds stay. On an SMK-37 the page asks whether it is a Pro or an Elite, as MIDI mode calls every
+  SMK-37 a Pro.
+
+## Fixed since 1.0.0
 
 - SMK-37: turning MASTER (K5) while a note was held could break the sound. The level is kept in flash two seconds after
   the last turn, and that write stopped the audio while the note was sounding. The write now waits until nothing is
@@ -137,7 +150,7 @@ in beta.
 - The last successfully connected outgoing MIDI device is remembered and retried after boot or connection
   loss, with increasing delays up to 30 seconds. Disconnect and Radio Off stop retries; Forget clears it.
 - Automatic last-sound recall, complete Saadet backups, Saadet Studio and a browser-based USB installer.
-- Optional m-bootloader 1.2 recovery, installed separately after the application.
+- Optional m-bootloader 2.2 recovery, installed separately after the application, and installs through its MIDI mode.
 
 The firmware uses MPL-2.0 with the retained third-party terms documented in LICENSING.md. The editor and
 some tools retain GPL-3.0-only. The downloadable source includes the matching application and pinned
@@ -149,7 +162,8 @@ in the source: a build from it needs your own copies, or leaves PPG out (LICENSI
 
 Open [the installer](https://keremimo.github.io/saadet/install/) in Chrome or Edge on a supported computer, connect the FM-1 by USB and follow
 the installer. Back up any sounds you want to keep. m-bootloader is optional and off by default. If selected,
-it is written after Saadet; keep USB and power connected until completion. See BUILDING.md for recovery.
+it is written after Saadet; keep USB and power connected until completion. See BUILDING.md for recovery. A unit in
+m-bootloader 2.2's MIDI mode is installed the same way: connect it and press Find device.
 
 After installing over 0.1.x, forget Saadet on your phone or computer once and connect again: the Bluetooth radio has a
 new address and old pairings are gone. A saved state from 0.1.x loads as one part.
@@ -167,7 +181,9 @@ transfer/resume, bootloader handling, source/package consistency and licence not
 Device checks since 0.1.1 were made on an SMK-37 Elite running the same source. Measured there and not yet on an FM-1:
 HYDRA's voice costs and USB recordings under a heavy voice load. Not yet measured on any unit: two parts at the full
 budget with USB audio on, and PPG's voice cost, which is set from the host. PPG's envelope speed rests on the 2.2's
-main loop timed in an emulator of its operating system, not on a real 2.2.
+main loop timed in an emulator of its operating system, not on a real 2.2. The installer's MIDI-mode install and
+m-bootloader 2.2 installed from Saadet are tested against simulated units and fm1-base's updater on the host, not yet on
+an FM-1 or an SMK-37. m-bootloader's author reports 2.1 and 2.2 untried on FM-1s with the UC25HQ80 flash.
 
 The preparation tools do not install or publish anything. BUILD_INFO.json and SHA256SUMS identify the exact
 package and corresponding source; VERIFICATION.json records the completed automated preparation checks.

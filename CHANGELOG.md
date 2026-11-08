@@ -2,12 +2,9 @@
 
 Each release in short. The full notes for the current release are in [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
-## Unreleased
+## 1.0.2 (8 November 2026)
 
-### Changed
-
-- **Web installer**: the optional m-bootloader is now 2.2 (was 1.2). 2.2 adds MIDI mode, a reinstall over USB MIDI
-  with no firmware running, and fixes `BAD CONFIG` after the 1.2 option.
+1.0.1 was never published; its changes are here.
 
 ### Added
 
@@ -15,7 +12,10 @@ Each release in short. The full notes for the current release are in [RELEASE_NO
   update loader with M-Flasher's protocol. It shows m-bootloader's version and the flash chip, and on an SMK-37
   asks whether it is a Pro or an Elite, as MIDI mode calls every SMK-37 a Pro.
 
-## 1.0.1 (7 November 2026)
+### Changed
+
+- **Web installer**: the optional m-bootloader is now 2.2 (was 1.2). 2.2 adds MIDI mode, a reinstall over USB MIDI
+  with no firmware running, and fixes `BAD CONFIG` after the 1.2 option.
 
 ### Fixed
 
