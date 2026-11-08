@@ -1,9 +1,9 @@
 # Saadet 1.0.2
 
 A fix release on Saadet 1.0.0 for the M-VAVE FM-1 and, in beta, the M-VAVE SMK-37, with a new installer. 1.0.1 was never
-published; its fixes are here. The FM-1 firmware's code is 1.0.0's; only its version changes. The SMK-37 packages keep
-their identities (`SMK-37 Elite_910` and so on), so an SMK-37 on 1.0.0 shows as up to date in the installer: press
-**Reinstall** to get the MASTER fix below.
+published; its fixes are here. The FM-1 firmware's code is 1.0.0's but for the USB volume fix below. The SMK-37
+packages keep their identities (`SMK-37 Elite_910` and so on), so an SMK-37 on 1.0.0 shows as up to date in the
+installer: press **Reinstall** to get the MASTER and USB volume fixes below.
 
 ## New in 1.0.2
 
@@ -18,6 +18,10 @@ their identities (`SMK-37 Elite_910` and so on), so an SMK-37 on 1.0.0 shows as 
 
 ## Fixed since 1.0.0
 
+- The computer's volume and mute for its own audio played through the FM-1 or SMK-37 (the device's playback volume in
+  the computer's sound settings) did nothing: Saadet refused every such request once the USB interfaces put MIDI last
+  for macOS 13-15. On Linux the connect logged `cannot get min/max values for control 2 (id 5)`. They are answered
+  now. Saadet's own sound, MASTER, MIDI and USB recording were never affected.
 - SMK-37: turning MASTER (K5) while a note was held could break the sound. The level is kept in flash two seconds after
   the last turn, and that write stopped the audio while the note was sounding. The write now waits until nothing is
   sounding, as Saadet's settings writes already did; the level itself still changes at once. Checked on an SMK-37 Elite.
@@ -183,7 +187,8 @@ HYDRA's voice costs and USB recordings under a heavy voice load. Not yet measure
 budget with USB audio on, and PPG's voice cost, which is set from the host. PPG's envelope speed rests on the 2.2's
 main loop timed in an emulator of its operating system, not on a real 2.2. The installer's MIDI-mode install and
 m-bootloader 2.2 installed from Saadet are tested against simulated units and fm1-base's updater on the host, not yet on
-an FM-1 or an SMK-37. m-bootloader's author reports 2.1 and 2.2 untried on FM-1s with the UC25HQ80 flash.
+an FM-1 or an SMK-37. m-bootloader's author reports 2.1 and 2.2 untried on FM-1s with the UC25HQ80 flash. The USB
+volume fix is tested against the shipping USB code and descriptors on the host, not yet on a unit.
 
 The preparation tools do not install or publish anything. BUILD_INFO.json and SHA256SUMS identify the exact
 package and corresponding source; VERIFICATION.json records the completed automated preparation checks.

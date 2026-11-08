@@ -19,6 +19,8 @@ Each release in short. The full notes for the current release are in [RELEASE_NO
 
 ### Fixed
 
+- **USB volume**: the computer's volume and mute for its audio played through the FM-1 or SMK-37 work. 1.0.0
+  refused every request (Linux logged `cannot get min/max values for control 2 (id 5)`).
 - **SMK-37 MASTER**: turning K5 over a held note could break the sound. Its level's flash write now waits until nothing
   is sounding; the level changes at once.
 - **Web installer**: installs the SMK-37 packages, by the model the device names (already on the 1.0.0 site).
