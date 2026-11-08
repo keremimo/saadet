@@ -49,6 +49,23 @@ static inline __attribute__((always_inline)) int32_t dc_block(int32_t x, audio_d
     return x - ((*dc + 32) >> 6);
 }
 
+/* Linear up to the limiter's threshold, then a tanh knee into the 6767 left below full scale: what the limiter
+ * holds passes exactly and only its attack's overs bend, to at most 32524 (-0.07 dBFS). The knee meets the line
+ * with its slope. (A tanh over the whole range bent every sample: a held chord came out 1.6 dB under the
+ * threshold with its intermod at -26 dB, and still -33 dB at -6 dBFS.)
+ * d stops at twice the headroom, where softclip's table ends and stays flat: d < 2^22, z <= 2 * 32768 native. */
+#define KNEE_H (AUDIO_Q15(32767) - LIM_T)
+static inline __attribute__((always_inline)) int32_t master_knee(int32_t x)
+{
+    int32_t a = x < 0 ? -x : x, d, z, y;
+    if (a <= LIM_T)
+        return x;
+    d = a - LIM_T < 2 * KNEE_H ? a - LIM_T : 2 * KNEE_H;
+    z = (int32_t)(((int64_t)d * 5077544 + (1 << 19)) >> 20);          /* d / H in softclip's units: 32768 / 6767 */
+    y = LIM_T + (int32_t)(((int64_t)softclip(z) * 3464810 + (1 << 23)) >> 24);   /* times H / 32767 */
+    return x < 0 ? -y : y;
+}
+
 static __attribute__((noinline,section(".dsp_text"))) void master_out(int32_t *l, int32_t *r)
 {
     int32_t al, ar, a;
@@ -79,8 +96,8 @@ static __attribute__((noinline,section(".dsp_text"))) void master_out(int32_t *l
         *l = audio_mul(*l,g,15); /* wide products retain the quiet fractional bits */
         *r = audio_mul(*r,g,15);
     }
-    *l = softclip(*l);
-    *r = softclip(*r);
+    *l = master_knee(*l);
+    *r = master_knee(*r);
 }
 
 /* length of one division (N_DIV order) in samples at the song tempo */

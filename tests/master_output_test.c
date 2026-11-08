@@ -65,6 +65,54 @@ static void limiter_threshold(void)
     puts("limiter: a peak at -2.2 dBFS passes untouched, a peak above is limited and released");
 }
 
+static void tone(double *re,double *im,const int32_t *x,uint32_t n,double cycles_per_sample);
+
+/* the knee after it: exact up to the threshold, then libm's K + H tanh(d / H) (d stopping at 2 H), odd, rising,
+ * under full scale however far the limiter's attack overshoots (its bound is 4 x the threshold) */
+static void knee(void)
+{
+    const double K=LIM_T,H=KNEE_H,tol=AUDIO_ONE>1?4.0:1.5;
+    double err=0;int32_t last=0;
+    for(int32_t x=0;x<=4*LIM_T;x+=AUDIO_ONE>1?97:1){
+        int32_t y=master_knee(x);
+        assert(master_knee(-x)==-y);
+        if(x<=LIM_T)assert(y==x);
+        else{double want=K+H*tanh(fmin(x-K,2*H)/H),e=fabs(y-want);if(e>err)err=e;}
+        assert(y>=last && y<AUDIO_Q15(32767));last=y;
+    }
+    printf("knee: exact to the threshold, libm within %.2f of %.1f native LSBs above it, top %.1f\n",err,tol,(double)last/AUDIO_ONE);
+    assert(err<tol && last>AUDIO_Q15(32500));
+}
+
+/* a chord held just under the threshold comes out with no intermod (a tanh over the whole range made it -26 dB) */
+static void chord_intermod(void)
+{
+    enum{N=65536};
+    static int32_t sig[N];
+    static const int32_t k[3]={400,504,599};                 /* cycles in the window: every product on a bin of its own */
+    static const int8_t prod[][3]={{2,-1,0},{-1,2,0},{0,2,-1},{0,-1,2},{2,0,-1},{-1,0,2},{1,1,-1},{1,-1,1},{-1,1,1},
+                                   {3,0,0},{0,3,0},{0,0,3}};
+    double top=0,scale,re,im,tone_min=1e300,worst=0;
+    for(uint32_t pass=0;pass<2;pass++){
+        if(pass){scale=AUDIO_Q15(24576)/top;power_on();reset_master();}   /* -2.5 dBFS at the peak */
+        for(uint32_t i=0;i<N;i++){
+            double s=0;
+            for(uint32_t j=0;j<3;j++)s+=sin(2*M_PI*k[j]*i/N+0.7*j);
+            if(!pass){if(fabs(s)>top)top=fabs(s);continue;}
+            int32_t l=(int32_t)lrint(s*scale),r=l;master_out(&l,&r);
+            assert(l==r && lim_env==LIM_T);
+            sig[i]=l;
+        }
+    }
+    for(uint32_t j=0;j<3;j++){tone(&re,&im,sig,N,(double)k[j]/N);if(hypot(re,im)<tone_min)tone_min=hypot(re,im);}
+    for(uint32_t p=0;p<NELEM(prod);p++){
+        int32_t f=prod[p][0]*k[0]+prod[p][1]*k[1]+prod[p][2]*k[2];
+        tone(&re,&im,sig,N,(double)f/N);if(hypot(re,im)>worst)worst=hypot(re,im);
+    }
+    printf("chord at -2.5 dBFS: the loudest intermod or third harmonic %.1f dB under the quietest note\n",20*log10(worst/tone_min+1e-300));
+    assert(worst/tone_min<pow(10.0,-80.0/20));
+}
+
 /* a voice of CZ-1 about as loud as the other engines (Melodee's: CZ-1 had twice their scale) */
 static void cz_level(void)
 {
@@ -377,7 +425,7 @@ static void volume(void)
     /* .. and the output has it: a step at 1/4 of MASTER comes out as a step a quarter as high */
     {
         int32_t pcm[2*CTL],want=AUDIO_Q15(2000);
-        want=softclip(want-(want>>12));                      /* (the DC blocker's first step takes 1/4096) */
+        want-=want>>12;                                      /* (the DC blocker's first step takes 1/4096) */
         power_on();reset_master();song.master_q12=1024;dither_block();
         for(uint32_t i=0;i<CTL;i++)mix_l[i]=mix_r[i]=AUDIO_Q15(8000);
         master_samples(pcm,CTL);
@@ -431,6 +479,8 @@ int main(void)
 {
     setvbuf(stdout,0,_IOLBF,0);
     limiter_threshold();
+    knee();
+    chord_intermod();
     cz_level();
     chords();
     two_parts();
