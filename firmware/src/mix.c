@@ -32,8 +32,9 @@ static volatile uint32_t kb_mask, kb_layer, kb_pedal;   /* kb_pedal: the button 
 static volatile uint8_t kb_lock, kb_sustain_end;        /* kb_sustain_end: ARP pressed again, what it kept ends (seq.c) */
 #define LIM_T AUDIO_Q15(26000)           /* -2 dBFS: only overs, a chord does not duck a held note */
 #define LIM_HOLD 2048u                   /* 46 ms: longer than a chord's repeat (30.6 ms for C major) */
+#define LIM_HOLD_MAX 44100u              /* 1 s: the longest gap between returning peaks the hold bridges */
 static int32_t lim_env = LIM_T;
-static uint32_t lim_hold;
+static uint32_t lim_hold, lim_since = LIM_HOLD_MAX + 1u, lim_len = LIM_HOLD;   /* since the last held peak; the hold */
 static audio_dc_t dc_l, dc_r, dce_l, dce_r;
 
 /* DC blocker (~2 Hz), always on: a leaky integrator of the input (Q6 state) subtracted from it.
@@ -75,11 +76,25 @@ static __attribute__((noinline,section(".dsp_text"))) void master_out(int32_t *l
     al = *l < 0 ? -*l : *l;
     ar = *r < 0 ? -*r : *r;
     a = al > ar ? al : ar;
-    /* A peak within 1/16 (0.56 dB) of the envelope holds it: the gain stays
-     * put while a sustained chord repeats, rather than rising between its
-     * peaks and ducking at each one, which growls at the chord's period. */
-    if (a > LIM_T && a >= lim_env - (lim_env >> 4))
-        lim_hold = LIM_HOLD;
+    /* A peak within 1/16 (0.56 dB) of the envelope holds it: the gain stays put while a sustained sound repeats,
+     * rather than rising between its peaks and ducking at each one. The hold is 46 ms, and grows to bridge the gap
+     * since the last such peak (and a quarter more) when the peaks come back within a second: the beats of a
+     * detuned pair or a pad return every few hundred ms, and a gain that followed them pumped at the beat
+     * (-20 dB beside the notes at 3 dB of limiting). A second with no such peak brings it back to 46 ms, so a lone
+     * hit still recovers as fast. */
+    if (a > LIM_T && a >= lim_env - (lim_env >> 4)) {
+        uint32_t g = lim_since;
+        lim_since = 0;
+        if (g <= LIM_HOLD_MAX) {
+            g += g >> 2;
+            g = g < LIM_HOLD_MAX ? g : LIM_HOLD_MAX;
+            lim_len = g > lim_len ? g : lim_len;
+        }
+        lim_hold = lim_len;
+    } else if (lim_since <= LIM_HOLD_MAX)
+        lim_since++;
+    else
+        lim_len = LIM_HOLD;
     if (a > lim_env)
         lim_env += (a - lim_env) >> 2;
     else if (lim_hold)

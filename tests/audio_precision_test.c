@@ -90,7 +90,7 @@ static void engines(void)
 static void limiter_release(void)
 {
     int32_t env15=36000;
-    lim_env=AUDIO_Q15(env15);lim_hold=0;
+    lim_env=AUDIO_Q15(env15);lim_hold=0;lim_since=LIM_HOLD_MAX+1u;lim_len=LIM_HOLD;
     for(uint32_t i=0;i<20000u;i++){
         int32_t l=0,r=0;master_out(&l,&r);
         if(env15>26000)env15-=((env15-26000)>>12)+1;
@@ -108,7 +108,7 @@ static void limiter_release(void)
         assert(lim_env==held || i>=9000u+LIM_HOLD);
     }
     assert(lim_env<held);
-    env15=29000;lim_env=AUDIO_Q15(env15);lim_hold=LIM_HOLD;
+    env15=29000;lim_env=AUDIO_Q15(env15);lim_hold=LIM_HOLD;lim_since=LIM_HOLD_MAX+1u;lim_len=LIM_HOLD;
     for(uint32_t i=0;i<LIM_HOLD+20000u;i++){
         l=r=0;master_out(&l,&r);
         if(i>=LIM_HOLD && env15>26000)env15-=((env15-26000)>>12)+1;

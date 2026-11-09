@@ -15,7 +15,7 @@
 static const uint32_t ENGINES_SHIPPED[]={ENGI_PROPHET,ENGI_FM6,ENGI_CZ,ENGI_J106};
 static const uint32_t PROBES[]={0,1,2,3,5,8,13,21,34};   /* factory sounds of every engine */
 static const uint8_t TRIAD[]={60,64,67},FOUR[]={60,64,67,71};
-static void reset_master(void){lim_env=LIM_T;lim_hold=0;dc_l=dc_r=dce_l=dce_r=0;dith_r=DITH_SEED;}
+static void reset_master(void){lim_env=LIM_T;lim_hold=0;lim_since=LIM_HOLD_MAX+1u;lim_len=LIM_HOLD;dc_l=dc_r=dce_l=dce_r=0;dith_r=DITH_SEED;}
 static void settle(void){panic_req|=3;for(uint32_t q=0;q<600;q++){int32_t pcm[2*CTL];mix_block(pcm,CTL);}}
 static double db(double x){return 20*log10(x/AUDIO_Q15(32768)+1e-12);}
 
@@ -111,6 +111,49 @@ static void chord_intermod(void)
     }
     printf("chord at -2.5 dBFS: the loudest intermod or third harmonic %.1f dB under the quietest note\n",20*log10(worst/tone_min+1e-300));
     assert(worst/tone_min<pow(10.0,-80.0/20));
+}
+
+/* A detuned pair over the threshold, beating at 2.7 and at 1.3 Hz: the hold bridges the beats, so the gain stays put
+ * and nothing stands beside the notes (a 46 ms hold made the gain follow the beat: -20 dB within 20 Hz of them).
+ * A lone 30 ms hit still recovers within 300 ms; hits 400 ms apart are held through, then recover */
+static void limiter_hold(void)
+{
+    enum{N=65536,NEAR=30};
+    static int32_t sig[N];
+    static const int32_t pairs[2][2]={{654,658},{654,656}};
+    for(uint32_t c=0;c<2;c++){
+        const int32_t *k=pairs[c];
+        double re,im,want=0,beside=0;
+        reset_master();
+        for(uint32_t i=0;i<4u*N;i++){                       /* three windows to settle, the fourth measured */
+            double s=sin(2*M_PI*k[0]*(i%N)/N)+sin(2*M_PI*k[1]*(i%N)/N+0.9);
+            int32_t l=(int32_t)lrint(s*AUDIO_Q15(18350)),r=l;  /* +1 dBFS at the beat's top: the limiter takes 3 dB */
+            master_out(&l,&r);
+            if(i>=3u*N)sig[i-3u*N]=l;
+        }
+        assert(lim_env>AUDIO_Q15(36000));
+        for(int32_t b=k[0]-NEAR;b<=k[1]+NEAR;b++){
+            tone(&re,&im,sig,N,(double)b/N);
+            if(b==k[0]||b==k[1])want+=re*re+im*im;else beside+=re*re+im*im;
+        }
+        printf("limiter: a pair beating at %.1f Hz, limited 3 dB, %.1f dB beside the notes\n",(k[1]-k[0])*44100.0/N,10*log10(beside/want+1e-300));
+        assert(beside/want<pow(10.0,-60.0/10));
+    }
+    /* back within 0.5 dB, in samples after the last hit: one hit, then four 400 ms apart */
+    for(uint32_t hits=1;hits<=4;hits+=3){
+        const uint32_t period=17640,hit=1323,end=(hits-1)*period+hit;
+        uint32_t last=0;
+        reset_master();
+        for(uint32_t i=0;i<5u*44100u;i++){
+            double amp=i<hits*period && i%period<hit?51900:8230;   /* +4 dBFS, then -12 dBFS */
+            int32_t l=(int32_t)lrint(amp*AUDIO_ONE*sin(2*M_PI*440.0*i/44100.0)),r=l;
+            master_out(&l,&r);
+            if(lim_env>(int32_t)(LIM_T*1.0592537))last=i;      /* 0.5 dB */
+        }
+        double ms=(last-end)*1000.0/44100.0;
+        printf("limiter: %u hit%s of 30 ms at +4 dBFS: the gain is back %.0f ms after the last\n",hits,hits>1?"s, 400 ms apart,":"",ms);
+        assert(hits==1?ms<300.0:ms>400.0 && ms<800.0);
+    }
 }
 
 /* a voice of CZ-1 about as loud as the other engines (Melodee's: CZ-1 had twice their scale) */
@@ -481,6 +524,7 @@ int main(void)
     limiter_threshold();
     knee();
     chord_intermod();
+    limiter_hold();
     cz_level();
     chords();
     two_parts();
