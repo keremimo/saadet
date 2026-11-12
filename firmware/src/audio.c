@@ -89,12 +89,18 @@ static void shed_voice(void)
 {
     uint32_t p, i;
     voice_t *best = 0;
-    for (p = 0; p < NPART; p++)
+    int32_t best_env = 0;
+    for (p = 0; p < NPART; p++) {
+        int own = ENGINES[trk[p].engine]->ownenv;      /* (its v->env is the MOD ENV: its level is the engine's) */
         for (i = 0; i < NVOICE; i++) {
             voice_t *v = &trk[p].v[i];
-            if (v->active && !v->gate && v->stage != 4u && (!best || v->env < best->env))
+            int32_t env = own ? 1 << 24 : v->env;
+            if (v->active && !v->gate && v->stage != 4u && (!best || env < best_env)) {
                 best = v;
+                best_env = env;
+            }
         }
+    }
     if (best) {
         voice_kill(best);
         shed_count++;

@@ -887,8 +887,9 @@ static void engine_block(track_t *t)
         t->pe_old[i] = t->p[P_E0 + i];
 }
 
-/* one control tick (CTL samples) of the amplitude envelope; returns Q15 */
-static int32_t env_tick(track_t *t, voice_t *v)
+/* one control tick (CTL samples) of the amplitude envelope; returns Q15. own: the engine's own envelopes are the
+ * voice's amplitude (ownenv), this is its MOD ENV alone: its release rests at 0 and the engine's done() ends the voice */
+static int32_t env_tick(track_t *t, voice_t *v, int own)
 {
     const int16_t *p = t->p;
     int32_t sus = (int32_t)p[P_SUS] << 17;              /* Q24 */
@@ -907,8 +908,10 @@ static int32_t env_tick(track_t *t, voice_t *v)
         v->env -= mulq16(v->env, ENV_EXP[p[P_REL] & 127]);
         if (v->env < (1 << 12)) {
             v->env = 0;
-            v->stage = 0;
-            v->active = 0;
+            if (!own) {
+                v->stage = 0;
+                v->active = 0;
+            }
         }
         break;
     case 4:                                             /* given up: track_render_audio takes it down the fade */
@@ -1051,26 +1054,24 @@ static __attribute__((noinline)) uint32_t track_render_audio(track_t *t, int32_t
     for (i = 0; i < NVOICE; i++) {
         voice_t *v = &t->v[i];
         vmod_t m;
-        int32_t env, pitch;
+        int32_t env, adsr, pitch;
         if (!v->active)
             continue;
         {
             AP_START(env_start);
-            env = env_tick(t, v);
+            env = adsr = env_tick(t, v, e->ownenv);
             if (e->ownenv && v->active) {               /* the engine's envelopes (FM6): they end the voice */
                 if (e->done(t, v)) {                    /* its last block, faded out (the engine's state goes on */
                     v->active = v->gate = 0;            /* one more block, as Dexed's) */
                     v->stage = 0;
                     v->env = 0;
-                    env = 0;
-                } else {
-                    v->env = 1 << 24;                   /* (the ADSR's release never ends it) */
-                    env = 32767;
-                }
+                    env = adsr = 0;
+                } else
+                    env = 32767;                        /* (the ADSR goes on as the MOD ENV) */
             }
             if (e->amp)                                 /* the engine's own amplitude curve */
                 env = e->amp(t, v, env);
-            m.envq15 = e->ownenv ? 0 : env;
+            m.envq15 = e->ownenv ? adsr : env;
             m.amp1 = e->ownenv ? env : mulq15(env, v->vel * 258);
             if (p[P_LD_AMP])
                 m.amp1 = mulq15(m.amp1, 32767 - mulq15(p[P_LPOL] ? lfo : (lfo + 32768) >> 1, p[P_LD_AMP] * 258));
@@ -1098,7 +1099,8 @@ static __attribute__((noinline)) uint32_t track_render_audio(track_t *t, int32_t
         if (m.fine)             /* residual below 1/16 semitone */
             m.inc += (uint32_t)((int32_t)(m.inc >> 12) * m.fine);
         m.cutoff = ((lfo * p[P_LD_FLT]) >> 7) + ((m.envq15 * p[P_ED_FLT]) >> 7);
-        if (v->vel > 110)                               /* accent opens the filter with the env */
+        if (v->vel > 110 && !e->ownenv)                 /* accent opens the filter with the env (an engine with its
+                                                         * own envelopes has its own velocity) */
             m.cutoff += (m.envq15 * 24) >> 7;
         m.shape = (64 << 8) + ((lfo * p[P_LD_SHP]) >> 7) + ((m.envq15 * p[P_ED_SHP]) >> 7);
         if (e == &ENG_CZ)                                /* cached native DCA, Q15 */

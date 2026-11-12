@@ -276,7 +276,7 @@ typedef struct {                 /* an engine (engines.c ENGINES[]; the eng_*.c 
      * (then the scale keyboard of seq.c kb_map) */
     int32_t (*keys)(const struct track *t, uint32_t k);
     /* 1 = the engine's own envelopes are the voice's amplitude (FM6): voice.c renders it at 1.0 (no ADSR, no
-     * velocity; LFO -> AMP, the matrix's AMP and the fades still apply; ENV is 0) and the voice ends when
+     * velocity; LFO -> AMP, the matrix's AMP and the fades still apply; the ADSR is the MOD ENV alone) and the voice ends when
      * done() says so (once per control tick, before the render), not at the end of the ADSR's release */
     uint8_t ownenv;
     /* 1 = note_on restarts the voice's envelopes from nothing (CZ-1, FM6): a sounding voice cannot restart in place, its
