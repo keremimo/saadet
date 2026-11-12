@@ -2,6 +2,17 @@
 
 Each release in short. The full notes for the current release are in [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
+## 1.0.5 (12 November 2026)
+
+### Fixed
+
+- **Held chords pumping**: the limiter's gain followed a loud chord's own beating. It now holds its reduction while
+  peaks keep returning, up to a second; a lone hit still recovers in about 0.25 s.
+- **MOD ENV on Prophet-5, JUNO-106, FM6, CZ-1 and PPG Wave**: ENV > AMOUNTS (FILTER, PITCH, SHAPE) did nothing on the
+  engines with their own envelopes. It now moves them and never touches the voice's level.
+- **Screen reader words**: the FM-1 Screen Reader looked for Saadet's words on fm1-base's site; they are now at
+  `https://keremimo.github.io/saadet/words/` (#5).
+
 ## 1.0.4 (8 November 2026)
 
 ### Fixed

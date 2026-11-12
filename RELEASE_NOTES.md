@@ -1,8 +1,23 @@
-# Saadet 1.0.4
+# Saadet 1.0.5
 
-A fix release on Saadet 1.0.3 for the M-VAVE FM-1 and, in beta, the M-VAVE SMK-37: the JUNO-106 engine's filter opens
-as the instrument's does. The SMK-37 packages keep their identities (`SMK-37 Elite_910` and so on), so an SMK-37 on
-1.0.0 to 1.0.3 shows as up to date in the installer: press **Reinstall** to get the changes below.
+A fix release on Saadet 1.0.4 for the M-VAVE FM-1 and, in beta, the M-VAVE SMK-37: held chords stop pumping, the
+MOD ENV works on every synth engine, and the FM-1 Screen Reader finds Saadet's words. The SMK-37 packages keep their
+identities (`SMK-37 Elite_910` and so on), so an SMK-37 on 1.0.0 to 1.0.4 shows as up to date in the installer: press
+**Reinstall** to get the changes below.
+
+## Fixed in 1.0.5
+
+- Held chords at high levels pumped. Once a chord reached the limiter, its gain rose and fell with the chord's own
+  beating, which came out as a wobble around the notes (about -28 dB on a triad, -13 dB on a detuned pad). The
+  limiter now holds its reduction while the peaks keep coming back, for up to a second, so a held chord stays steady
+  (those products are now -73 and -65 dB). A lone hit still recovers in about a quarter of a second.
+- The MOD ENV (ENV > AMOUNTS: FILTER, PITCH, SHAPE) did nothing on the engines with their own envelopes: Prophet-5,
+  JUNO-106, FM6, CZ-1 and PPG Wave. It now moves their filter, pitch and shape, its SUSTAIN holds them there, and it
+  never touches the voice's level: the engine's own envelopes still shape and end each note. Velocity above 110 no
+  longer opens the filter extra on those engines, which have their own velocity response.
+- The FM-1 Screen Reader could not find Saadet's words: the firmware pointed it at fm1-base's template site. It now
+  points at `https://keremimo.github.io/saadet/words/`, which the installer site publishes. Thanks to Charles Vestal
+  ([#5](https://github.com/keremimo/saadet/issues/5)).
 
 ## Fixed in 1.0.4
 
