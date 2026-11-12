@@ -49,6 +49,10 @@ INSTALL = ROOT / "web/install"
 MODULES = ("fm1pkg.js", "fm1ports.js", "fm1ota.js", "mboot.js", "flow.js", "transfer.js", "keepalive.js", "installer.js")
 VENDORED = ("fm1pkg.js", "fm1ports.js", "fm1ota.js")          # fm1-base's, unchanged
 WEB = ("editor.html", "fm1backup.js", "fukiai.ttf", "FUKIAI-LICENSE.txt")
+# the screen reader's words (fm1-reader): each build points the reader at WORDS_URL + its file's id (gen_words.py), so
+# words/ carries every file ever made (platform/web/words, kept in the repo), never one less
+WORDS = ROOT / "platform/web/words"
+WORDS_URL = "https://keremimo.github.io/saadet/words/"
 
 IMPORT = re.compile(r'^import\s*\{([^}]*)\}\s*from\s*"\./([\w.]+)";[ \t]*\n', re.M)
 EXPORT = re.compile(r"^export\s+(?=(?:async\s+)?function|class|const|let)", re.M)
@@ -130,6 +134,18 @@ def copy_licences(destination, base):
         shutil.copyfile(base / "assets/fonts" / name, destination / "LICENSES/upstream/fm1-base" / name)
 
 
+def words_files():
+    """the words files to publish; refused when words.tsv points the reader anywhere but this site's words/"""
+    urls = [line.split(":", 1)[1].strip() for line in (ROOT / "platform/words.tsv").read_text().splitlines()
+            if line.startswith("# url:")]
+    if urls != [WORDS_URL]:
+        raise SystemExit(f"platform/words.tsv: its '# url:' line must be {WORDS_URL}, the site's words/ (got {urls})")
+    files = sorted(WORDS.glob("*.json"))
+    if not files:
+        raise SystemExit(f"{WORDS.relative_to(ROOT)}: no words file; build the firmware first")
+    return files
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("package", type=Path)
@@ -172,6 +188,7 @@ def main(argv=None):
     boot = checked_files(ARTIFACTS)[BOOT_PACKAGE]
     if product_of(boot) != "FM-1_099":
         raise SystemExit("m-bootloader: wrong package identity")
+    words = words_files()
 
     source_info = None
     if not a.dev:
@@ -248,6 +265,9 @@ def main(argv=None):
     for name in WEB:
         shutil.copyfile(ROOT / "web" / name, out / name)
     shutil.copytree(ROOT / "web/manual", out / "manual")
+    (out / "words").mkdir()
+    for path in words:
+        shutil.copyfile(path, out / "words" / path.name)
     # The manual moves from web/manual/ to manual/ in the published site.
     # Link to the matching public source instead of a repository-relative path.
     manual = out / "manual/index.html"
@@ -259,7 +279,7 @@ def main(argv=None):
                                     '<a href="install/">Install Saadet</a>\n')
     print(f"site: {out}: install/ ({', '.join(p['product'] for p in packages)}, {a.version}{', dev' if a.dev else ''}), "
           f"firmware/{fw} ({len(raw)} B){f' and {len(smk)} SMK-37' if smk else ''}, "
-          f"m-bootloader {BOOT_VERSION}, editor, manual" + ("; uncommitted changes in the tree" if dirty else ""))
+          f"m-bootloader {BOOT_VERSION}, editor, manual, {len(words)} words file(s)" +("; uncommitted changes in the tree" if dirty else ""))
 
 
 if __name__ == "__main__":

@@ -60,6 +60,28 @@ class SiteTest(unittest.TestCase):
         self.assertNotIn("../../docs/UI.md", manual)
         self.assertIn("https://github.com/keremimo/saadet/blob/", manual)
 
+    def test_words_for_the_screen_reader(self):
+        """words/ carries every words file, and the build points the reader at one of them on this site"""
+        kept = sorted(S.WORDS.glob("*.json"))
+        self.assertTrue(kept)
+        self.assertEqual(sorted(p.name for p in (self.out / "words").iterdir()), [p.name for p in kept])
+        for p in kept:
+            self.assertEqual((self.out / "words" / p.name).read_bytes(), p.read_bytes())
+        url = re.search(r'#define ANN_WORDS_URL "([^"]+)"', (ROOT / "platform/build/gen/ann_words.h").read_text())[1]
+        self.assertEqual(url.rsplit("/", 1)[0] + "/", "https://keremimo.github.io/saadet/words/")
+        self.assertTrue((self.out / "words" / url.rsplit("/", 1)[1]).is_file(), url)
+
+    def test_words_url_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            old = S.WORDS_URL
+            S.WORDS_URL = "https://example.invalid/words/"
+            try:
+                with self.assertRaisesRegex(SystemExit, "url:' line must be"):
+                    S.main(["--dev", str(PKG), "dev", str(Path(d) / "a")])
+            finally:
+                S.WORDS_URL = old
+            self.assertFalse((Path(d) / "a").exists())
+
     def test_packages_per_model(self):
         """release.json lists a package per model, the FM-1's first and the same as its top-level fields"""
         m, o = self.meta, self.out
