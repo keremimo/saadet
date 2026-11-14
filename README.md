@@ -77,3 +77,5 @@ for the applicable file-by-file terms and third-party notices.
 
 ## Support
 [Buy me a coffee](https://ko-fi.com/keremimo)
+
+You can also try Saadet in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
